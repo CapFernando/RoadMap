@@ -19,6 +19,11 @@
    As tres sao do dono da sprint, como no admin.html. Estimar e a tela Poker
    do app (#poker, axis-tela-poker.js). Mover, alocar, ausencia e feriado sao
    a tela Planejamento do app (#planejamento, axis-tela-planejamento.js).
+
+   O QUE FALTA DIRECIONAR (Sprint atual), como na bandeja Sprint do
+   Gerencial do admin: a faixa das demandas depois da Planning sem sprint
+   (`renderSprLinha`) e o backlog da sprint por dev, com o seletor que grava
+   o dev na hora (`renderGerSprint` + `sprDirecionar`).
    ───────────────────────────────────────────────────────────────────────── */
 (function () {
   var raiz = typeof window !== 'undefined' ? window : globalThis;
@@ -163,6 +168,24 @@
       '.axa .es-ln .ti > span b{font-weight:700;color:var(--tx2)}',
       '.axa .es-ln .x{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;align-items:center;max-width:340px}',
       '.axa .es-ln .x .chip{height:20px;font-size:10.5px;gap:4px;max-width:220px;overflow:hidden;text-overflow:ellipsis}',
+      // Backlog da sprint por dev, com o seletor que direciona (`renderGerSprint` do admin).
+      '.axa .sp-bk-g{display:flex;flex-direction:column;gap:6px}',
+      '.axa .sp-bk-dev{display:flex;align-items:center;gap:6px;padding:8px 2px 2px;font-size:12.5px;font-weight:800;color:var(--tx2)}',
+      '.axa .sp-bk-dev.sem{color:var(--wn-t)}',
+      '.axa .sp-bk-dev .n{font-family:var(--font-mono);font-weight:600;color:var(--tx4)}',
+      '.axa .sp-bk-it{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:12px;align-items:center;padding:8px 10px 8px 14px;border-radius:11px;background:var(--sf2);border:1px solid transparent}',
+      '.axa .sp-bk-it.so{grid-template-columns:minmax(0,1fr)}',
+      '.axa .sp-bk-it:hover{border-color:var(--bd4)}',
+      '.axa .sp-bk-ln{display:grid;grid-template-columns:78px minmax(0,1fr);gap:12px;align-items:center;min-width:0;font-size:13px;text-decoration:none;color:var(--tx)}',
+      '.axa .sp-bk-ln:hover{color:var(--tx)}',
+      '.axa .sp-bk-ln .cd{font-family:var(--font-mono);font-size:12px;color:var(--tx3)}',
+      '.axa .sp-bk-ln .ti{display:flex;flex-direction:column;gap:3px;min-width:0}',
+      '.axa .sp-bk-ln .ti b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.axa .sp-bk-ln .ti span{font-size:12px;color:var(--tx3)}',
+      '.axa .sp-bk-ln .pr{font-style:normal;font-weight:700;color:var(--ac-t)}',
+      '.axa .sp-bk-sel{width:100%;min-width:0;height:38px;font-size:13px}',
+      '.axa .sp-ss-t{flex:1 1 320px;min-width:0;line-height:20px}',
+      '.axa .sp-ss-t a{white-space:nowrap}',
       // Fechamento: cada pendente com o destino e o motivo embaixo.
       '.axa .sp-fd{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:12px;background:var(--sf2);border:1px solid var(--bd)}',
       '.axa .sp-fd .sp-fd-cab{padding:0;background:transparent;border:0}',
@@ -193,6 +216,12 @@
       // O dialogo mora no <body>, fora do container `app`: a regra do celular e por media.
       '@media (max-width: 760px){.axa .sp-lt-topo{grid-template-columns:minmax(0,1fr)}}',
       '@container app (max-width: 760px){',
+      // No celular a linha do backlog vira cartao: o titulo em cima, o seletor embaixo, com toque de 44 px.
+      '.axa .sp-bk-it{grid-template-columns:minmax(0,1fr);gap:8px;padding:10px 12px}',
+      '.axa .sp-bk-ln{grid-template-columns:62px minmax(0,1fr);min-height:44px}',
+      '.axa .sp-bk-sel{height:44px}',
+      '.axa #sp-sem-sprint .btns{min-height:44px;width:100%}',
+      '.axa #sp-sem-sprint .dir{width:100%}',
       '.axa .sp-fd-ed{grid-template-columns:minmax(0,1fr)}',
       '.axa .sp-k4{grid-template-columns:repeat(2,minmax(0,1fr))}',
       '.axa .es-ln{grid-template-columns:62px minmax(0,1fr)}',
@@ -468,6 +497,110 @@
       (nota ? '<span class="s">' + nota + '</span>' : '') + '</div>';
   }
 
+  // ── O QUE FALTA DIRECIONAR (renderSprLinha + renderGerSprint, admin.html) ──
+  /* SEM SPRINT DEPOIS DA PLANNING. A regra de 29/10 trava o MOVIMENTO, e nao
+     o estado: as que ja estavam depois da Planning seguem sem sprint ate o PO
+     escolher, e conta-las e o que faz isso acabar. So o que ainda nao foi
+     entregue (planejado e em andamento; `atrasado` e etapa legada): com as
+     de validacao o aviso nascia com mais de 150 nomes. COPIA do filtro do
+     admin; a faixa nao depende da sprint nem da trilha escolhidas. */
+  function semSprintDepoisDaPlanning(SPm, lista, gravada) {
+    return (lista || []).filter(function (m) {
+      return m && !m.oculto && !m.mesclado_em && !SPm.doPO(m) && ['planejado', 'em_andamento', 'atrasado'].indexOf(gravada(m)) >= 0;
+    });
+  }
+  function faixaSemSprint(sem, r, dono) {
+    if (!sem.length) return '';
+    return '<div class="sp-faixa x-wn" id="sp-sem-sprint" role="status"><span class="lb" style="color:var(--wn-t)">SEM SPRINT</span>' +
+      '<span class="sp-ss-t"><b>' + plural(sem.length, 'demanda está', 'demandas estão') + ' depois da Planning sem sprint</b> — ' +
+      sem.slice(0, 6).map(function (m) { return '<a class="mono" href="' + H.hrefItem(m) + '">' + esc(m.codigo || m.id) + '</a>'; }).join(', ') +
+      (sem.length > 6 ? '…' : '') + '. Escolha a sprint no item' + (dono ? ', ou repasse em lote' : '') + '.</span>' +
+      (dono ? '<span class="dir"><button type="button" class="btns" data-sp-ciclo="lote" data-r="' + esc(r) + '">' + ico('send') + ' Repassar em lote</button></span>' : '') + '</div>';
+  }
+
+  /* QUEM PODE RECEBER (`devsDisponiveis` + `devsComTrabalhoAberto`): o time
+     cadastrado e quem ja aparece nas demandas, sem quem saiu (`devs_removidos`)
+     nem conta desativada — a menos que tenha voltado a ter trabalho aberto.
+     COPIA do admin; `inativos` e a rota `devs-inativos` (null = ainda nao
+     chegou, e entao ninguem sai por isso). */
+  function devsParaDirecionar(D, inativos) {
+    var parte = function (s) { return s ? String(s).split(/[\/,]/).map(function (x) { return x.trim(); }).filter(Boolean) : []; };
+    var norm = function (s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); };
+    var todos = [];
+    (D.desenvolvedores || []).forEach(function (d) { todos = todos.concat(parte(d)); });
+    (D.melhorias || []).forEach(function (m) { todos = todos.concat(parte(m && m.dev)); });
+    todos = todos.filter(function (x, i) { return todos.indexOf(x) === i; });
+    var fora = Object.create(null), abertas = Object.create(null);
+    (D.devs_removidos || []).concat(inativos || D.devs_inativos || []).forEach(function (n) { fora[norm(n)] = true; });
+    (D.melhorias || []).forEach(function (m) {
+      if (!m || m.oculto || m.mesclado_em) return;
+      if (['concluido', 'negada'].indexOf(String(m.status_planejamento || '')) >= 0) return;
+      parte(m.dev).forEach(function (d) { abertas[norm(d)] = true; });
+    });
+    return todos.filter(function (d) { var k = norm(d); return !fora[k] || abertas[k]; })
+      .sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
+  }
+
+  /* O BACKLOG DA SPRINT: o que esta na sprint e ainda nao comecou, por dev,
+     "Sem dev — para direcionar" primeiro (`SPRINTPO.backlogDaSprint`). Para
+     quem pode, cada linha tem o seletor que grava o dev na hora; o dev atual
+     nao aparece nele. `grupos` e o que o modulo devolve. */
+  var ETQ_BK = { backlog: 'Backlog', levantar_req: 'Aprov. requisitos', planning: 'Planning', planejado: 'Planejado' };
+  function htmlBacklogSprint(grupos, devs, pode) {
+    var n = grupos.reduce(function (t, g) { return t + g.itens.length; }, 0);
+    if (!n) return '';
+    return '<section class="sp-pn" id="sp-backlog"><div class="hh"><h2 class="h2">Backlog da sprint <span class="note" style="font-family:var(--font-ui);font-weight:600">· ' + n + '</span></h2></div>' +
+      '<span class="note">' + (n === 1 ? '1 demanda ainda não começou' : n + ' demandas ainda não começaram') +
+      '. O que está antes de Planejado já aparece para o time, com a sprint marcada.</span>' +
+      grupos.map(function (g) {
+        return '<div class="sp-bk-g"><div class="sp-bk-dev' + (g.dev ? '' : ' sem') + '" data-sp-bk-dev="' + esc(g.dev) + '">' +
+          (g.dev ? ico('user') + ' ' + esc(g.dev) : ico('alert') + ' Sem dev — para direcionar') + ' <span class="n">· ' + g.itens.length + '</span></div>' +
+          g.itens.map(function (x) {
+            var m = x.m, pts = SP().pontosDe(m);
+            var sel = !pode ? '' : '<select class="in sp-bk-sel" data-sp-dir="' + esc(m.id) + '" aria-label="' + esc((g.dev ? 'Trocar o dev de ' : 'Direcionar ') + (m.codigo || 'a demanda')) + '">' +
+              '<option value="">' + (g.dev ? 'Trocar dev…' : 'Direcionar para…') + '</option>' +
+              devs.filter(function (d) { return d !== g.dev; }).map(function (d) { return '<option value="' + esc(d) + '">' + esc(d) + '</option>'; }).join('') + '</select>';
+            return '<div class="sp-bk-it' + (pode ? '' : ' so') + '"><a class="sp-bk-ln" href="' + H.hrefItem(m) + '"><span class="cd">' + esc(m.codigo || '—') + '</span>' +
+              '<span class="ti"><b>' + esc(m.titulo || '') + '</b><span>' + esc(ETQ_BK[x.etapa] || x.etapa) +
+              (x.prioritaria ? ' · <em class="pr">' + ico('zap') + ' Prioritária</em>' : '') + (pts ? ' · ' + pts + ' pts' : '') + '</span></span></a>' + sel + '</div>';
+          }).join('') + '</div>';
+      }).join('') + '</section>';
+  }
+
+  /* DIRECIONAR (`sprDirecionar`): grava o dev escolhido, e so ele, na hora.
+     Sem demanda ou sem nome nao ha o que gravar — as mesmas guardas do admin.
+     Quem decide no fim e o servidor; a recusa volta o seletor. */
+  function direcionarPatch(m, nome) {
+    if (!m || !nome) return null;
+    var p = {};
+    p[m.id] = { dev: nome };
+    return p;
+  }
+  async function direcionar(sel) {
+    var id = sel.getAttribute('data-sp-dir'), nome = sel.value;
+    var m = ((AX.APP.D || {}).melhorias || []).filter(function (x) { return x && x.id === id; })[0];
+    var p = direcionarPatch(m, nome);
+    if (!p) return;
+    if (AX.APP.papel !== 'admin') { sel.value = ''; H.toast('Só o PM/PO direciona as demandas da sprint.', 'erro'); return; }
+    sel.disabled = true;
+    var out = await H.gravar(p, { ok: (m.codigo || 'Demanda') + ' direcionada para ' + nome + '.' });
+    avisa(out);
+    if ((!out || !out.ok) && sel.isConnected) { sel.disabled = false; sel.value = ''; }
+  }
+  /* As contas desativadas vem a parte (rota `devs-inativos`), como no admin:
+     a consulta ao banco de contas nao entra no caminho que desenha a tela. */
+  var _inativos = { lista: null, pedido: false };
+  function inativosDevs() {
+    if (!_inativos.pedido && AX.APP.papel === 'admin') {
+      _inativos.pedido = true;
+      H.api('devs-inativos').then(function (j) {
+        _inativos.lista = Array.isArray(j && j.nomes) ? j.nomes : [];
+        if (_inativos.lista.length && (AX.APP.rota || {}).tela === 'sprints') AX.desenhar(true);
+      }).catch(function () { _inativos.pedido = false; });
+    }
+    return _inativos.lista;
+  }
+
   function abaAtual(el, ctx) {
     var D = ctx.D;
     var lista = sprintsComDados(D);
@@ -543,6 +676,8 @@
         '<span style="font-weight:700">' + plural(emRisco.length, 'demanda', 'demandas') + ' de ' + acomp.length + ' com sinal de risco de não entregar.</span>' +
         '<span class="dir"><button type="button" class="btns" data-sp-filtro="risco">Ver no escopo</button></span></div>';
     }
+    // O que ficou sem sprint depois da Planning (`#spr-alerta-linha` do admin): para o PM/PO.
+    if (AX.APP.papel === 'admin') h += faixaSemSprint(semSprintDepoisDaPlanning(SP(), (D || {}).melhorias, H.colunaDe), r, H.donoDaSprint());
 
     var pctPl = p.pctPontos != null ? p.pctPontos + '% dos pontos' : 'sem pontuação para medir';
     /* EM VALIDACAO CONTA COMO ENTREGA (renderGerSprint, admin.html, fdf14e2): no
@@ -601,6 +736,10 @@
       }).join('') + (temDupla ? '<span class="note" style="font-size:11.5px">Demanda de dupla divide os pontos entre os dois.</span>' : '')
       : H.vazio('users', 'Ninguém nesta sprint ainda', 'O PM/PO repassa as demandas pela aba Planning ou pelo campo Sprint do card.')) + '</section>';
     h += '<div class="sp-2">' + blocoBd + blocoPp + '</div>';
+
+    // Backlog da sprint, por dev, com o direcionar (o etapa e a gravada, como no admin).
+    var admDir = AX.APP.papel === 'admin';
+    h += htmlBacklogSprint(SP().backlogDaSprint(D, r, etapa, tr), admDir ? devsParaDirecionar(D, inativosDevs()) : [], admDir);
 
     // Escopo
     h += '<section class="sp-pn" id="sp-escopo"></section>';
@@ -2087,6 +2226,11 @@
       };
       el.addEventListener('input', decide);
       el.addEventListener('change', decide);
+      // "Direcionar para… / Trocar dev…" no backlog da sprint: grava na hora.
+      el.addEventListener('change', function (e) {
+        var s = e.target.closest && e.target.closest('select[data-sp-dir]');
+        if (s) direcionar(s).catch(function (ex) { console.error(ex); H.toast('Não foi possível: ' + (ex.message || ex), 'erro'); });
+      });
     }
   });
 })();

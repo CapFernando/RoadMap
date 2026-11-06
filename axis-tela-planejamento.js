@@ -650,7 +650,8 @@
     var projs = (D.projetos || []).slice().sort(function (a, b) { return String(a.codigo || '').localeCompare(String(b.codigo || '')); });
     var s = function (k, rot, ops) { return '<select data-plf="' + k + '" aria-label="' + rot + '"' + (F[k] ? ' class="on"' : '') + '>' + ops + '</select>'; };
     var n = nFiltros();
-    return '<div class="pl-fil" role="group" aria-label="Filtros">' +
+    // No celular os filtros recolhem no botao "Filtros (n)" (H.filtros); a contagem fica a mostra.
+    return '<div class="pl-fil" role="group" aria-label="Filtros">' + H.filtros(
       s('dev', 'Dev', opt('', 'Com demanda no período', F.dev) + opt('__todos__', 'Todos os devs', F.dev) + pessoas.map(function (p) { return opt(p, p, F.dev); }).join('')) +
       s('tipo', 'Tipo', opt('', 'Todos os tipos', F.tipo) + opt('evolucao', 'Evolução', F.tipo) + opt('sustentacao', 'Sustentação', F.tipo) + opt('__sem__', 'Sem tipo', F.tipo)) +
       s('tema', 'Sistema', temas) +
@@ -661,7 +662,7 @@
           .map(function (r) { return opt(r, 'Sprint ' + sprintCurto(r), F.sprintPo); }).join('')) +
       s('etapa', 'Etapa', opt('', 'Toda etapa', F.etapa) + ETS.map(function (e) { return opt(e, (H.ETAPA_POR_ID[e] || {}).rotulo || e, F.etapa); }).join('') + opt('__pausada__', 'Pausada', F.etapa)) +
       s('projeto', 'Projeto', opt('', 'Todos os projetos', F.projeto) + projs.map(function (p) { return opt(p.id, (p.codigo ? p.codigo + ' · ' : '') + (p.nome || ''), F.projeto); }).join('')) +
-      (n ? '<button type="button" class="btns" data-pl="limpar">Limpar (' + n + ')</button>' : '') +
+      (n ? '<button type="button" class="btns" data-pl="limpar">Limpar (' + n + ')</button>' : ''), n, { id: 'planejamento' }) +
       '<span class="ct">' + H.plural(M.barras.length, 'demanda no período', 'demandas no período') + ' · ' + H.plural(M.linhas.length, 'pessoa', 'pessoas') + '</span>' +
       '</div>';
   }

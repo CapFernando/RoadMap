@@ -92,8 +92,6 @@
 .axa .cfg{grid-template-columns:minmax(0,1fr) !important}
 .axa .tabs.vert{flex-direction:row;overflow-x:auto;padding:4px}
 .axa .tabs.vert .grp{display:none}
-.axa .ovl{padding:10px !important}
-.axa .dlg{padding:18px !important;border-radius:16px !important}
 .axa .sb{width:100% !important;min-height:0 !important;flex-direction:row !important;align-items:center;gap:6px !important;padding:10px 12px !important;overflow-x:auto;border-right:0 !important;border-bottom:1px solid var(--bd)}
 .axa .sb .sb-lab,.axa .sb .sb-user,.axa .sb .sb-word{display:none !important}
 .axa .sb .sb-grp{flex-direction:row !important;gap:4px !important}
@@ -180,6 +178,7 @@
 .axa .pal-it { display: grid; grid-template-columns: 70px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 10px 12px;
   border-radius: 10px; cursor: pointer; color: var(--tx); text-decoration: none; }
 .axa .pal-it.on, .axa .pal-it:hover { background: var(--sf4); }
+.axa .pal-x { display: none; }
 .axa .pal-vazio { padding: 22px; text-align: center; color: var(--tx3); font-size: 13px; }
 
 /* ── Notificacoes (sino) ──────────────────────────────────────────────── */
@@ -224,4 +223,160 @@
    altura de tela inteira do modo lateral deixava um vao enorme acima do conteudo. */
 @container app (max-width: 760px) {
   .axa .sb { position: static; height: auto; overflow-y: visible; }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   CELULAR (MOBILE FIRST). O que esta abaixo e a BASE: barra inferior, topo
+   compacto, gaveta, filtros recolhidos, tabela que vira cartoes, janelas em
+   tela cheia e os minimos de toque (44 px) e de texto (12 px). O uso de cada
+   peca esta no comentario do topo do axis-app.js.
+
+   O que mora dentro do app (.app) responde a container query `app`; o que
+   o nucleo pendura no <body> (.ovl, .gv-fundo, .toast) fica fora do
+   container e responde a media query da mesma largura.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ── No computador: barra inferior e logo do topo escondidos; os filtros
+   recolhidos sao transparentes (os controles ficam no flex da tela). ──── */
+.axa .bn, .axa .tb-logo { display: none; }
+.axa .fl, .axa .fl-gv, .axa .fl-corpo { display: contents; }
+.axa .fl-btn, .axa .fl-fundo, .axa .fl-gv > .gv-cab, .axa .fl-gv > .gv-pe { display: none; }
+
+/* ── Gaveta (bottom sheet): a generica (H.gaveta) e a dos filtros ─────── */
+.axa .gv-fundo { position: fixed; inset: 0; z-index: 70; background: rgba(3,5,10,.6); backdrop-filter: blur(2px);
+  display: flex; align-items: flex-end; justify-content: center; animation: gv-fundo .18s ease-out; }
+.axa .gv, .axa .fl.aberto .fl-gv { width: 100%; max-width: 560px; max-height: 88vh; max-height: 88dvh; box-sizing: border-box;
+  display: flex; flex-direction: column; background: var(--sf3); color: var(--tx); border: 1px solid var(--bd2); border-bottom: 0;
+  border-radius: 20px 20px 0 0; box-shadow: 0 -20px 60px var(--shadow); padding-bottom: env(safe-area-inset-bottom);
+  transition: transform .2s ease; animation: gv-sobe .22s ease-out; outline: none; font-family: var(--font-ui); }
+.axa .gv-cab { position: relative; display: flex; align-items: center; gap: 10px; padding: 20px 12px 8px 20px; flex-shrink: 0;
+  touch-action: none; cursor: grab; user-select: none; }
+.axa .gv-alca { position: absolute; top: 8px; left: 50%; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px; background: var(--bd4); }
+.axa .gv-t { flex: 1; min-width: 0; font-family: var(--font-title); font-size: 17px; font-weight: 800; }
+.axa .gv-x { width: 44px; height: 44px; flex-shrink: 0; border-radius: 12px; border: 1px solid var(--bd2); background: transparent; color: var(--tx3);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font: inherit; font-size: 16px; }
+.axa .gv-corpo, .axa .fl.aberto .fl-corpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 6px 20px 18px; display: flex; flex-direction: column; gap: 12px; }
+.axa .gv-pe { flex-shrink: 0; display: flex; gap: 10px; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--bd2); }
+.axa .gv-pe .btnp { flex: 1; height: 48px; font-size: 14px; }
+.axa .gv-grp { display: flex; flex-direction: column; gap: 2px; }
+.axa .gv-grp .sb-lab { padding: 10px 12px 4px; font-size: 12px; }
+.axa .gv-it { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 0 12px; box-sizing: border-box; border: 0; border-radius: 12px;
+  background: transparent; color: var(--tx2); font: inherit; font-size: 15px; font-weight: 600; text-decoration: none; text-align: left; cursor: pointer; }
+.axa .gv-it .axi { font-size: 18px; color: var(--tx3); }
+.axa .gv-it:hover { background: var(--sf4); color: var(--tx); }
+.axa .gv-it.on { background: linear-gradient(90deg, rgba(var(--ac-rgb),.22) 0%, rgba(var(--ac-rgb),.04) 100%); box-shadow: inset 0 0 0 1px rgba(var(--ac-rgb),.28); color: var(--tx-hi); font-weight: 700; }
+.axa .gv-it.on .axi { color: var(--ac-t); }
+.axa .gv-eu { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 12px; border-radius: 14px; background: var(--sf2); border: 1px solid var(--bd); text-decoration: none; color: var(--tx); }
+@keyframes gv-sobe { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes gv-fundo { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .axa .gv, .axa .fl-gv, .axa .gv-fundo { animation: none !important; transition: none !important; } }
+.axa.gv-trava { overflow: hidden; }
+@media (max-width: 760px) { .axa.fl-trava { overflow: hidden; } }
+
+@container app (max-width: 760px) {
+  /* ── Menu: a lateral sai, a barra inferior entra ─────────────────────── */
+  .axa .sb { display: none !important; }
+  .axa .main { padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
+  .axa .bn { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); background: var(--side); border-top: 1px solid var(--bd3);
+    box-shadow: 0 -12px 30px var(--shadow); font-family: var(--font-ui); }
+  .axa .bn-it { position: relative; min-width: 0; min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    padding: 4px 2px; border: 0; border-radius: 12px; background: transparent; color: var(--tx3); font: inherit; font-size: 12px; font-weight: 600;
+    text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .axa .bn-it .axi { font-size: 20px; }
+  .axa .bn-t { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 15px; letter-spacing: -.01em; }
+  .axa .bn-it:hover, .axa .bn-it:focus-visible { color: var(--tx); }
+  .axa .bn-it.on { color: var(--ac-t); font-weight: 800; }
+  .axa .bn-it.on::before { content: ""; position: absolute; top: 0; left: 50%; width: 28px; height: 3px; margin-left: -14px; border-radius: 0 0 3px 3px; background: var(--ac); }
+  .axa .bn-badge { position: absolute; top: 3px; left: calc(50% + 6px); min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px;
+    background: var(--wn); color: #05070C; font-size: 12px; font-weight: 800; line-height: 18px; text-align: center; }
+
+  /* ── Topo compacto: logo, e o resto em botoes de icone de 44 px ───────── */
+  .axa .topbar { gap: 8px; }
+  .axa .tb-logo { display: inline-flex; flex-shrink: 0; text-decoration: none; }
+  .axa .tb-logo .sb-mark { width: 40px; height: 40px; }
+  .axa .tb-search, .axa .tb-ico, .axa .tb-av { width: 44px; height: 44px; flex: 0 0 44px; }
+  .axa .tb-novo { width: 44px; height: 44px; flex: 0 0 44px; padding: 0; font-size: 22px; font-weight: 600; line-height: 1; }
+  .axa .tb-novo .lbl { display: none; }
+  .axa .ntf { position: fixed; top: 64px; left: 12px; right: 12px; width: auto; max-width: none; max-height: 70vh; overflow-y: auto; }
+
+  /* ── Minimo de toque: 44 px ────────────────────────────────────────────── */
+  .axa .btn, .axa .btnp { height: 44px; min-width: 44px; }
+  .axa .btns { height: auto; min-height: 44px; min-width: 44px; font-size: 13px; }
+  .axa .in, .axa select { min-height: 44px; }
+  .axa .tab { height: 44px; }
+  .axa .tabs.vert .tab { height: 44px; }
+  .axa .pal-it, .axa .ntf-it, .axa .li { min-height: 44px; box-sizing: border-box; }
+  /* Desenho menor que o dedo: a area cresce, o desenho e o layout ficam. */
+  .axa button.chip, .axa a.chip, .axa .chip[data-acao], .axa .chip[role="button"] {
+    border-top: 11px solid transparent; border-bottom: 11px solid transparent; background-clip: padding-box; margin-top: -11px; margin-bottom: -11px; }
+  .axa button.link { padding-top: 12px; padding-bottom: 12px; margin-top: -12px; margin-bottom: -12px; }
+  .axa .main a[href]:not([class]):not([style]) { padding: 12px 4px; margin: -12px -4px; }
+  /* Campo com letra de 16 px: abaixo disso o iPhone aproxima a tela ao focar. */
+  .axa .main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .axa .main select, .axa .main textarea { font-size: 16px; }
+
+  /* ── Minimo de texto: 12 px nos componentes e nos estilos de linha ────── */
+  .axa .chip, .axa .lab, .axa .labo, .axa .kbd, .axa .kl, .axa .av, .axa .tbl th, .axa .tab .n, .axa .sb-lab, .axa .sb-badge, .axa .tb-ico .dot { font-size: 12px !important; }
+  .axa .main [style*="font-size:9"], .axa .main [style*="font-size: 9"], .axa .main [style*="font-size:10"], .axa .main [style*="font-size: 10"],
+  .axa .main [style*="font-size:11"], .axa .main [style*="font-size: 11"] { font-size: 12px !important; }
+  .axa .tb-ico .dot { min-width: 20px; height: 20px; border-radius: 10px; }
+
+  /* ── Filtros recolhidos (H.filtros): o botao no lugar, a gaveta por cima ─ */
+  .axa .fl { display: block; flex: 0 0 auto; }
+  .axa .fl-btn { display: inline-flex; }
+  .axa .fl-btn .fl-n { min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: var(--ac); color: var(--on-ac);
+    font-size: 12px; font-weight: 800; line-height: 20px; text-align: center; }
+  .axa .fl-btn.on { border-color: rgba(var(--ac-rgb), .5); }
+  .axa .fl-gv { display: none; }
+  .axa .fl.aberto .fl-fundo { display: block; position: fixed; inset: 0; z-index: 69; background: rgba(3,5,10,.6); animation: gv-fundo .18s ease-out; }
+  .axa .fl.aberto .fl-gv { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; margin: 0 auto; }
+  .axa .fl.aberto .fl-gv > .gv-cab, .axa .fl.aberto .fl-gv > .gv-pe { display: flex; }
+  .axa .fl-corpo > span, .axa .fl-corpo > div, .axa .fl-corpo > label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 100%; margin: 0; }
+  .axa .fl-corpo > .btns, .axa .fl-corpo > button { align-self: flex-start; }
+  .axa .fl-corpo select, .axa .fl-corpo .in, .axa .fl-corpo .fsp, .axa .fl-corpo .fsp-btn {
+    width: 100% !important; max-width: none !important; min-width: 0 !important; flex: none !important; height: 44px; box-sizing: border-box; }
+  .axa .fl-corpo .fsp { height: auto; flex-direction: column; }
+  .axa .fl-corpo .fsp-pop { position: static; max-height: none; min-width: 0; margin-top: 6px; box-shadow: none; }
+  .axa .fl-corpo .fsp-op { min-height: 44px; box-sizing: border-box; }
+  .axa .fl-corpo label, .axa .fl-corpo .qd-fl { font-size: 12.5px; font-weight: 700; color: var(--tx2); }
+
+  /* ── Tabela que vira lista de cartoes (.tc + data-label) ─────────────── */
+  .axa .tc thead, .axa .tc .tc-cab { display: none !important; }
+  .axa table.tc, .axa table.tc tbody { display: block; width: 100%; overflow: visible; }
+  .axa .tc tr, .axa .tc .tc-ln { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 12px 14px; align-items: start;
+    padding: 14px !important; margin: 0 0 10px; box-sizing: border-box; min-width: 0; border: 1px solid var(--bd); border-radius: 14px; background: var(--sf2); }
+  .axa .tc td, .axa .tc .tc-ln > * { display: flex !important; flex-wrap: wrap !important; align-items: center; gap: 4px 6px; min-width: 0; max-width: none !important;
+    padding: 0 !important; border: 0 !important; text-align: left !important; font-size: 13px; }
+  .axa .tc td > *, .axa .tc .tc-ln > * > * { min-width: 0; max-width: 100%; }
+  .axa .tc td[data-label]:not([data-label=""])::before, .axa .tc .tc-ln > [data-label]:not([data-label=""])::before {
+    content: attr(data-label); display: block; flex: 0 0 100%; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tx4); line-height: 16px; }
+  .axa .tc [data-tc="topo"], .axa .tc [data-tc="topo-fim"] { order: -3; }
+  .axa .tc [data-tc="topo-fim"] { justify-content: flex-end; text-align: right !important; }
+  .axa .tc [data-tc="titulo"], .axa .tc [data-tc="largo"], .axa .tc [data-tc="acao"] { grid-column: 1 / -1; }
+  .axa .tc [data-tc="titulo"] { order: -2; align-items: stretch; }
+  .axa .tc [data-tc="acao"] { order: 9; }
+  .axa .tc [data-tc="topo"]::before, .axa .tc [data-tc="topo-fim"]::before, .axa .tc [data-tc="titulo"]::before { content: none !important; }
+  .axa .tc [data-tc="fora"], .axa .tc td:empty { display: none !important; }
+}
+
+/* ── Janelas (.ovl/.dlg): o formulario de demanda, as caixas das acoes e a
+   busca ocupam a tela inteira. Ficam no <body>: media query. ──────────── */
+@media (max-width: 760px) {
+  .axa .ovl { padding: 0 !important; align-items: stretch !important; justify-content: stretch !important; }
+  .axa .ovl > .dlg { width: 100% !important; max-width: none !important; min-height: 100%; margin: 0 !important; border-radius: 0 !important; border: 0 !important;
+    padding: calc(18px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom)) !important; box-shadow: none !important; }
+  .axa .ovl > .dlg.pal { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) !important; }
+  .axa .pal-res { max-height: none; }
+  .axa .pal-in { padding: 0 6px 0 16px; }
+  .axa .pal-in .kbd { display: none; }
+  .axa .pal-x { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border: 0; border-radius: 12px;
+    background: transparent; color: var(--tx3); cursor: pointer; font: inherit; font-size: 18px; }
+  .axa .dlg-x { width: 44px !important; height: 44px !important; top: calc(10px + env(safe-area-inset-top)) !important; right: 10px !important; }
+  .axa .ovl .btn, .axa .ovl .btnp { height: 44px; }
+  .axa .ovl .btns { height: auto; min-height: 44px; }
+  .axa .ovl .in, .axa .ovl select { min-height: 44px; }
+  .axa .ovl input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .axa .ovl select, .axa .ovl textarea { font-size: 16px; }
+  .axa .ovl .chip, .axa .ovl .lab, .axa .ovl .kbd { font-size: 12px !important; }
+  .axa .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 }

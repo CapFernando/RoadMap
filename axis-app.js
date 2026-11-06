@@ -19,6 +19,48 @@
    sessao compartilhada: nao pede login.
 
    As telas se registram com AXIS_APP.tela({...}) em arquivos axis-tela-*.js.
+
+   NO CELULAR (largura do app ate 760 px, a mesma container query `app` do
+   axis-app.css) o app e outro desenho, nao o do computador encolhido:
+   - MENU: a barra lateral some e entra a BARRA INFERIOR fixa (`.bn`): Inicio,
+     Meu trabalho, Quadro (o que o perfil ve, completado ate tres pelo MENU),
+     Buscar e Mais. "Mais" abre uma gaveta com o resto do MENU do perfil, a
+     conta e o Sair. A regra de quem vai para a barra e `barraInferior(papel)`,
+     pura e exportada (a suite cobre por perfil).
+   - TOPO compacto: busca e "+ Nova demanda" viram botoes de icone.
+   - ALVO DE TOQUE de 44 px e TEXTO de 12 px no minimo nos componentes base
+     (.btn, .btns, .btnp, .tab, .in, chip clicavel, itens de menu, linhas).
+     Quando o desenho e menor (chip, link de texto), a area de toque cresce
+     por borda transparente ou padding com margem negativa: o desenho fica.
+   - JANELAS (.ovl/.dlg, o formulario de demanda e as caixas das acoes)
+     ocupam a tela inteira, so por CSS.
+
+   O QUE AS TELAS USAM PARA FICAR BOAS NO CELULAR (helpers em H):
+   - H.filtros(html, nAtivos, { id, titulo }) — FILTROS RECOLHIDOS. Recebe o
+     HTML dos controles de filtro (selects, inputs, Limpar) e devolve um bloco
+     que no computador e transparente (display: contents: os controles ficam
+     onde estavam, no flex/grid da tela) e no celular vira o botao
+     "Filtros (n)", que abre uma gaveta de baixo para cima COM OS MESMOS
+     ELEMENTOS dentro. Como os controles nao mudam de lugar no DOM, os
+     ouvintes da tela (inclusive os delegados na vista) continuam valendo, e
+     a gaveta continua aberta quando a tela se redesenha (o aberto mora aqui,
+     por `id`). `nAtivos` e quantos filtros estao fora do padrao; quem so
+     repinta parte da tela atualiza o numero com H.filtrosN(id, n). A busca
+     de texto, que se quer sempre a mao, fica FORA do helper.
+   - H.gaveta({ titulo, html, pe, aoFechar }) — GAVETA (bottom sheet)
+     generica, presa ao <body>: fecha no X, no fundo, no Esc e arrastando a
+     alca para baixo; prende o foco dentro e devolve o foco a quem abriu.
+     Devolve { el, corpo, fechar }. `html` pode ser string ou um Node.
+   - TABELA QUE VIRA LISTA DE CARTOES: por CSS, com `data-label`. Ponha a
+     classe `tc` na <table class="tbl tc"> (ou num container de linhas em
+     grid, com `tc-ln` em cada linha e `tc-cab` no cabecalho) e
+     `data-label="Prazo"` em cada celula. No celular cada linha vira um cartao
+     de duas colunas, com o rotulo em cima do valor. `data-tc` arruma o
+     cartao: "topo" e "topo-fim" (primeira linha, esquerda e direita),
+     "titulo" (largura toda, logo abaixo), "largo" (largura toda), "acao"
+     (largura toda, no fim) e "fora" (some no celular). H.celula(html,
+     rotulo, tc) marca a primeira tag de um pedaco de HTML ja pronto, sem
+     embrulhar (o grid do computador nao muda).
    ───────────────────────────────────────────────────────────────────────── */
 (function () {
   var raiz = typeof window !== 'undefined' ? window : globalThis;
@@ -378,6 +420,163 @@
     setTimeout(function () { t.remove(); }, 3600);
   }
 
+  // ── Gaveta (bottom sheet) e filtros recolhidos ────────────────────────
+  /* As duas usam o mesmo desenho (.gv-cab com a alca, .gv-pe) e o mesmo
+     teclado e gesto, ligados uma vez so em `ligar` por delegacao: a gaveta
+     dos filtros mora DENTRO da vista e e redesenhada com ela. */
+  var FOCAVEIS = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  var _gavetas = [];
+  function gaveta(o) {
+    o = o || {};
+    var anterior = document.activeElement;
+    var fundo = document.createElement('div');
+    fundo.className = 'gv-fundo';
+    fundo.innerHTML = '<div class="gv" role="dialog" aria-modal="true" aria-label="' + esc(o.titulo || 'Gaveta') + '" tabindex="-1">' +
+      '<div class="gv-cab" data-gv-alca><span class="gv-alca" aria-hidden="true"></span><b class="gv-t">' + esc(o.titulo || '') + '</b>' +
+      '<button type="button" class="gv-x" data-gv-fechar aria-label="Fechar">' + ico('x') + '</button></div>' +
+      '<div class="gv-corpo"></div>' + (o.pe ? '<div class="gv-pe">' + o.pe + '</div>' : '') + '</div>';
+    var painel = fundo.firstChild;
+    var corpo = painel.querySelector('.gv-corpo');
+    if (typeof o.html === 'string') corpo.innerHTML = o.html; else if (o.html) corpo.appendChild(o.html);
+    var g = {
+      el: painel, corpo: corpo,
+      fechar: function () {
+        var i = _gavetas.indexOf(g);
+        if (i < 0) return;
+        _gavetas.splice(i, 1);
+        fundo.remove();
+        if (!_gavetas.length) document.documentElement.classList.remove('gv-trava');
+        if (anterior && anterior.isConnected && anterior.focus) anterior.focus();
+        if (o.aoFechar) o.aoFechar();
+      }
+    };
+    fundo.addEventListener('click', function (e) {
+      if (e.target === fundo || e.target.closest('[data-gv-fechar]')) g.fechar();
+    });
+    painel.__fechar = g.fechar;
+    _gavetas.push(g);
+    document.body.appendChild(fundo);
+    document.documentElement.classList.add('gv-trava');
+    var prim = corpo.querySelector(FOCAVEIS);
+    (prim || painel).focus();
+    return g;
+  }
+  function fecharGavetas() { _gavetas.slice().forEach(function (g) { g.fechar(); }); }
+
+  /* FILTROS RECOLHIDOS. O aberto mora aqui, pelo id, porque as telas
+     redesenham a vista inteira a cada escolha: o HTML novo ja nasce aberto. */
+  var _flAberto = '';
+  var _flRota = '';
+  var ICO_FILTRO = '<svg class="fl-ico" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 5h16l-6 8v5l-4 2v-7z"/></svg>';
+  function filtros(html, nAtivos, o) {
+    o = o || {};
+    var id = String(o.id || (APP.rota.tela + (APP.rota.aba ? '-' + APP.rota.aba : '')) || 'filtros').replace(/[^\w-]/g, '');
+    var ab = _flAberto === id;
+    var n = Number(nAtivos) || 0;
+    var tit = o.titulo || 'Filtros';
+    return '<div class="fl' + (ab ? ' aberto' : '') + '" data-fl="' + id + '">' +
+      '<button type="button" class="btn fl-btn' + (n ? ' on' : '') + '" data-fl-abrir aria-expanded="' + ab + '" aria-controls="fl-gv-' + id + '">' +
+      ICO_FILTRO + '<span>' + esc(tit) + '</span><span class="fl-n"' + (n ? '' : ' hidden') + '>' + n + '</span></button>' +
+      '<div class="fl-fundo" data-fl-fechar></div>' +
+      '<div class="fl-gv" id="fl-gv-' + id + '" aria-label="' + esc(tit) + '"' + (ab ? ' role="dialog" aria-modal="true"' : '') + '>' +
+      '<div class="gv-cab" data-gv-alca><span class="gv-alca" aria-hidden="true"></span><b class="gv-t">' + esc(tit) + '</b>' +
+      '<button type="button" class="gv-x" data-fl-fechar aria-label="Fechar">' + ico('x') + '</button></div>' +
+      '<div class="fl-corpo">' + html + '</div>' +
+      '<div class="gv-pe"><button type="button" class="btnp" data-fl-fechar>Ver resultado</button></div></div></div>';
+  }
+  /** Atualiza o "(n)" do botao, para a tela que so repinta parte da vista. */
+  function filtrosN(id, n) {
+    var b = document.querySelector('.fl[data-fl="' + id + '"] .fl-btn');
+    if (!b) return;
+    n = Number(n) || 0;
+    var s = b.querySelector('.fl-n');
+    s.textContent = n; s.hidden = !n;
+    b.classList.toggle('on', !!n);
+  }
+  function abrirFiltros(fl) {
+    _flAberto = fl.getAttribute('data-fl');
+    fl.classList.add('aberto');
+    var gv = fl.querySelector('.fl-gv');
+    gv.setAttribute('role', 'dialog'); gv.setAttribute('aria-modal', 'true');
+    fl.querySelector('.fl-btn').setAttribute('aria-expanded', 'true');
+    document.documentElement.classList.add('fl-trava');
+    var prim = fl.querySelector('.fl-corpo').querySelector(FOCAVEIS);
+    if (prim) prim.focus();
+  }
+  function fecharFiltros() {
+    var fl = _flAberto && document.querySelector('.fl[data-fl="' + _flAberto + '"]');
+    _flAberto = '';
+    document.documentElement.classList.remove('fl-trava');
+    if (!fl) return;
+    fl.classList.remove('aberto');
+    var gv = fl.querySelector('.fl-gv');
+    gv.removeAttribute('role'); gv.removeAttribute('aria-modal');
+    var b = fl.querySelector('.fl-btn');
+    b.setAttribute('aria-expanded', 'false');
+    b.focus();
+  }
+  /** A gaveta de cima: a generica mais recente, ou a dos filtros aberta. */
+  function gavetaDoTopo() {
+    if (_gavetas.length) { var g = _gavetas[_gavetas.length - 1]; return { painel: g.el, fechar: g.fechar }; }
+    var fl = _flAberto && document.querySelector('.fl.aberto[data-fl="' + _flAberto + '"]');
+    if (fl && getComputedStyle(fl.querySelector('.fl-gv')).position === 'fixed') return { painel: fl.querySelector('.fl-gv'), fechar: fecharFiltros };
+    return null;
+  }
+  /* Arrastar a alca para baixo fecha; pouco arraste volta ao lugar. */
+  function ligarGestoGaveta() {
+    var arr = null;
+    document.addEventListener('pointerdown', function (e) {
+      var cab = e.target.closest && e.target.closest('[data-gv-alca]');
+      if (!cab || e.target.closest('button')) return;
+      var painel = cab.closest('.gv, .fl-gv');
+      var topo = gavetaDoTopo();
+      if (!painel || !topo || topo.painel !== painel) return;
+      arr = { painel: painel, y0: e.clientY, dy: 0, t0: Date.now(), fechar: topo.fechar };
+      painel.style.transition = 'none';
+      try { cab.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    document.addEventListener('pointermove', function (e) {
+      if (!arr) return;
+      arr.dy = Math.max(0, e.clientY - arr.y0);
+      arr.painel.style.transform = 'translateY(' + arr.dy + 'px)';
+    });
+    var solta = function () {
+      if (!arr) return;
+      var a = arr; arr = null;
+      a.painel.style.transition = '';
+      var rapido = a.dy > 30 && a.dy / Math.max(1, Date.now() - a.t0) > 0.6;
+      if (a.dy > Math.min(120, a.painel.offsetHeight / 3) || rapido) { a.painel.style.transform = ''; a.fechar(); }
+      else a.painel.style.transform = '';
+    };
+    document.addEventListener('pointerup', solta);
+    document.addEventListener('pointercancel', solta);
+  }
+  /* Esc fecha e Tab nao sai da gaveta. Em captura, antes dos ouvintes das
+     telas: a lista de sprints (`.fsp`) aberta dentro da gaveta fecha primeiro. */
+  function tecladoGaveta(e) {
+    var topo = gavetaDoTopo();
+    if (!topo) return;
+    if (e.key === 'Escape') {
+      if (topo.painel.querySelector('.fsp.aberto')) return;
+      e.preventDefault(); e.stopPropagation();
+      topo.fechar();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    var fs = Array.prototype.filter.call(topo.painel.querySelectorAll(FOCAVEIS), function (x) { return x.offsetParent !== null || x === document.activeElement; });
+    if (!fs.length) { e.preventDefault(); return; }
+    var prim = fs[0], ult = fs[fs.length - 1], at = document.activeElement;
+    if (!topo.painel.contains(at)) { e.preventDefault(); prim.focus(); }
+    else if (e.shiftKey && at === prim) { e.preventDefault(); ult.focus(); }
+    else if (!e.shiftKey && at === ult) { e.preventDefault(); prim.focus(); }
+  }
+
+  /** Marca a primeira tag de um pedaco de HTML como celula da tabela-cartao
+      (`data-label` e `data-tc`), sem embrulhar. */
+  function celula(html, rotulo, tc) {
+    return String(html).replace(/^(\s*<[a-zA-Z][\w-]*)/, '$1 data-label="' + esc(rotulo || '') + '"' + (tc ? ' data-tc="' + esc(tc) + '"' : ''));
+  }
+
   // ── Registro de telas e rotas ─────────────────────────────────────────
   /* tela({ id, rotulo, ico, grupo, papeis, abas: [{id, rotulo}], menu: false,
             render(el, ctx) })  — `render` recebe o <div> da vista e um contexto
@@ -402,7 +601,8 @@
     { grupo: 'Trabalho', itens: [
       { id: 'inicio',   rotulo: 'Início',         ico: 'home',     papeis: ADC },
       // O painel do dev (dev.html) virou esta aba do Inicio; o item no menu e a porta dela.
-      { id: 'meu',      rotulo: 'Meu trabalho',   ico: 'user',     papeis: AD, rota: 'inicio/meu' },
+      // `curto`: o rotulo na barra inferior do celular, onde "Meu trabalho" nao cabe.
+      { id: 'meu',      rotulo: 'Meu trabalho',   ico: 'user',     papeis: AD, rota: 'inicio/meu', curto: 'Minhas' },
       { id: 'quadro',   rotulo: 'Quadro',         ico: 'board',    papeis: AD },
       { id: 'backlog',  rotulo: 'Backlog',        ico: 'menu',     papeis: AD, badge: 'backlog' },
       { id: 'sprints',  rotulo: 'Sprints',        ico: 'refresh',  papeis: AD },
@@ -424,6 +624,31 @@
   var FORA_DO_MENU = { item: 'quadro', projeto: 'projetos', conta: '', planejamento: 'sprints', importar: 'backlog', api: '' };
 
   function itemVisivel(it) { return it.papeis.indexOf(APP.papel) >= 0; }
+
+  /* A BARRA INFERIOR DO CELULAR, por perfil. Fixos: Inicio, Meu trabalho e
+     Quadro, os que o perfil ve; quem ve menos de tres (a consulta) completa
+     com os proximos do MENU, sem link que sai do app. Buscar e Mais sao da
+     propria barra. O que nao foi para a barra vai para a gaveta do "Mais",
+     nos grupos do MENU, e o RODAPE (Configuracoes) no fim. */
+  var BARRA_FIXOS = ['inicio', 'meu', 'quadro'];
+  var BARRA_MAX = 3;
+  function barraInferior(papel) {
+    var ve = function (it) { return it.papeis.indexOf(papel) >= 0; };
+    var todos = [];
+    MENU.forEach(function (g) { g.itens.forEach(function (it) { todos.push(it); }); });
+    var barra = [];
+    BARRA_FIXOS.forEach(function (id) {
+      var it = todos.filter(function (x) { return x.id === id; })[0];
+      if (it && ve(it)) barra.push(it);
+    });
+    todos.forEach(function (it) {
+      if (barra.length < BARRA_MAX && ve(it) && !it.href && barra.indexOf(it) < 0) barra.push(it);
+    });
+    var mais = MENU.map(function (g) {
+      return { grupo: g.grupo, itens: g.itens.filter(function (it) { return ve(it) && barra.indexOf(it) < 0; }) };
+    }).filter(function (g) { return g.itens.length; });
+    return { barra: barra, mais: mais, rodape: RODAPE.filter(ve) };
+  }
 
   function contagemBadge(qual) {
     if (qual === 'backlog' && APP.papel === 'admin') {
@@ -458,6 +683,55 @@
       '<span style="font-size:11.5px;color:var(--tx3)">' + esc(rotPapel) + '</span></span>' +
       '<button type="button" class="sb-sair" data-acao="sair" title="Sair" aria-label="Sair">' + ico('logout') + '</button></a>';
     return h;
+  }
+
+  /* A barra inferior do celular (`.bn`): so aparece pela container query do
+     axis-app.css; no computador fica escondida e a lateral segue igual. */
+  function htmlBarra(ativo) {
+    var B = barraInferior(APP.papel);
+    var noMais = B.mais.some(function (g) { return g.itens.some(function (it) { return it.id === ativo; }); }) ||
+      B.rodape.some(function (it) { return it.id === ativo; });
+    var badge = B.mais.reduce(function (t, g) { return t + g.itens.reduce(function (s, it) { return s + (it.badge ? contagemBadge(it.badge) : 0); }, 0); }, 0);
+    var h = '<nav class="bn" aria-label="Navegação">' + B.barra.map(function (it) {
+      var on = it.id === ativo;
+      return '<a href="#' + (it.rota || it.id) + '" class="bn-it' + (on ? ' on' : '') + '"' + (on ? ' aria-current="page"' : '') +
+        (it.curto ? ' aria-label="' + esc(it.rotulo) + '" title="' + esc(it.rotulo) + '"' : '') + '>' +
+        ico(it.ico) + '<span class="bn-t">' + esc(it.curto || it.rotulo) + '</span></a>';
+    }).join('');
+    h += '<button type="button" class="bn-it" data-acao="busca">' + ico('search') + '<span class="bn-t">Buscar</span></button>';
+    h += '<button type="button" class="bn-it' + (noMais ? ' on' : '') + '" data-acao="mais" aria-haspopup="dialog">' + ico('menu') +
+      '<span class="bn-t">Mais</span>' + (badge ? '<span class="bn-badge" title="aguardando validação">' + badge + '</span>' : '') + '</button>';
+    return h + '</nav>';
+  }
+
+  /** A gaveta do "Mais": o resto do MENU do perfil, a conta e o Sair. */
+  function abrirMais() {
+    var B = barraInferior(APP.papel);
+    var e = APP.eu || {};
+    var nome = e.nome || e.login || 'Minha conta';
+    var rotPapel = { admin: 'PM/PO · Admin', analista: 'Analista de requisitos', dev: 'Dev', consulta: 'Consulta' }[APP.papel] || '';
+    var r = lerRota();
+    var ativo = FORA_DO_MENU[r.tela] != null ? FORA_DO_MENU[r.tela] : r.tela;
+    var item = function (it) {
+      var b = it.badge ? contagemBadge(it.badge) : 0;
+      return '<a href="' + (it.href || ('#' + (it.rota || it.id))) + '" class="gv-it' + (it.id === ativo ? ' on' : '') + '"' + (it.id === ativo ? ' aria-current="page"' : '') + '>' +
+        ico(it.ico) + '<span class="sb-t">' + esc(it.rotulo) + '</span>' +
+        (b ? '<span class="sb-badge" title="aguardando validação">' + b + '</span>' : '') +
+        (it.href ? ico('external', 'style="color:var(--tx4)"') : '') + '</a>';
+    };
+    var h = '<a href="#conta" class="gv-eu">' + av(nome, 40) + '<span style="display:flex;flex-direction:column;min-width:0">' +
+      '<b class="ell" style="font-size:14px">' + esc(nome) + '</b><span style="font-size:12.5px;color:var(--tx3)">' + esc(rotPapel) + '</span></span></a>';
+    B.mais.forEach(function (g) {
+      h += '<div class="gv-grp"><span class="sb-lab">' + esc(g.grupo.toUpperCase()) + '</span>' + g.itens.map(item).join('') + '</div>';
+    });
+    h += '<div class="gv-grp"><span class="sb-lab">CONTA</span>' + B.rodape.map(item).join('') +
+      item({ id: 'conta', rotulo: 'Minha conta', ico: 'user' }) +
+      '<button type="button" class="gv-it" data-acao="sair">' + ico('logout') + '<span class="sb-t">Sair</span></button></div>';
+    var g = gaveta({ titulo: 'Menu', html: h });
+    // Fecha depois do clique: tirar o link do DOM no meio do clique poderia
+    // cancelar a navegacao.
+    g.corpo.addEventListener('click', function (ev) { if (ev.target.closest('a[href]')) setTimeout(g.fechar, 0); });
+    return g;
   }
 
   // ── Notificacoes: o que pede acao, derivado da base ───────────────────
@@ -503,7 +777,7 @@
     ov.className = 'ovl busca';
     ov.innerHTML = '<div class="dlg pal" role="dialog" aria-label="Buscar"><div class="pal-in">' + ico('search') +
       '<input id="pal-q" placeholder="Buscar AX-, título, dev, solicitante ou sistema" autocomplete="off">' +
-      '<span class="kbd">Esc</span></div><div class="pal-res" id="pal-res"></div></div>';
+      '<span class="kbd">Esc</span><button type="button" class="pal-x" aria-label="Fechar a busca">' + ico('x') + '</button></div><div class="pal-res" id="pal-res"></div></div>';
     document.body.appendChild(ov);
     var q = ov.querySelector('#pal-q'), res = ov.querySelector('#pal-res'), sel = 0, achados = [];
     var fecha = function () { ov.remove(); };
@@ -535,7 +809,8 @@
       else if (e.key === 'ArrowUp') { sel = Math.max(sel - 1, 0); pinta(); e.preventDefault(); }
       else if (e.key === 'Enter' && achados[sel]) { location.hash = hrefItem(achados[sel]); fecha(); }
     });
-    ov.addEventListener('click', function (e) { if (e.target === ov || e.target.closest('.pal-it')) fecha(); });
+    // No celular a busca ocupa a tela: sem fundo para tocar, o X fecha.
+    ov.addEventListener('click', function (e) { if (e.target === ov || e.target.closest('.pal-it, .pal-x')) fecha(); });
     pinta();
     q.focus();
   }
@@ -609,7 +884,7 @@
       raizEl.innerHTML = '<div class="app"><nav class="sb" aria-label="Menu principal">' + htmlMenu('') + '</nav><main class="main">' +
         '<div class="sk" style="height:40px;width:420px;max-width:100%"></div><div class="sk" style="height:34px;width:260px"></div>' +
         '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">' + '<div class="sk" style="height:96px"></div>'.repeat(4) + '</div>' +
-        '<div class="sk" style="height:320px"></div></main></div>';
+        '<div class="sk" style="height:320px"></div></main>' + htmlBarra('') + '</div>';
       return;
     }
     var r = lerRota();
@@ -624,6 +899,9 @@
     if (t && t.param) { r.param = r.param; r.aba = ''; }
     else if (abas.length) { var s = r.param.split('/'); r.aba = s[0] || abas[0].id; r.param = s.slice(1).join('/'); if (!abas.some(function (a) { return a.id === r.aba; })) r.aba = abas[0].id; }
     APP.rota = r;
+    // Filtros abertos so sobrevivem ao redesenho da MESMA rota.
+    var rotaTxt = r.tela + '/' + r.aba + '/' + r.param;
+    if (rotaTxt !== _flRota) { _flRota = rotaTxt; _flAberto = ''; document.documentElement.classList.remove('fl-trava'); }
     var ativoMenu = FORA_DO_MENU[r.tela] != null ? FORA_DO_MENU[r.tela] : r.tela;
     if (r.tela === 'inicio' && r.aba === 'meu') ativoMenu = 'meu';
     var nN = notificacoes();
@@ -637,17 +915,19 @@
           esc(a.rotulo) + (a.n != null ? '<span class="n">' + a.n + '</span>' : '') + '</a>';
       }).join('') + '</nav>';
     }
-    var novo = pode('gravar') ? '<button type="button" class="btnp" data-acao="novo">+ Nova demanda</button>' : '';
+    // No celular o rotulo some e fica o "+" (botao de icone, 44 px).
+    var novo = pode('gravar') ? '<button type="button" class="btnp tb-novo" data-acao="novo" title="Nova demanda" aria-label="Nova demanda"><span>+ <span class="lbl">Nova demanda</span></span></button>' : '';
     raizEl.innerHTML =
       '<div class="app"><nav class="sb" aria-label="Menu principal">' + htmlMenu(ativoMenu) + '</nav>' +
       '<main class="main"><div class="topbar">' +
-      '<button type="button" class="tb-search" data-acao="busca">' + ico('search') + '<span class="lbl">Buscar AX-, título, dev ou sistema</span><span class="kbd">Ctrl K</span></button>' +
+      '<a href="#inicio" class="tb-logo" aria-label="AXIS, início"><span class="sb-mark"><img src="axis/marca/axis-leao-branco.png" alt="" style="width:22px;height:auto;display:block"></span></a>' +
+      '<button type="button" class="tb-search" data-acao="busca" aria-label="Buscar">' + ico('search') + '<span class="lbl">Buscar AX-, título, dev ou sistema</span><span class="kbd">Ctrl K</span></button>' +
       '<span style="flex:1"></span>' + novo +
       '<button type="button" class="tb-ico" data-acao="tema" aria-label="Alternar tema claro ou escuro" title="Tema claro ou escuro">' + ico(raiz.temaAtual && raiz.temaAtual() === 'claro' ? 'sun' : 'moon') + '</button>' +
       '<span style="position:relative"><button type="button" class="tb-ico" data-acao="ntf" aria-label="Notificações" aria-expanded="false">' + ico('bell') +
       (nN.length ? '<span class="dot">' + nN.length + '</span>' : '') + '</button></span>' +
       '<a href="#conta" class="tb-av" aria-label="Minha conta" style="background:var(--ac);color:var(--on-ac)">' + esc(iniciais((APP.eu || {}).nome || (APP.eu || {}).login || '')) + '</a>' +
-      '</div>' + abasHtml + '<div class="view" id="vista"></div></main></div>';
+      '</div>' + abasHtml + '<div class="view" id="vista"></div></main>' + htmlBarra(ativoMenu) + '</div>';
     var vista = raizEl.querySelector('#vista');
     if (!t) {
       vista.innerHTML = vazio('package', 'Esta tela ainda está sendo montada', 'Use o menu para ir a outra tela.');
@@ -664,6 +944,8 @@
         '<button class="btn" type="button" onclick="location.reload()">Recarregar</button>');
     }
     if (manterRolagem !== true) window.scrollTo(0, 0);
+    // A tela pode ter deixado de desenhar o bloco de filtros que estava aberto.
+    if (_flAberto && !document.querySelector('.fl.aberto[data-fl="' + _flAberto + '"]')) { _flAberto = ''; document.documentElement.classList.remove('fl-trava'); }
   }
 
   function ctx(r) {
@@ -715,8 +997,9 @@
       var a = e.target.closest('[data-acao]');
       if (a) {
         var acao = a.getAttribute('data-acao');
-        if (acao === 'sair') { e.preventDefault(); sair(); return; }
+        if (acao === 'sair') { e.preventDefault(); fecharGavetas(); sair(); return; }
         if (acao === 'busca') { abrirBusca(); return; }
+        if (acao === 'mais') { abrirMais(); return; }
         if (acao === 'tema') { if (raiz.temaAlternar) raiz.temaAlternar(); desenhar(); return; }
         if (acao === 'ntf') { abrirNotificacoes(a); return; }
         // "+ Nova demanda": o formulario do app (axis-form-demanda.js).
@@ -727,6 +1010,9 @@
         }
       }
       if (!e.target.closest('.ntf, [data-acao="ntf"]')) { var n = document.querySelector('.ntf'); if (n) n.remove(); }
+      var fa = e.target.closest('[data-fl-abrir]');
+      if (fa) { var fl = fa.closest('.fl'); if (fl.classList.contains('aberto')) fecharFiltros(); else abrirFiltros(fl); return; }
+      if (e.target.closest('[data-fl-fechar]')) { fecharFiltros(); return; }
       // <a href="admin.html" data-admin-aba="mes">: o admin abre na aba pedida.
       // Usa a mesma chave que o admin ja le ao carregar (`restoreLastTab`).
       var aa = e.target.closest('[data-admin-aba]');
@@ -735,7 +1021,9 @@
     document.addEventListener('keydown', function (e) {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K') && APP.D) { e.preventDefault(); abrirBusca(); }
     });
-    window.addEventListener('hashchange', function () { desenhar(); });
+    document.addEventListener('keydown', tecladoGaveta, true);
+    ligarGestoGaveta();
+    window.addEventListener('hashchange', function () { fecharGavetas(); desenhar(); });
     // Volta a ler a base quando a aba volta ao foco depois de um minuto: quem
     // editou no admin e voltou ve a mudanca sem recarregar.
     window.addEventListener('focus', function () {
@@ -753,10 +1041,11 @@
     pontosDe: pontosDe, devsDe: devsDe, tema: tema, caminho: caminho, projeto: projeto, sprintAtual: sprintAtual,
     porCodigo: porCodigo, meusNomes: meusNomes, minha: minha, pode: pode, donoDaSprint: donoDaSprint, hidrata: hidrata,
     ico: ico, chip: chip, chipEtapa: chipEtapa, chipTipo: chipTipo, chipsReq: chipsReq, chipCasoUso: chipCasoUso, CASO_USO_COR: CASO_USO_COR, av: av, cod: cod, hrefItem: hrefItem,
-    prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, gravar: gravar, kpi: kpi, toast: toast, ir: ir, api: api, recarregar: function () { return carregar().then(desenhar); }
+    prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, gravar: gravar, kpi: kpi, toast: toast, ir: ir, api: api, recarregar: function () { return carregar().then(desenhar); },
+    filtros: filtros, filtrosN: filtrosN, gaveta: gaveta, celula: celula
   };
 
-  var AXIS_APP = { tela: tela, H: H, APP: APP, desenhar: desenhar, notificacoes: notificacoes, MENU: MENU, abrirBusca: abrirBusca, WORKER: WORKER };
+  var AXIS_APP = { tela: tela, H: H, APP: APP, desenhar: desenhar, notificacoes: notificacoes, MENU: MENU, RODAPE: RODAPE, barraInferior: barraInferior, abrirBusca: abrirBusca, WORKER: WORKER };
   raiz.AXIS_APP = AXIS_APP;
   if (typeof document !== 'undefined' && document.getElementById) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ligar); else ligar();

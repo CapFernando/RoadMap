@@ -13,7 +13,20 @@
    retomar, negar e entregar sao os gestos de axis-acoes.js, cada um com o
    patch que o editor do admin ou o painel do dev gravaria. O que este arquivo
    decide e so QUAIS botoes cada perfil ve (`AXIS_ACOES.disponiveis`) e qual e
-   o principal. Estimar leva a tela de Poker do app (#poker).
+   o principal. Estimar leva a tela de Poker do app (#poker). Excluir e do
+   PM/PO, com a confirmacao que diz qual (`kbExcluir` do admin).
+
+   NA VALIDACAO (area ou PM/PO) a entrega do dev vem no topo: o que foi
+   implementado, o resumo e os avisos da aba Entrega do admin, junto de
+   Validar e Devolver (`entregaSec`), com as assinaturas do spike
+   (`spikeBloco`) e os "Dados da entrega" (`dadosEntrega`).
+
+   O QUE O MODAL ANTIGO TINHA E O ITEM TAMBEM TEM: o Discovery do painel
+   publico (`discoveryLinhas`, copia de `renderMDiscovery`), o "Mover para"
+   unico com as etapas de cada perfil (`AXIS_ACOES.etapasDoSeletor`), o
+   Comecar a partir de qualquer etapa antes do andamento, a zona de colar e
+   arrastar anexo (`ligaZonaAnexo`, anexo-cola.js) e o ✕ do anexo, a estrela
+   do destaque e o codigo que se copia com um clique.
 
    OS GESTOS DO PAINEL DO DEV TAMBEM GRAVAM DAQUI (axis-acoes.js): pegar da
    fila do time, as subtarefas (TASKS), corrigir a entrega com o PM/PO, o
@@ -108,7 +121,63 @@
       '.axa .it-tira:hover{color:var(--dg-t)}',
       '.axa .it-erro{font-size:12.5px;color:var(--dg-t)}',
       '.axa .it-erro:empty{display:none}',
-      '@container app (max-width: 760px){.axa .it-bolha{max-width:88%}}'
+      // A entrega do dev (`entregaHTML` do admin): avisos, o texto e a decisao juntos.
+      '.axa .it-ent.x-wn{border-color:rgba(var(--wn-rgb),.42)}',
+      '.axa .it-ent-av{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:var(--sf2);font-size:13px;line-height:19px;color:var(--tx2);overflow-wrap:anywhere}',
+      '.axa .it-ent-av > .axi{flex-shrink:0;margin-top:2px}',
+      '.axa .it-ent-av b{font-weight:800}',
+      '.axa .it-ent-av.x-wn{background:rgba(var(--wn-rgb),.08);color:var(--wn-t)}',
+      '.axa .it-ent-av.x-ok{background:rgba(var(--ok-rgb),.08);color:var(--ok-t)}',
+      '.axa .it-ent-av.x-dg{background:rgba(var(--dg-rgb),.08);color:var(--dg-t)}',
+      '.axa .it-ent-l{font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--tx3)}',
+      '.axa .it-ent-t{padding:12px 14px;border-radius:12px;background:var(--sf2);font-size:14px;line-height:22px;color:var(--tx);white-space:pre-wrap;overflow-wrap:anywhere}',
+      '.axa .it-ent-t.vz{font-size:13px;color:var(--tx3)}',
+      '.axa .it-ent-ac{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;padding-top:12px;border-top:1px solid var(--bd)}',
+      // Discovery: rotulo e valor em duas colunas; no celular, um embaixo do outro.
+      '.axa .it-disc{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr);gap:8px 14px;font-size:13.5px;line-height:20px}',
+      '.axa .it-disc > dt{color:var(--tx3);font-weight:700;font-size:12.5px}',
+      '.axa .it-disc > dd{margin:0;color:var(--tx2);white-space:pre-wrap;overflow-wrap:anywhere}',
+      '.axa .it-disc .dim{color:var(--tx3)}',
+      // Spike e dados da entrega (`spike-bloco` e `ent-linha` do admin).
+      '.axa .it-spk{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:12px;background:var(--sf2);border:1px solid var(--bd)}',
+      '.axa .it-spk.x-wn{border-color:rgba(var(--wn-rgb),.45)}',
+      '.axa .it-spk.x-ok{border-color:rgba(var(--ok-rgb),.45)}',
+      '.axa .it-spk-l{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--tx2);min-width:0}',
+      '.axa .it-spk-l.ok{color:var(--tx)}',
+      '.axa .it-spk-l .n{flex:1;min-width:0;overflow-wrap:anywhere}',
+      '.axa .it-spk-l .em{font-size:12px;color:var(--tx3);white-space:nowrap}',
+      '.axa .it-spk-av{font-size:12.5px;line-height:18px;color:var(--wn-t)}',
+      '.axa .it-spk-av.ok{color:var(--ok-t)}',
+      '.axa .it-ent-dados{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--tx3)}',
+      '.axa .it-ent-dados b{color:var(--tx);font-weight:700}',
+      // Anexos: abrir e tirar na mesma linha; a zona de colar e arrastar.
+      '.axa .it-anx{display:flex;gap:6px;align-items:stretch;min-width:0}',
+      '.axa .it-anx > .it-linha{flex:1;border:0;font-family:inherit;font-size:13px;cursor:pointer;text-align:left}',
+      '.axa .it-anx-tira{flex:0 0 auto;width:38px;border:0;border-radius:10px;background:var(--sf2);color:var(--tx3);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font:inherit}',
+      '.axa .it-anx-tira:hover{color:var(--dg-t)}',
+      '.axa .it-anx-zona .anexo-zona{border:1px dashed var(--bd3);border-radius:12px;background:var(--sf2);color:var(--tx3);font-size:12.5px;line-height:18px;padding:12px 14px;min-height:44px;box-sizing:border-box;display:flex;align-items:center}',
+      '.axa .it-anx-zona .anexo-zona b{color:var(--tx2)}',
+      '.axa .it-anx-zona .anexo-zona:focus{border-style:solid;border-color:var(--ac);box-shadow:0 0 0 3px rgba(var(--ac-rgb),.18)}',
+      '.axa .it-anx-zona .anexo-zona.sobre{border-style:solid;border-color:var(--ok);background:rgba(var(--ok-rgb),.1)}',
+      // Sem mouse nao ha Ctrl+V nem arrastar: fica o botao Anexar.
+      '@media (hover: none){.axa .it-anx-zona{display:none}}',
+      '.axa .it-dest{border:0;background:transparent;padding:0;cursor:pointer;display:inline-flex;font:inherit}',
+      '.axa .it-dest:hover .chip{box-shadow:inset 0 0 0 1px rgba(var(--ac-rgb),.5)}',
+      '.axa .it-cod{border:0;background:transparent;padding:0;font:inherit;color:var(--tx2);cursor:pointer;display:inline-flex;align-items:center;gap:4px}',
+      '.axa .it-cod:hover{color:var(--ac-t)}',
+      '.axa .it-conv-d,.axa .it-conv-m{display:flex;flex-direction:column;min-width:0}',
+      '.axa .it-conv-m{display:none}',
+      // Toque de 44 px no celular: os botoes do topo e os da entrega.
+      '@container app (max-width: 760px){.axa .it-acoes > .btn,.axa .it-acoes > .btnp{min-height:44px}' +
+        '.axa .it-ent-ac > *{flex:1 1 150px;min-height:44px}.axa .it-ent{padding:16px}}',
+      '@container app (max-width: 760px){.axa .it-bolha{max-width:88%}' +
+        '.axa .it-disc{grid-template-columns:minmax(0,1fr);gap:2px}.axa .it-disc > dd{margin-bottom:8px}' +
+        '.axa .it-anx-tira{width:44px;min-height:44px}.axa .it-anx > .it-linha{min-height:44px}' +
+        '.axa .it-cod{min-height:44px}.axa .it-spk-l .em{font-size:12px}' +
+        '.axa .it-conv-d{display:none}.axa .it-conv-m{display:flex}' +
+        // O resto do Item no celular: linhas, o link da conversa e a estrela com 44 px; texto de 12 px.
+        '.axa .it-linha{min-height:44px;box-sizing:border-box}.axa .it-sec > a.note,.axa .it-trilha a{display:inline-flex;align-items:center;min-height:44px}' +
+        '.axa .it-dest{padding:11px 0;margin:-11px 0}.axa .it-props .dim,.axa .it-props .note{font-size:12px !important}}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -157,11 +226,23 @@
     return i >= 0 && i < FLUXO.length - 1 ? FLUXO[i + 1] : '';
   }
 
+  /** A frase da ultima recusa de pausa (`devPausaRender`, dev.html), ou ''. */
+  function ultimaRecusa(m) {
+    var rs = Array.isArray(m.pausa_recusas) ? m.pausa_recusas.filter(Boolean) : [];
+    var u = rs[rs.length - 1];
+    if (!u) return '';
+    return 'Pausa negada em ' + H.esc(H.dma(u.em)) + ' por ' + H.esc(u.por || '—') + ': ' + H.esc(u.motivo || '—') +
+      (rs.length > 1 ? ' <span class="note">(' + rs.length + 'ª recusa nesta demanda)</span>' : '');
+  }
+
   /** O QUE IMPEDE A DEMANDA DE SEGUIR, cada linha com a regra de onde veio. */
-  function travas(m, D) {
+  /* Antes do andamento, o proximo passo DO DEV e comecar (`ms-status`, que
+     so oferece Em andamento e as validacoes); o resto e decisao do PM/PO. */
+  var ANTES_DE_COMECAR = ['backlog', 'levantar_req', 'planning', 'planejado'];
+  function travas(m, D, papel) {
     var hoje = H.hoje();
     var col = H.colunaDe(m);
-    var prox = proxima(col);
+    var prox = papel === 'dev' && ANTES_DE_COMECAR.indexOf(col) >= 0 ? 'em_andamento' : proxima(col);
     var out = [];      // { cls, html, trava }
     var faltas = [];
 
@@ -175,13 +256,20 @@
         var p = PAUSA.pedido(m);
         out.push({ cls: '', trava: false, html: 'Pedido de pausa de ' + H.dma(p.em) + (p.por ? ' (' + H.esc(p.por) + ')' : '') +
           ' aguardando o PM/PO.' + (p.motivo ? ' Motivo: <b>' + H.esc(p.motivo) + '</b>' : '') });
+      } else {
+        /* A ULTIMA RECUSA FICA A VISTA (`devPausaRender`, dev.html): sem ela,
+           pede-se de novo a mesma coisa e recebe-se o mesmo nao. */
+        var rec = ultimaRecusa(m);
+        if (rec) out.push({ cls: 'dg', trava: false, html: rec });
       }
     }
 
     if (window.VINCULO) {
       var abertos = VINCULO.abertos(lista(), m.id);
+      /* A DEPENDENCIA SO BARRA A AREA E A CONCLUSAO (`checkDepBlock`, dev.html;
+         a regra `entregar`): comecar e entregar ao PM/PO seguem. */
       if (abertos.length) {
-        out.push({ cls: '', trava: true, html: 'Não avança enquanto ' + (abertos.length === 1 ? 'esta dependência estiver aberta' : 'estas dependências estiverem abertas') + ': ' +
+        out.push({ cls: '', trava: ['validacao_area', 'concluido'].indexOf(prox) >= 0, html: 'Não vai à Validação da área nem conclui enquanto ' + (abertos.length === 1 ? 'esta dependência estiver aberta' : 'estas dependências estiverem abertas') + ': ' +
           abertos.map(function (f) {
             return '<a href="' + H.hrefItem(f) + '" class="mono">' + H.esc(f.codigo || f.titulo) + '</a> (' + H.esc(rotEtapa(H.colunaDe(f))) + ')';
           }).join(', ') + '.' });
@@ -367,7 +455,11 @@
         partes.push('<a href="' + H.hrefItem(p) + '">' + H.esc((p.codigo ? p.codigo + ' ' : '') + (p.titulo || '')) + '</a>');
       });
     }
-    partes.push('<span class="mono" style="color:var(--tx2)">' + H.esc(m.codigo || '—') + '</span>');
+    /* O CODIGO SE COPIA (`copiarCodigo`, admin.html): um clique copia o
+       codigo; com Shift ou Alt, o link do item. */
+    partes.push(m.codigo ? '<button type="button" class="it-cod mono" data-it-copia="' + H.esc(m.codigo) + '" title="Copiar o código (Shift ou Alt: o link)">' +
+      H.esc(m.codigo) + ' ' + H.ico('clipboard', 'style="font-size:12px;color:var(--tx4)"') + '</button>'
+      : '<span class="mono" style="color:var(--tx2)">—</span>');
     return '<nav aria-label="Caminho" class="it-trilha">' + partes.join('<span aria-hidden="true">›</span>') + '</nav>';
   }
 
@@ -394,7 +486,13 @@
     else if (m.sales_ops) c.push(H.chip(H.ico('trend') + ' Sales Ops', 'in'));
     if (m.spike) c.push(H.chip(H.ico('search') + ' Spike', 'in'));
     if (m.debito_tecnico) c.push(H.chip('Débito técnico', 'pu'));
-    if (m.destaque) c.push(H.chip(H.ico('star') + ' Destaque', 'ac'));
+    /* A ESTRELA (`destaqueAlterna`, admin.html): para o PM/PO e um botao que
+       grava em um clique; para os outros, o chip quando marcada. */
+    if (AC && AC.REGRAS.destaque && permite('destaque', m, {})) {
+      c.push('<button type="button" class="it-dest" data-axa-acao="destaque" data-axa-id="' + H.esc(m.id) + '" aria-pressed="' + !!m.destaque + '" title="' +
+        (m.destaque ? 'Destaque da apresentação. Clique para tirar.' : 'Marcar como destaque da apresentação') + '">' +
+        H.chip(H.ico('star') + ' ' + (m.destaque ? 'Destaque' : 'Marcar destaque'), m.destaque ? 'ac' : 'bk') + '</button>');
+    } else if (m.destaque) c.push(H.chip(H.ico('star') + ' Destaque', 'ac'));
     c.push(H.chipsReq(m));
     return c.join('');
   }
@@ -413,6 +511,8 @@
     var pega = ctx.papel === 'dev' && !H.minha(m) ? AC.botaoPegar(m) : '';
     // Mesclar (`mescAbrirBusca` do editor do admin): a outra entra nesta e sai do fluxo.
     if (H.pode('editar') && AC.REGRAS.mesclar) b.push(AC.botao('mesclar', m, 'Mesclar outra nesta', 'btn', { ico: 'link', titulo: 'Duas pessoas pediram a mesma coisa: a outra entra nesta e sai do fluxo, sem ser apagada' }));
+    // Excluir (`deleteMelhoria`/`kbExcluir` do admin): so o PM/PO, com a confirmacao que diz qual.
+    if (AC.REGRAS.excluir && permite('excluir', m, {})) b.push(AC.botao('excluir', m, 'Excluir', 'btn perigo', { ico: 'trash', titulo: 'Excluir esta demanda. Não há como desfazer.' }));
     var trava = { desligado: tv.travada, descrito: tv.travada ? 'it-trava' : '', titulo: tv.travada ? 'Veja abaixo o que falta' : '' };
     /* O BOTAO PRINCIPAL. Na validacao do PM/PO e a decisao (devolver ou
        validar e fechar); para o dev, entregar E o avanco de Em andamento e da
@@ -425,14 +525,40 @@
       b.push(AC.botao('devolver', m, 'Devolver com motivo', 'btn perigo', { ico: 'undo' }));
       b.push(AC.botao('validar', m, 'Validar e fechar', 'btnp ok', { ico: 'check' }));
     } else if (ctx.papel === 'dev' && (col === 'em_andamento' || col === 'validacao_area')) {
+      // A trava e a da regra `entregar` (`saveStatus`): a dependencia so barra a area.
+      var pe = podeEntregar(m);
       b.push(AC.botao('entregar', m, col === 'em_andamento' ? 'Registrar entrega' : 'Enviar ao PM/PO', 'btnp',
-        Object.assign({ ico: 'send', dados: { destino: tv.prox } }, trava)));
-    } else if (ctx.papel === 'dev' && col === 'planejado') {
-      b.push(AC.botao('mover', m, 'Começar', 'btnp', Object.assign({ dados: { destino: 'em_andamento' } }, trava)));
+        { ico: 'send', dados: { destino: tv.prox }, desligado: !pe.ok, descrito: pe.ok ? '' : 'it-trava', titulo: pe.ok ? '' : pe.motivo }));
+    } else if (ctx.papel === 'dev' && ANTES_DE_COMECAR.indexOf(col) >= 0 && H.minha(m)) {
+      /* COMECAR DE QUALQUER ETAPA ANTES DO ANDAMENTO (o `ms-status` do dev.html
+         deixa): a trava e a da regra `mover` do dev — a da sprint e a da area,
+         as mesmas do `saveStatus` e do Worker. */
+      var rc = AC.REGRAS.mover(m, { destino: 'em_andamento' }, AC.contexto());
+      b.push(AC.botao('mover', m, 'Começar', 'btnp', { dados: { destino: 'em_andamento' }, desligado: !rc.ok,
+        descrito: rc.ok ? '' : 'it-trava', titulo: rc.ok ? 'Vai para Em andamento' : rc.erro }));
     } else if (tv.prox && ctx.papel !== 'dev') {
       b.push(AC.botao('mover', m, 'Mover para ' + rotEtapa(tv.prox), 'btnp', Object.assign({ dados: { destino: tv.prox } }, trava)));
     }
-    return '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">' + b.join('') + '</div>';
+    return '<div class="it-acoes" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">' + b.join('') + '</div>';
+  }
+
+  /** A entrega do dev pode sair? A regra `entregar` com horas e texto de
+   *  mentira: o que falta de CAMPO se resolve na caixa; o resto trava. */
+  function podeEntregar(m) {
+    var AC = window.AXIS_ACOES;
+    var c = AC.contexto();
+    var ds = AC.destinosDeEntrega(m, c);
+    if (!ds.length) {
+      var hb = window.HOMOLOGACAO ? HOMOLOGACAO.barra(m, H.colunaDe(m) === 'validacao_area' ? 'validacao' : 'validacao_area', c.hoje) : null;
+      return { ok: false, motivo: hb ? hb.motivo : 'Daqui não há para onde entregar.' };
+    }
+    var erro = '';
+    var ok = ds.some(function (d) {
+      var r = AC.REGRAS.entregar(m, { destino: d, horas: 1, implementacao: '-' }, c);
+      if (!r.ok && !r.campo && !erro) erro = r.erro;
+      return r.ok || !!r.campo;
+    });
+    return { ok: ok, motivo: erro };
   }
 
   function barraEtapas(m, tv) {
@@ -573,10 +699,17 @@
     var podeAnexar = !!AC && permite('anexar', m, { novos: [{ nome: '-' }] });
     if (anexos.length || podeAnexar) {
       // O anexo abre daqui (`AXIS_ACOES.abrirAnexo`): baixa com a sessao e entrega pelo ANEXOTIPO.
-      h += sec('ANEXOS', (anexos.length ? '' : '<span class="note">Nenhum anexo. Até 1,5 MB por arquivo.</span>') + anexos.map(function (x, i) {
-        return '<button type="button" class="it-linha" style="border:0;font:inherit;cursor:pointer;text-align:left;width:100%" data-axa-anexo="' + m.anexos.indexOf(x) + '" data-axa-id="' + H.esc(m.id) + '" title="Abrir ' + H.esc(x.nome || 'anexo') + '"><span class="ell">' + H.ico('clip', 'style="color:var(--tx3)"') + ' ' + H.esc(x.nome || x.chave || 'anexo') + '</span>' +
-          (x.tamanho ? '<span class="note" style="font-size:11.5px">' + Math.max(1, Math.round(x.tamanho / 1024)) + ' KB</span>' : '') + '</button>';
-      }).join(''), podeAnexar ? botaoArquivo('data-axa-anexar="' + H.esc(m.id) + '"', 'Anexar', 'btns') : '');
+      /* O ✕ tira o anexo da lista (`msRemoveAnexo`, dev.html) e a zona de
+         colar (Ctrl+V) e arrastar e a `.anexo-zona` do modal antigo
+         (anexo-cola.js, ligada no `depois`). */
+      h += sec('ANEXOS', (anexos.length ? '' : '<span class="note">Nenhum anexo. Até 1,5 MB por arquivo.</span>') + anexos.map(function (x) {
+        var i = m.anexos.indexOf(x), nome = x.nome || x.chave || 'anexo';
+        return '<div class="it-anx"><button type="button" class="it-linha" data-axa-anexo="' + i + '" data-axa-id="' + H.esc(m.id) + '" title="Abrir ' + H.esc(nome) + '"><span class="ell">' + H.ico('clip', 'style="color:var(--tx3)"') + ' ' + H.esc(nome) + '</span>' +
+          (x.tamanho ? '<span class="note" style="font-size:12px">' + Math.max(1, Math.round(x.tamanho / 1024)) + ' KB</span>' : '') + '</button>' +
+          (podeAnexar ? '<button type="button" class="it-anx-tira" data-axa-acao="tirarAnexo" data-axa-id="' + H.esc(m.id) + '" data-axa-i="' + i + '" aria-label="Tirar ' + H.esc(nome) + '" title="Tirar este anexo">' + H.ico('x') + '</button>' : '') + '</div>';
+      }).join('') + (podeAnexar ? '<div class="it-anx-zona"><input type="file" multiple hidden id="it-anx-arq" data-axa-anexar="' + H.esc(m.id) + '"' +
+          (window.ANEXOTIPO ? ' accept="' + H.esc(ANEXOTIPO.aceita()) + '"' : '') + '></div>' : ''),
+        podeAnexar ? botaoArquivo('data-axa-anexar="' + H.esc(m.id) + '"', 'Anexar', 'btns') : '');
     }
 
     /* AS MESCLADAS NESTA (`mescRenderBloco` do admin): saem do fluxo e vivem
@@ -641,6 +774,9 @@
   }
 
   // ── Grill: o parecer do dev (`msGrillRender`, dev.html) ──────────────
+  /* O TEXTO DIGITADO SOBREVIVE AO REDESENHO (o modal do dev.html adia o
+     refresco): a base relida ao voltar a aba refaz a tela inteira. */
+  var RASC_GRILL = {};
   function grillSec(m) {
     var G = window.GRILL, AC = window.AXIS_ACOES;
     if (!G || !AC) return '';
@@ -666,10 +802,215 @@
       '<div class="row" style="justify-content:space-between"><h2 class="it-h2">' + H.ico('flame') + ' GRILL — DÊ SEU PARECER</h2>' + H.chip('antes do planejamento', 'wn') + '</div>' +
       '<span class="note">Leia a demanda. Se faltar algo para estimar e executar, escreva os pontos — <b>uma dúvida por linha</b>. ' +
       'Ela volta para Em aprovação de requisitos com o que você perguntou. Se estiver claro, segue para o Planning.</span>' + ja +
-      '<textarea class="in" id="it-grill-pontos" rows="3" aria-label="Suas dúvidas, uma por linha" placeholder="Ex.: De onde vem o valor do limite?&#10;O que acontece quando o cedente tem dois contratos?"></textarea>' +
+      '<textarea class="in" id="it-grill-pontos" rows="3" aria-label="Suas dúvidas, uma por linha" placeholder="Ex.: De onde vem o valor do limite?&#10;O que acontece quando o cedente tem dois contratos?">' + H.esc(RASC_GRILL[m.id] || '') + '</textarea>' +
       '<div class="row" style="flex-wrap:wrap;gap:8px;justify-content:flex-end">' +
       AC.botao('grillDuvida', m, 'Tenho dúvidas → Aprov. requisitos', 'btn', { ico: 'help' }) +
       AC.botao('grillOk', m, 'Entendi → Planning', 'btnp', { ico: 'check' }) + '</div></section>';
+  }
+
+  // ── A entrega do dev, onde se decide (`entregaHTML`, admin.html) ─────
+  /* O QUE FOI IMPLEMENTADO E O RESUMO ficam junto de Validar e Devolver:
+     validar sem ler o texto do dev e decidir pelo titulo. Os avisos sao os da
+     aba Entrega do editor do admin, com a mesma frase: aguardando a validacao
+     (para quem nao decide, "ainda nao validada" — o `leitura` de la), a ultima
+     devolucao e se ja esta no ar. Na Validacao da area o admin mostra a
+     homologacao (`homologHTML`); aqui ela vem com o texto do dev, que e
+     tambem o que a area confere. Antes do texto, as assinaturas do spike
+     (`spikeBloco`): sao elas que decidem se aprovar e possivel; depois, os
+     "Dados da entrega" (`dadosEntrega`). */
+  function quandoEnt(v) { return v ? new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''; }
+  /** COPIA de `formatDate` (admin.html): dia/mes/ano, no fuso de Sao Paulo. */
+  function dataEnt(s) {
+    if (!s) return '';
+    var t = String(s), dia = t.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) {
+      var dt = new Date(t);
+      if (isNaN(dt)) return '';
+      dia = dt.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    }
+    var p = dia.split('-');
+    return p[0] && p[1] && p[2] ? p[2] + '/' + p[1] + '/' + p[0] : '';
+  }
+
+  /** Os avisos do topo da entrega, na ordem do admin: [{ tipo, html }].
+   *  `tipo` e a classe do admin (espera, aprovada, rejeitada, no-ar, fora-ar,
+   *  nota). `HO` e o HOMOLOGACAO; `hoje` em ISO. */
+  function avisosEntrega(m, col, leitura, hoje, HO) {
+    var esc = H.esc, out = [];
+    if (col === 'validacao_area') {
+      if (!HO) return out;
+      var reg = HO.registro(m);
+      if (reg) {
+        out.push({ tipo: 'aprovada', html: '<b>Homologado por ' + esc(reg.quem) + '</b>' + (reg.em ? ' em ' + esc(quandoEnt(reg.em)) : '') + '.' });
+        if (reg.obs) out.push({ tipo: 'nota', html: esc(reg.obs) });
+        return out;
+      }
+      var dias = HO.diasNaArea(m, hoje);
+      out.push(HO.cobraHomologacao(m, hoje)
+        ? { tipo: 'espera', html: '<b>Parada há ' + dias + ' dias na área.</b> Passou dos ' + HO.DIAS_ATE_COBRAR + ' dias combinados — quem homologou?' }
+        : { tipo: 'espera', html: '<b>Em homologação</b>' + (dias != null ? ' há ' + dias + ' dia(s)' : '') + '. Assim que a área conferir, registre aqui.' });
+      return out;
+    }
+    if (col === 'validacao') {
+      out.push({ tipo: 'espera', html: leitura
+        ? '<b>Ainda não validada.</b>' + (m.entregue_em ? ' Entregue em ' + esc(quandoEnt(m.entregue_em)) + '.' : '')
+        : '<b>Aguardando sua validação.</b> Confira o que foi implementado e aprove, ou devolva ao dev explicando o que falta.' +
+          (m.entregue_em ? '<br>Entregue em ' + esc(quandoEnt(m.entregue_em)) : '') });
+    } else if (m.validado_em) {
+      out.push({ tipo: 'aprovada', html: '<b>Entrega aprovada</b>' + (m.validado_por ? ' por ' + esc(m.validado_por) : '') + ' em ' + esc(quandoEnt(m.validado_em)) + '.' });
+    }
+    if (m.validacao_obs) out.push({ tipo: 'rejeitada', html: '<b>Última devolução:</b> ' + esc(m.validacao_obs) });
+    // JA ESTA NO AR? Muda COMO se valida: no ar, da para conferir no sistema.
+    out.push(m.em_producao
+      ? { tipo: 'no-ar', html: '<b>Em produção</b>' + (m.versao ? ' na versão <b>' + esc(m.versao) + '</b>' : '') +
+          (m.producao_em ? ' desde ' + esc(dataEnt(m.producao_em)) : '') + (m.producao_por ? ' · marcada por ' + esc(m.producao_por) : '') +
+          (leitura ? '.' : '. Dá para conferir no sistema antes de aprovar.') }
+      : { tipo: 'fora-ar', html: '<b>Ainda não subiu para produção.</b> ' + (m.versao ? 'Versão prevista <b>' + esc(m.versao) + '</b>. ' : '') +
+          (leitura ? '' : 'A validação aqui é pelo texto e pelos anexos — o que foi descrito ainda não está no ar para conferir.') });
+    return out;
+  }
+
+  /** OS DADOS DA ENTREGA (`meta` de `entregaHTML`, admin.html): [rotulo,
+   *  valor]; sem valor e marca (debito, Dados/BI). Mesma ordem e mesmos
+   *  campos — inclusive o `sprint` antigo, que e o que o admin mostra. */
+  function dadosEntrega(m) {
+    var out = [['Dev', m.dev || '—']];
+    if (m.horas_realizadas) out.push(['Horas', String(m.horas_realizadas) + 'h']);
+    if (m.entrega) out.push(['Prazo', dataEnt(m.entrega)]);
+    if (m.concluido_em) out.push(['Concluída em', dataEnt(m.concluido_em)]);
+    if (m.debito_tecnico) out.push(['Débito técnico']);
+    if (m.dados_bi) out.push(['Dados / BI']);
+    else if (m.sales_ops) out.push(['Sales Ops']);
+    var bis = window.BIS ? BIS.daDemanda(m) : [];
+    if (bis.length) out.push(['BIs', bis.join(' · ')]);
+    if (m.sprint) out.push(['Sprint', m.sprint]);
+    return out;
+  }
+
+  /* AS TRES ASSINATURAS DO SPIKE (`entregaHTML`, admin.html). A LISTA E
+     NOMINAL: "faltam 2" nao diz a quem pedir. `podem` e a lista da rota
+     `spike-aprovadores` (null enquanto nao chegou: entao "Conferindo", e nao
+     "0 de 3"); `eu` e o login da sessao; `leitura` tira os botoes. */
+  function spikeBloco(m, podem, eu, leitura, PV) {
+    if (!m.spike) return '';
+    if (!Array.isArray(podem)) {
+      return '<div class="it-spk x-wn"><span class="it-ent-l">SPIKE</span><span class="note">Conferindo as aprovações…</span></div>';
+    }
+    var valem = PV ? PV.assinaturasValidas(m, podem) : [];
+    var minimo = (PV && PV.ASSINATURAS_SPIKE) || 3;
+    var low = function (x) { return String(x || '').toLowerCase(); };
+    var assinou = function (login) { return valem.find(function (a) { return low(a.login) === low(login); }); };
+    var euSou = !!eu && podem.some(function (a) { return low(a.login) === low(eu.login); });
+    var jaAssinei = !!eu && !!assinou(eu.login);
+    var faltam = Math.max(0, minimo - valem.length);
+    var linhas = podem.map(function (a) {
+      var x = assinou(a.login);
+      return '<div class="it-spk-l' + (x ? ' ok' : '') + '">' + H.ico(x ? 'check' : 'circle', 'style="color:var(' + (x ? '--ok-t' : '--tx4') + ')"') +
+        '<span class="n">' + H.esc(a.nome || a.login) + '</span><span class="em">' + (x ? H.esc(quandoEnt(x.em)) : 'aguardando') + '</span></div>';
+    }).join('');
+    var AC = window.AXIS_ACOES;
+    var bt = leitura || !euSou || !AC ? '' : '<div class="it-ent-ac">' + (jaAssinei
+      ? AC.botao('spikeRetirar', m, 'Retirar minha aprovação', 'btn', { ico: 'undo' })
+      : AC.botao('spikeAssinar', m, 'Aprovar como ' + ((eu && (eu.nome || eu.login)) || ''), 'btnp ok', { ico: 'check' })) + '</div>';
+    return '<div class="it-spk ' + (faltam ? 'x-wn' : 'x-ok') + '" data-spike="' + valem.length + '">' +
+      '<span class="it-ent-l">SPIKE · ' + valem.length + ' DE ' + minimo + ' APROVAÇÕES</span>' +
+      (podem.length < minimo
+        ? '<span class="note">Só ' + podem.length + ' pessoa(s) marcada(s) como aprovadora de spike, e são necessárias ' + minimo +
+          '. Um admin habilita na aba Usuários — sem isso nenhum spike consegue fechar.</span>'
+        : linhas) +
+      (faltam ? '<span class="it-spk-av">Enquanto faltar assinatura, este spike não conclui — a decisão dele vira backlog de desenvolvimento.</span>'
+              : '<span class="it-spk-av ok">Assinado. Pode concluir.</span>') + bt + '</div>';
+  }
+
+  var COR_AVISO = { espera: ['wn', 'hourglass'], aprovada: ['ok', 'check'], rejeitada: ['dg', 'undo'], 'no-ar': ['ok', 'rocket'], 'fora-ar': ['', 'info'], nota: ['', 'info'] };
+  function entregaSec(m, ctx) {
+    var col = H.colunaDe(m);
+    if (['validacao_area', 'validacao', 'concluido'].indexOf(col) < 0) return '';
+    var AC = window.AXIS_ACOES;
+    var admin = ctx.papel === 'admin';
+    // Quem decide le "aguardando a sua validacao"; os outros, o fato (o `leitura` do admin).
+    var decide = col === 'validacao' ? admin : col === 'validacao_area' ? (admin || (ctx.papel === 'dev' && H.minha(m))) : false;
+    var av = avisosEntrega(m, col, !decide, H.hoje(), window.HOMOLOGACAO).map(function (a) {
+      var c = COR_AVISO[a.tipo] || COR_AVISO.nota;
+      return '<div class="it-ent-av' + (c[0] ? ' x-' + c[0] : '') + '" data-ent="' + a.tipo + '">' + H.ico(c[1]) + '<span>' + a.html + '</span></div>';
+    }).join('');
+    var impl = String(m.implementacao || '').trim();
+    var res = String(m.resumo_entrega || '').trim();
+    var bloco = function (rot, t, vazio) {
+      return '<div style="display:flex;flex-direction:column;gap:8px;min-width:0"><span class="it-ent-l">' + rot + '</span>' +
+        '<div class="it-ent-t' + (t ? '' : ' vz') + '">' + H.esc(t || vazio) + '</div></div>';
+    };
+    var bt = '';
+    if (AC && admin && col === 'validacao') {
+      bt = AC.botao('devolver', m, 'Devolver ao dev', 'btn perigo', { ico: 'undo', titulo: 'Volta para o dev, com o motivo que ele vai ler' }) +
+           AC.botao('validar', m, 'Aprovar entrega', 'btnp ok', { ico: 'check', titulo: 'Conclui a demanda com o seu nome como quem validou' });
+    } else if (AC && col === 'validacao_area' && AC.disponiveis(m).some(function (d) { return d.acao === 'homologar'; })) {
+      bt = AC.botao('homologar', m, 'Registrar homologação', 'btnp', { ico: 'check', titulo: 'Registra quem homologou na área; enviar ao PM/PO é o passo seguinte' });
+    }
+    return '<section class="it-sec it-ent' + (col === 'validacao' ? ' x-wn' : '') + '" id="it-entrega" aria-labelledby="it-ent-t">' +
+      '<h2 class="it-h2" id="it-ent-t">' + (col === 'validacao_area' ? 'ENTREGA · NA ÁREA' : 'ENTREGA DO DEV') + '</h2>' + av +
+      (col === 'validacao_area' ? '' : spikeBloco(m, SPIKE.lista, AX.APP.eu || null, ctx.papel === 'consulta', window.PREVOO)) +
+      bloco('O QUE FOI IMPLEMENTADO', impl, decide && col === 'validacao'
+        ? 'O dev não descreveu a entrega. Devolva pedindo a descrição — é esse texto que alimenta o relatório do comitê.'
+        : 'O dev não descreveu a entrega.') +
+      bloco('RESUMO DA ENTREGA', res, 'O dev não escreveu resumo.') +
+      (col === 'validacao_area' ? '' : '<div style="display:flex;flex-direction:column;gap:8px"><span class="it-ent-l">DADOS DA ENTREGA</span><div class="it-ent-dados">' +
+        dadosEntrega(m).map(function (d) { return '<span>' + (d.length > 1 ? H.esc(d[0]) + ': <b>' + H.esc(d[1]) + '</b>' : '<b>' + H.esc(d[0]) + '</b>') + '</span>'; }).join('') + '</div></div>') +
+      (bt ? '<div class="it-ent-ac">' + bt + '</div>' : '') + '</section>';
+  }
+
+  // ── Discovery do painel publico (`renderMDiscovery`, admin.html) ────
+  /* TUDO O QUE O SOLICITANTE PREENCHEU NO PAINEL PUBLICO. Sem isto, quem
+     implementa nao via requisitos, regras de negocio, escopo e criterios.
+     Copia do `renderMDiscovery` (o do admin, que tem tambem o local e os
+     documentos afetados; o do dev.html e o mesmo sem eles): [rotulo, html]. */
+  function discoveryLinhas(m) {
+    var d = m && m.discovery;
+    if (!d || typeof d !== 'object') return [];
+    var esc = H.esc, L = [];
+    var row = function (r, v) { L.push([r, v]); };
+    var dois = function (i) { return String(i + 1).padStart(2, '0'); };
+    if (d.tipo) row('Tipo', d.tipo === 'ganho' ? 'Ganho de produtividade' : 'Correção/Ajuste');
+    if (d.area_solicitante) row('Área do solicitante', esc(d.area_solicitante));
+    if (d.local_implementacao) row('Local da implementação', esc(d.local_implementacao));
+    if (Array.isArray(d.documentos_afetados) && d.documentos_afetados.length) {
+      row('Documentos afetados', esc(d.documentos_afetados.join(', ')) + (d.documentos_obs ? ' — ' + esc(d.documentos_obs) : ''));
+    }
+    if (d.impacto) row('Impacto', esc(d.impacto));
+    if (d.beneficiarios) row('Beneficiários', esc(d.beneficiarios));
+    if (d.ganho) {
+      var det = [];
+      if (d.ganho.horas_dia) det.push(esc(d.ganho.horas_dia) + 'h/dia por pessoa');
+      if (d.ganho.pessoas) det.push(esc(d.ganho.pessoas) + ' pessoa(s)');
+      var tg = [d.ganho.resumo ? esc(d.ganho.resumo) : '', det.length ? '<span class="dim">(' + det.join(' × ') + ')</span>' : ''].filter(Boolean).join(' ');
+      if (tg) row('Ganho', tg);
+    }
+    if (d.contexto) {
+      if (d.contexto.as_is) row('Como funciona hoje', esc(d.contexto.as_is));
+      if (d.contexto.dor) row('Dor real', esc(d.contexto.dor));
+      if (d.contexto.nao_fazer) row('Se não fizer', esc(d.contexto.nao_fazer));
+    }
+    (d.requisitos_funcionais || []).forEach(function (r, i) { if (r && r.desc) row('RF-' + dois(i), esc(r.desc) + ' <span class="dim">(' + esc(r.prio || '') + ')</span>'); });
+    (d.regras_negocio || []).forEach(function (r, i) { if (r && r.regra) row('RN-' + dois(i), esc(r.regra) + (r.fonte ? ' — <i>' + esc(r.fonte) + '</i>' : '')); });
+    if (d.escopo) {
+      if (d.escopo.dentro) row('Dentro do escopo', esc(d.escopo.dentro));
+      if (d.escopo.fora) row('Fora do escopo', esc(d.escopo.fora));
+      if (d.escopo.premissas) row('Premissas', esc(d.escopo.premissas));
+    }
+    (d.criterios_aceite || []).forEach(function (c, i) {
+      if (c && (c.dado || c.quando || c.entao)) row('CA-' + dois(i), 'Dado ' + esc(c.dado || '…') + ', quando ' + esc(c.quando || '…') + ', então ' + esc(c.entao || '…'));
+    });
+    if (m.criado_em) {
+      var dt = new Date(m.criado_em);
+      if (!isNaN(dt)) row('Enviado pelo painel em', dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+    }
+    return L;
+  }
+  function discoverySec(m) {
+    var L = discoveryLinhas(m);
+    if (!L.length) return '';
+    return sec('DISCOVERY · PREENCHIDO NO PAINEL', '<dl class="it-disc" id="it-discovery">' +
+      L.map(function (x) { return '<dt>' + H.esc(x[0]) + '</dt><dd>' + x[1] + '</dd>'; }).join('') + '</dl>');
   }
 
   // ── TASKS: as subtarefas, editaveis por quem faz a demanda ──────────
@@ -798,25 +1139,38 @@
 
   function principal(m, ctx) {
     var sp = separa(m.descricao);
-    var h = sec('DESCRIÇÃO', sp.desc ? '<p class="it-desc">' + descHTML(sp.desc) + '</p>' : '<span class="note">Sem descrição registrada.</span>');
+    /* Na validacao (area ou PM/PO) a entrega vem PRIMEIRO — e o que se le
+       antes de decidir, como a aba Entrega do admin, que abre ja nela; depois
+       de concluida ela fica abaixo do que foi pedido. */
+    var ent = entregaSec(m, ctx);
+    var noTopo = ['validacao', 'validacao_area'].indexOf(H.colunaDe(m)) >= 0;
+    var h = (noTopo ? ent : '') + sec('DESCRIÇÃO', sp.desc ? '<p class="it-desc">' + descHTML(sp.desc) + '</p>' : '<span class="note">Sem descrição registrada.</span>');
     h += casoUso(m, ctx);
     if (sp.crit.length) h += sec('CRITÉRIOS DE ACEITE', sp.crit.map(function (l) { return '<div class="it-crit">' + critHTML(l) + '</div>'; }).join(''));
+    h += discoverySec(m);
+    if (!noTopo) h += ent;
 
     h += grillSec(m);
     h += '<section class="it-sec" id="it-tasks">' + tasksInterno(m) + '</section>';
 
-    // Um resumo da conversa, como no prototipo; a conversa inteira e a aba.
-    var msgs = mensagens(m);
-    var ps = pessoas(m, ctx.D);
-    var hist = (Array.isArray(m.historico) ? m.historico : []).length;
-    h += sec('CONVERSA',
-      (msgs.length ? msgs.slice(-2).map(function (g) { return bolha(g, ps); }).join('') : '<span class="note">Nenhuma mensagem nesta demanda ainda.</span>') +
-      '<a href="' + H.hrefItem(m) + '/conversa" class="note">Ver a conversa' + (msgs.length ? ' (' + msgs.length + ')' : '') + ' e o histórico' + (hist ? ' (' + hist + ')' : '') + '</a>');
+    h += '<div class="it-conv-d">' + resumoConversa(m, ctx) + '</div>';
     return '<div style="display:flex;flex-direction:column;gap:16px;min-width:0">' + h + '</div>';
   }
 
+  /* Um resumo da conversa, como no prototipo; a conversa inteira e a aba. No
+     celular ele vem DEPOIS de anexos e vinculos (`it-conv-m`): numa coluna so,
+     o que se consulta de pe vem antes do que se le sentado. */
+  function resumoConversa(m, ctx) {
+    var msgs = mensagens(m);
+    var ps = pessoas(m, ctx.D);
+    var hist = (Array.isArray(m.historico) ? m.historico : []).length;
+    return sec('CONVERSA',
+      (msgs.length ? msgs.slice(-2).map(function (g) { return bolha(g, ps); }).join('') : '<span class="note">Nenhuma mensagem nesta demanda ainda.</span>') +
+      '<a href="' + H.hrefItem(m) + '/conversa" class="note">Ver a conversa' + (msgs.length ? ' (' + msgs.length + ')' : '') + ' e o histórico' + (hist ? ' (' + hist + ')' : '') + '</a>');
+  }
+
   function detalhe(m, ctx) {
-    var tv = travas(m, ctx.D);
+    var tv = travas(m, ctx.D, ctx.papel);
     return trilha(m) +
       '<header style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:16px">' +
       '<div style="display:flex;flex-direction:column;gap:8px;max-width:760px;min-width:0">' +
@@ -825,7 +1179,8 @@
       acoes(m, ctx, tv) + '</header>' +
       barraEtapas(m, tv) +
       '<div class="grid" style="grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start">' +
-      principal(m, ctx) + lateral(m, ctx) + '</div>';
+      principal(m, ctx) + lateral(m, ctx) + '</div>' +
+      '<div class="it-conv-m">' + resumoConversa(m, ctx) + '</div>';
   }
 
   // ── Aba Conversa: escrever (mensageria.html) ─────────────────────────
@@ -961,8 +1316,6 @@
     var ps = pessoas(m, ctx.D);
     var quem = [];
     msgs.forEach(function (g) { if (g.quem && quem.indexOf(g.quem) < 0) quem.push(g.quem); });
-    var ref = m.codigo || m.id;
-    var hrefMsg = 'mensageria.html?codigo=' + encodeURIComponent(ref);
     var hist = (Array.isArray(m.historico) ? m.historico : []).filter(Boolean).slice()
       .sort(function (a, b) { return String(b.em || '').localeCompare(String(a.em || '')); });
     var anexos = (Array.isArray(m.anexos) ? m.anexos : []).filter(Boolean);
@@ -972,9 +1325,7 @@
       '<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span class="note"><a href="' + H.hrefItem(m) + '">' + H.esc(m.codigo || '—') + '</a> › Conversa</span>' +
       '<h1 class="h1" style="font-size:24px;overflow-wrap:anywhere">' + H.esc(m.titulo || '(sem título)') + '</h1>' +
       '<span class="sub">Conversa do item com o PM/PO, o solicitante e o time, e tudo o que mudou nele.</span></div>' +
-      '<div class="row" style="flex-wrap:wrap">' + (quem.length ? '<span class="row" style="gap:4px">' + quem.slice(0, 6).map(function (n) { return H.av(n); }).join('') + '</span>' : '') +
-      '<a class="btn" href="' + hrefMsg + '" data-mensageria="' + H.esc(ref) + '" title="Abre a Mensageria desta demanda, onde se escreve e responde">' + H.ico('message') + ' Abrir na mensageria ' +
-      H.ico('external', 'style="font-size:12px;color:var(--tx4)"') + '</a></div></header>';
+      (quem.length ? '<div class="row" style="flex-wrap:wrap"><span class="row" style="gap:4px">' + quem.slice(0, 6).map(function (n) { return H.av(n); }).join('') + '</span></div>' : '') + '</header>';
 
     h += '<div class="grid" style="grid-template-columns:minmax(0,1fr) 300px;align-items:start">' +
       '<div style="display:flex;flex-direction:column;gap:16px;min-width:0">' +
@@ -994,10 +1345,39 @@
       '<span class="row" style="justify-content:space-between;font-size:13px"><span class="note">Responsável</span><span class="ell">' + (H.devsDe(m).map(H.esc).join(' / ') || '—') + '</span></span>' +
       '<span class="row" style="justify-content:space-between;font-size:13px"><span class="note">Solicitante</span><span class="ell">' + H.esc(m.solicitante || '—') + '</span></span>' +
       '<span class="lab" style="margin-top:8px">ANEXOS DA DEMANDA</span>' +
-      (anexos.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px">' + anexos.map(function (x) { return H.chip(H.ico('clip') + ' ' + H.esc(x.nome || 'anexo'), 'bk'); }).join('') + '</div>'
+      // O anexo abre daqui tambem (`abrirAnexo`), como na secao ANEXOS do Detalhe.
+      (anexos.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px">' + anexos.map(function (x) {
+        return '<button type="button" class="chip c-bk" style="cursor:pointer" data-axa-anexo="' + m.anexos.indexOf(x) + '" data-axa-id="' + H.esc(m.id) + '" title="Abrir ' + H.esc(x.nome || 'anexo') + '">' +
+          H.ico('clip') + ' ' + H.esc(x.nome || 'anexo') + '</button>'; }).join('') + '</div>'
         : '<span class="note">Nenhum anexo.</span>') +
       '</section></div>';
     return h;
+  }
+
+  /* COPIAR O CODIGO (`copiarCodigo`, admin.html): o codigo, ou o link do
+     item com Shift/Alt. Sem acesso a area de transferencia, o texto aparece
+     no aviso para copiar a mao. */
+  function copiaCodigo(cod, link) {
+    var t = link ? location.href.split('#')[0] + '#item/' + encodeURIComponent(cod) : cod;
+    var ok = function () { H.toast((link ? 'Link de ' : '') + cod + ' copiado.'); };
+    try { navigator.clipboard.writeText(t).then(ok, function () { H.toast('Copie: ' + t); }); }
+    catch (_) { H.toast('Copie: ' + t); }
+  }
+
+  /* QUEM PODE ASSINAR SPIKE (`spikeCarregaAprovadores`, admin.html): rota
+     propria, pedida uma vez e sem segurar a tela; uma nova tentativa so.
+     Chegando, vale tambem para a regra (`AXIS_ACOES.contexto` le de D). */
+  var SPIKE = { lista: null, pedindo: false, tentou: 0 };
+  function pedeAprovadores() {
+    if (SPIKE.lista || SPIKE.pedindo || SPIKE.tentou > 1) return;
+    SPIKE.pedindo = true; SPIKE.tentou++;
+    H.api('spike-aprovadores').then(function (j) {
+      SPIKE.pedindo = false;
+      if (!j || !Array.isArray(j.aprovadores)) return;
+      SPIKE.lista = j.aprovadores;
+      if (AX.APP.D) AX.APP.D.spike_aprovadores = j.aprovadores;
+      AX.desenhar(true);
+    }, function () { SPIKE.pedindo = false; if (SPIKE.tentou < 2) setTimeout(pedeAprovadores, 4000); });
   }
 
   // ── Registro ─────────────────────────────────────────────────────────
@@ -1033,6 +1413,7 @@
     },
     render: function (el, ctx) {
       css();
+      if (SPIKE.lista && ctx.D && ctx.D.spike_aprovadores !== SPIKE.lista) ctx.D.spike_aprovadores = SPIKE.lista;
       lerAba(ctx.rota);
       var a = acha(ctx.rota.param);
       var volta = '<a class="btn" href="#quadro">Voltar ao Quadro</a>';
@@ -1052,17 +1433,21 @@
       var alvo = acha(((ctx || {}).rota || {}).param).m;
       if (alvo && ctx.rota.aba === 'conversa') ligarCompositor(el, alvo);
       if (alvo) ligarTasks(el, alvo);
-      /* A Mensageria abre em JANELA, como mensageria-abrir.js faz: so assim a
-         janela nova herda a sessao (copia do sessionStorage). O href fica como
-         reserva para quem abre em aba nova pelo menu do navegador. */
+      if (!alvo) return;
+      var AC = window.AXIS_ACOES;
+      // A zona de colar e arrastar (anexo-cola.js): o arquivo vai pelo mesmo `anexarArquivos`.
+      if (window.ligaZonaAnexo && AC && el.querySelector('#it-anx-arq')) {
+        ligaZonaAnexo('it-anx-arq', function (fs) {
+          AC.anexarArquivos(porId(alvo.id) || alvo, fs).catch(function (ex) { H.toast('Não foi possível anexar: ' + (ex.message || ex), 'erro'); });
+        });
+      }
+      var gp = el.querySelector('#it-grill-pontos');
+      if (gp) gp.addEventListener('input', function () { RASC_GRILL[alvo.id] = gp.value; });
+      else delete RASC_GRILL[alvo.id];
+      if (alvo.spike) pedeAprovadores();
       el.addEventListener('click', function (e) {
-        var a = e.target.closest('[data-mensageria]');
-        if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
-        e.preventDefault();
-        var ref = a.getAttribute('data-mensageria');
-        var j = window.open('mensageria.html?codigo=' + encodeURIComponent(ref), 'mensageria-' + ref.replace(/[^A-Za-z0-9_-]/g, ''), 'width=900,height=760');
-        if (!j) H.toast('O navegador bloqueou a janela da Mensageria. Libere as janelas para este site.', 'erro');
-        else try { j.focus(); } catch (_) { /* a janela abriu */ }
+        var b = e.target.closest('[data-it-copia]');
+        if (b) copiaCodigo(b.getAttribute('data-it-copia'), e.shiftKey || e.altKey);
       });
     }
   });

@@ -47,8 +47,12 @@
     ntfLimite: 30,
     mostrar: '',           // Meu trabalho do dev: '' (no meu nome + fila), 'meu', 'fila'
     sprint: '',            // Meu trabalho do dev: '' (todas), '__fora__' ou o rotulo
-    sprintPadrao: false    // a sprint atual so e escolhida na primeira montagem
+    sprintPadrao: false,   // a sprint atual so e escolhida na primeira montagem
+    mais: {},              // Meu trabalho: colunas abertas por inteiro ("e mais N")
+    etapa: ''              // Meu trabalho no celular: a etapa a vista (uma por vez)
   };
+  // Cards por coluna antes do "e mais N" (o painel do dev mostra todos; o corte e so de leitura).
+  var POR_COLUNA = 10;
 
   // ── CSS proprio, injetado uma vez ─────────────────────────────────────
   function poeCss() {
@@ -102,6 +106,24 @@
       '.axa .ini-card .fl{display:flex;flex-wrap:wrap;gap:4px}',
       '.axa .ini-card .rd{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11.5px;color:var(--tx3)}',
       '.axa .ini-mais{font-size:12px;color:var(--tx3);text-align:center;padding:4px}',
+      /* O quadro do Meu trabalho e o do Quadro (AXIS_QUADRO), com as colunas do painel do dev. */
+      '.axa .ini-qd .qd-col{width:224px}',
+      /* A coluna vazia vira tira, como a Negada do Quadro: as sete do painel cabem na tela e o
+         trabalho fica a vista. Continua recebendo o card arrastado. */
+      '@container app (min-width: 761px){.axa .ini-qd .qd-col.vazia{width:56px;padding:12px 0;align-items:center}' +
+        '.axa .ini-qd .qd-col.vazia .qd-ch{flex-direction:column;gap:10px;padding:0}' +
+        '.axa .ini-qd .qd-col.vazia .qd-ch h2{writing-mode:vertical-rl;transform:rotate(180deg)}' +
+        '.axa .ini-qd .qd-col.vazia .qd-ch .n{margin:0}.axa .ini-qd .qd-col.vazia .qd-vz{display:none}' +
+        '.axa .ini-qd .qd-col.vazia.trava .qd-trava{display:none}}',
+      '.axa button.k{font:inherit;text-align:left;color:inherit;cursor:pointer;width:100%}',
+      '.axa .ini-fil{display:flex;flex-wrap:wrap;gap:10px;align-items:center}',
+      // A faixa do prazo vencido (`risco-dev`, dev.html): quantas, quais (cada uma abre), e as escondidas pelo filtro.
+      '.axa .ini-risco{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:10px 14px;border-radius:12px;background:rgba(var(--dg-rgb),.1);border:1px solid rgba(var(--dg-rgb),.35);color:var(--dg-t);font-size:13px;line-height:20px}',
+      '.axa .ini-risco:focus{outline:2px solid rgba(var(--dg-rgb),.6);outline-offset:2px}',
+      '.axa .ini-risco b{font-weight:800}',
+      '.axa .ini-rl{border:0;background:transparent;color:inherit;font:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:2px 0}',
+      '.axa .ini-rl:hover{color:var(--tx)}',
+      '.axa .ini-risco-esc{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}',
       /* Cronograma */
       '.axa .ini-cr{padding:0;gap:0;overflow-x:auto}',
       '.axa .ini-cr .ln{display:grid;border-bottom:1px solid var(--bd3);min-height:54px}',
@@ -136,6 +158,20 @@
       '.axa .ini-col{min-height:0}',
       '.axa .ini-busca{width:100%}',
       '.axa .ini-hd>div{width:100%}',
+      /* Meu trabalho no celular: filtros na gaveta, numeros numa faixa que rola de lado, a faixa
+         do prazo numa linha so — os cards ficam acima da dobra. */
+      '.axa .ini-novo,.axa .ini-sub{display:none !important}',
+      '.axa .ini-kg.seis{display:flex !important;overflow-x:auto;scrollbar-width:none;gap:8px;align-items:flex-start}',
+      '.axa .ini-kg.seis::-webkit-scrollbar{display:none}',
+      '.axa .ini-kg.seis>.k{flex:0 0 120px;padding:10px 12px;gap:2px}',
+      '.axa .ini-kg.seis>.k:last-child{flex-basis:210px}',
+      '.axa .ini-kg.seis>.k:last-child .note{display:none}',
+      '.axa .ini-hd.ini-hd-meu{flex-wrap:nowrap;align-items:center}',
+      '.axa .ini-hd.ini-hd-meu>div{width:auto !important}',
+      '.axa .ini-risco{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;scrollbar-width:none;padding:0 12px}',
+      '.axa .ini-risco::-webkit-scrollbar{display:none}',
+      '.axa .ini-rl{min-height:44px}',
+      '.axa .ini-risco-esc{flex-wrap:nowrap}',
       '}'
     ].join('\n');
     document.head.appendChild(st);
@@ -217,8 +253,10 @@
   function link(m, ctx) { return ctx.papel === 'consulta' ? '' : H.hrefItem(m); }
   function kpi(rot, valor, nota, o) {
     o = o || {};
-    var tag = o.href ? 'a' : 'div';
-    return '<' + tag + (o.href ? ' href="' + o.href + '"' : '') + ' class="k' + (o.cls ? ' ' + o.cls : '') + (o.href ? ' click' : '') + '">' +
+    // `o.ini`: o numero e um botao da tela (data-ini), e nao um link.
+    var tag = o.href ? 'a' : o.ini ? 'button' : 'div';
+    return '<' + tag + (o.href ? ' href="' + o.href + '"' : '') + (o.ini ? ' type="button" data-ini="' + o.ini + '"' + (o.titulo ? ' title="' + H.esc(o.titulo) + '"' : '') : '') +
+      ' class="k' + (o.cls ? ' ' + o.cls : '') + (o.href || o.ini ? ' click' : '') + '">' +
       '<span class="kl">' + rot + '</span>' +
       '<span class="kv"' + (o.cor ? ' style="color:' + o.cor + '"' : '') + '>' + valor + '</span>' +
       (nota != null ? '<span class="kn"' + (o.notaCor ? ' style="color:' + o.notaCor + '"' : '') + '>' + nota + '</span>' : '') +
@@ -493,14 +531,49 @@
     return ctx.aba === 'pede' ? meuTrabalhoPO(ctx) : meuTrabalhoDev(ctx);
   }
 
+  /* A FAIXA DO PRAZO VENCIDO — COPIA DE `renderRiscoDev` (dev.html): as
+     demandas no nome de quem olha com a etapa efetiva Atrasado (`statusEfetivo`),
+     e quais delas o filtro esta escondendo. `visiveis` = { id: true } do que o
+     quadro mostra. Cada uma abre (`devIrPara`). */
+  function riscoDoPainel(lista, eMinha, visiveis) {
+    var minhas = (lista || []).filter(function (m) { return m && !m.mesclado_em && eMinha(m) && H.etapaDe(m) === 'atrasado'; });
+    return { minhas: minhas, escondidas: minhas.filter(function (m) { return !visiveis[m.id]; }) };
+  }
+  function faixaRisco(r) {
+    var n = r.minhas.length, k = r.escondidas.length;
+    if (!n) return '';
+    var link = function (m) {
+      return '<button type="button" class="ini-rl" data-ini="risco-abre" data-id="' + H.esc(m.id) + '">' + H.esc((m.codigo ? m.codigo + ' ' : '') + (m.titulo || '')) + '</button>';
+    };
+    return '<div class="ini-risco" id="ini-risco" role="alert" tabindex="-1">' + H.ico('alert') + ' <b>' + n +
+      (n === 1 ? ' demanda sua está com o prazo vencido' : ' demandas suas estão com o prazo vencido') + ':</b> ' +
+      r.minhas.slice(0, 3).map(link).join(' · ') + (n > 3 ? ' <span style="opacity:.8">e mais ' + (n - 3) + '</span>' : '') +
+      (k ? '<span class="ini-risco-esc">' + H.ico('search') + ' <b>' + k + (k === 1 ? ' está' : ' estão') + ' escondida' + (k > 1 ? 's' : '') +
+        ' pelos filtros ativos.</b> <button type="button" class="ini-rl" data-ini="risco-limpa">limpar os filtros</button></span>' : '') + '</div>';
+  }
+
+  /* AS COLUNAS DO PAINEL DO DEV (`COLUMNS`, dev.html), com a ordem do quadro
+     (`ORDEMKB`, a mesma das tres telas): Backlog, Planning, Planejado (com Em
+     aprovacao de requisitos), Em andamento, Validacao da area, Validacao PM/PO
+     e Concluido (o do mes). */
+  function colunasDoPainel(noQuadro, noMes) {
+    var Q = window.AXIS_QUADRO;
+    var ord = function (l) { return window.ORDEMKB ? ORDEMKB.ordena(l, window.ENTREGAUSU && ENTREGAUSU.data) : l.sort(ordemDeAtencao); };
+    return (Q ? Q.COLUNAS_DEV : []).map(function (c) {
+      var itens = noQuadro.filter(function (m) { var k = H.colunaDe(m); return c.junto.indexOf(k) >= 0 && (k !== 'concluido' || noMes(m)); });
+      return { k: c.k, junto: c.junto, rotulo: c.k === 'concluido' ? 'Concluído no mês' : '', itens: ord(itens) };
+    });
+  }
+
   function meuTrabalhoDev(ctx) {
-    var S = window.SPRINTPO, CAP = window.CAPACIDADE;
+    var S = window.SPRINTPO, CAP = window.CAPACIDADE, Q = window.AXIS_QUADRO;
     var vs = H.visiveis();
     var minhas = vs.filter(H.minha);
     var sprint = H.sprintAtual();
     var d = diaDaSprint(sprint, ctx);
     var mes = mesAtual();
     var noMes = function (m) { return CAP && CAP.diaDaEntrega(m).slice(0, 7) === mes; };
+    if (Q) Q.css();
 
     /* O QUADRO PESSOAL MOSTRA O QUE O PAINEL DO DEV MOSTRA (`getFiltered`):
        no nome dele e a fila do time, com o filtro "Mostrar". */
@@ -519,13 +592,16 @@
       : doPainel;
     var times = AC && AC.times ? AC.times() : '';
     var filtrosAtivos = (EST.sprint !== (sprint || '') ? 1 : 0) + (times ? 1 : 0);
-    var col = function (f) { return noQuadro.filter(function (m) { return f(H.colunaDe(m), m); }).sort(ordemDeAtencao); };
-    var planning = col(function (c) { return c === 'levantar_req' || c === 'planning'; });
-    var planejado = col(function (c) { return c === 'planejado'; });
-    var andamento = col(function (c) { return c === 'em_andamento'; });
-    var validacao = col(function (c) { return EM_VALIDACAO.indexOf(c) >= 0; });
-    var concl = col(function (c, m) { return c === 'concluido' && noMes(m); })
-      .sort(function (a, b) { return String(CAP.diaDaEntrega(b)).localeCompare(String(CAP.diaDaEntrega(a))); });
+    var cols = colunasDoPainel(noQuadro, noMes);
+    var porCol = {};
+    cols.forEach(function (c) { porCol[c.k] = c.itens; });
+    // No celular (uma etapa por vez) o Meu trabalho abre onde ha trabalho: Em andamento, ou a primeira com card.
+    if (!EST.etapa) {
+      var comCard = cols.filter(function (c) { return c.itens.length; });
+      EST.etapa = (porCol.em_andamento || []).length ? 'em_andamento' : comCard.length ? comCard[0].k : '';
+    }
+    var andamento = porCol.em_andamento || [];
+    var validacao = (porCol.validacao_area || []).concat(porCol.validacao || []);
 
     // Pontos entregues no mes: capacidade.porDev, a mesma conta da faixa de
     // produtividade do dev.html (`prodAgrega`).
@@ -545,36 +621,43 @@
       });
     }
     var pct = sp.total ? Math.round(sp.feitos / sp.total * 100) : 0;
-    var vHoje = minhas.filter(venceHoje), atr = minhas.filter(atrasada);
+    var vHoje = minhas.filter(venceHoje);
+    var visiveis = {};
+    cols.forEach(function (c) { c.itens.forEach(function (m) { visiveis[m.id] = true; }); });
+    var risco = riscoDoPainel((ctx.D || {}).melhorias, H.minha, visiveis);
 
     var sub = (EST.mostrar === 'meu' ? 'Só o que está no seu nome.' : EST.mostrar === 'fila' ? 'A fila do time: na sprint, sem dono ou com outra pessoa.' : 'O que está com você e a fila do time.') + (sprint ? ' Sprint ' + H.esc(S.rotuloCurto(sprint)) + ' · ' +
       (d ? (d.acabou ? 'terminou ' + H.dm(d.ate) : 'faltam ' + H.plural(d.faltam, 'dia útil', 'dias úteis')) : '') + '.' : '');
     var opt = function (v, rot, sel) { return '<option value="' + H.esc(v) + '"' + (v === sel ? ' selected' : '') + '>' + H.esc(rot) + '</option>'; };
-    var h = '<header class="ini-hd fim"><div style="display:flex;flex-direction:column;gap:6px"><h1 class="h1">Meu trabalho</h1><span class="sub">' + sub + '</span></div>' +
-      '<div class="row" style="flex-wrap:wrap"><label class="note" for="ini-mostrar">Mostrar</label>' +
+    // No celular os filtros recolhem em "Filtros (n)" (H.filtros); cada rotulo anda com o seu seletor.
+    var fl = '<span class="qd-par"><label class="note" for="ini-mostrar">Mostrar</label>' +
       '<select id="ini-mostrar" class="in" data-ini="mostrar" style="height:36px" title="Separa as demandas no seu nome das que estão na fila do time.">' +
       [['', 'No meu nome + fila do time'], ['meu', 'Só no meu nome'], ['fila', 'Só a fila do time']].map(function (o) {
         return '<option value="' + o[0] + '"' + (EST.mostrar === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
-      }).join('') + '</select>' +
+      }).join('') + '</select></span>' +
       // Sprint (368342d): abre na atual; a contagem e a das demandas no seu nome, como no painel.
-      (opsSprint.length ? '<label class="note" for="ini-sprint">Sprint</label>' +
+      (opsSprint.length ? '<span class="qd-par"><label class="note" for="ini-sprint">Sprint</label>' +
         '<select id="ini-sprint" class="in" data-ini="sprint" style="height:36px" title="Abre na sprint atual. Escolha outra, Todas ou Fora da sprint.">' +
         opsSprint.map(function (o) {
           var rot = o.v === '' ? 'Todas' : o.v === '__fora__' ? 'Fora da sprint' : S.rotuloCurto(o.v) + (o.agora ? ' · agora' : '');
           return opt(o.v, rot + ' (' + o.n + ')', EST.sprint);
-        }).join('') + '</select>' : '') +
+        }).join('') + '</select></span>' : '') +
       // Times (5c849fb): por padrao so o seu time; a escolha soma a fila e a vitrine do outro.
-      (AC && AC.times ? '<label class="note" for="ini-times">Times</label>' +
+      (AC && AC.times ? '<span class="qd-par"><label class="note" for="ini-times">Times</label>' +
         '<select id="ini-times" class="in" data-ini="times" style="height:36px" title="Por padrão aparece só o seu time. Escolha outro para ver a fila dele e poder ajudar.">' +
-        opt('', 'Só o meu time', times) + opt('dados', '+ Dados/BI', times) + opt('sales', '+ Sales Ops', times) + opt('todos', 'Todos os times', times) + '</select>' : '') +
-      (filtrosAtivos ? '<button type="button" class="btns" data-ini="limpar" style="height:36px" title="Volta para a sprint atual e só o seu time">Limpar (' + filtrosAtivos + ')</button>' : '') +
-      '<button type="button" class="btnp" data-axa-form="novo">+ Nova demanda</button></div></header>';
+        opt('', 'Só o meu time', times) + opt('dados', '+ Dados/BI', times) + opt('sales', '+ Sales Ops', times) + opt('todos', 'Todos os times', times) + '</select></span>' : '') +
+      (filtrosAtivos ? '<button type="button" class="btns" data-ini="limpar" style="height:36px" title="Volta para a sprint atual e só o seu time">Limpar (' + filtrosAtivos + ')</button>' : '');
+    var h = '<header class="ini-hd fim ini-hd-meu"><div style="display:flex;flex-direction:column;gap:6px;min-width:0"><h1 class="h1">Meu trabalho</h1><span class="sub ini-sub">' + sub + '</span></div>' +
+      '<div class="ini-fil">' + H.filtros(fl, filtrosAtivos + (EST.mostrar ? 1 : 0), { id: 'meu' }) +
+      '<button type="button" class="btnp ini-novo" data-axa-form="novo">+ Nova demanda</button></div></header>';
 
     var kp = '<div class="ini-kg seis">' +
       kpi('Em andamento', andamento.length, null, { cor: 'var(--ac-t)' }) +
       kpi('Vencem hoje', vHoje.length, null, { cls: vHoje.length ? 'dg' : '', cor: vHoje.length ? 'var(--dg-t)' : '' }) +
       kpi('Em validação', validacao.length, null) +
-      kpi('Atrasadas', atr.length, null, { cls: atr.length ? 'dg' : '', cor: atr.length ? 'var(--dg-t)' : '' }) +
+      // O numero do prazo vencido leva as demandas (a faixa do dev.html): uma abre direto; mais, a faixa com cada uma.
+      kpi('Atrasadas', risco.minhas.length, null, { cls: risco.minhas.length ? 'dg' : '', cor: risco.minhas.length ? 'var(--dg-t)' : '',
+        ini: risco.minhas.length ? 'risco' : '', titulo: risco.minhas.length === 1 ? 'Abre ' + (risco.minhas[0].codigo || 'a demanda') : 'Mostra quais são' }) +
       // "No mes" nao depende da sprint escolhida: conta o que o painel mostra no mes inteiro.
       kpi('Entregues no mês', doPainel.filter(function (m) { return H.colunaDe(m) === 'concluido' && noMes(m); }).length, null, { cor: 'var(--ok-t)' }) +
       kpi('Meus pontos na sprint', sp.feitos + ' / ' + sp.total, null, {
@@ -583,27 +666,27 @@
           '<div class="bar"><span style="width:' + pct + '%;background:linear-gradient(90deg,var(--ac),var(--ac-t))"></span></div>' }) +
       '</div>';
 
-    var r = function (m) { return cartao(m, ctx, { dono: true }); };
-    var cols = '<div class="ini-cols">' +
-      coluna('PLANNING', 'var(--tl)', planning, r) +
-      coluna('PLANEJADO', 'var(--in)', planejado, r) +
-      coluna('EM ANDAMENTO', 'var(--ac)', andamento, r) +
-      coluna('EM VALIDAÇÃO', 'var(--wn)', validacao, r) +
-      coluna('CONCLUÍDO NO MÊS', 'var(--ok)', concl, r, 8) +
-      '</div>';
-    var bk = minhas.filter(function (m) { return H.colunaDe(m) === 'backlog'; }).length;
-    var rod = bk ? '<span class="note">Mais ' + H.plural(bk, 'demanda sua', 'demandas suas') + ' no backlog, fora deste quadro. <a href="#backlog">Ver backlog</a></span>' : '';
+    var quadro = !Q ? '' : '<div class="qd ini-qd" style="display:flex;flex-direction:column;gap:12px;min-width:0">' +
+      Q.abasEtapas(cols.map(function (c) { return { k: c.k, rotulo: c.rotulo, n: c.itens.length }; }), EST.etapa) +
+      '<div class="qd-rolo" id="ini-rolo"><div class="qd-board">' + cols.map(function (c) {
+        return Q.coluna(c.k, c.itens, { junto: c.junto, rotulo: c.rotulo || '', lim: EST.mais[c.k] ? Math.max(c.itens.length, 1) : POR_COLUNA, todos: true });
+      }).join('') + '</div></div></div>';
+    // O Backlog sem sprint fica fora da sprint escolhida: o rodape diz quantas e mostra todas num clique.
+    var bkFora = minhas.filter(function (m) { return H.colunaDe(m) === 'backlog' && !visiveis[m.id]; }).length;
+    var rod = bkFora && EST.sprint ? '<span class="note">Mais ' + H.plural(bkFora, 'demanda sua', 'demandas suas') + ' no Backlog fora desta sprint. ' +
+      '<button type="button" class="ini-rl" data-ini="sprint-todas" style="color:var(--ac-t)">Ver todas as sprints</button></span>' : '';
     if (!noQuadro.length && EST.mostrar === 'fila') {
-      return h + kp + H.vazio('inbox', 'A fila do time está vazia', 'Nada na sprint em curso está sem dono agora.');
+      return h + kp + faixaRisco(risco) + H.vazio('inbox', 'A fila do time está vazia', 'Nada na sprint em curso está sem dono agora.');
     }
     if (!noQuadro.length && doPainel.length) {
-      return h + kp + H.vazio('inbox', 'Nada nesta sprint com estes filtros', 'Troque a sprint no filtro ou escolha Todas.');
+      return h + kp + faixaRisco(risco) + H.vazio('inbox', 'Nada nesta sprint com estes filtros', 'Troque a sprint no filtro ou escolha Todas.') + rod;
     }
     if (!minhas.length && !noQuadro.length) {
       return h + H.vazio('user', 'Nenhuma demanda com o seu nome',
-        'O RoadMap procura por ' + (H.meusNomes().join(', ') || 'seu nome') + ' no campo dev. Se o nome nas demandas estiver diferente, ajuste no Meu painel (dev.html).');
+        'O RoadMap procura por ' + (H.meusNomes().join(', ') || 'seu nome') + ' no campo dev. Se o nome nas demandas estiver diferente, ajuste em Minha conta › Nome nas demandas.',
+        '<a class="btn" href="#conta">Abrir Minha conta</a>');
     }
-    return h + kp + cols + rod;
+    return h + kp + faixaRisco(risco) + quadro + rod;
   }
 
   function meuTrabalhoPO(ctx) {
@@ -872,8 +955,33 @@
   }
 
   function redesenha(el, ctx) {
+    var rolo = el.querySelector('#ini-rolo');
+    var x = rolo ? rolo.scrollLeft : 0;
     el.innerHTML = render(el, ctx);
+    var novo = el.querySelector('#ini-rolo');
+    if (novo) novo.scrollLeft = x;
     depois(el, ctx);
+  }
+
+  /* LEVA ATE A DEMANDA DO PRAZO VENCIDO (`devIrPara`, dev.html): se o filtro a
+     esconde, mostra todas as sprints e tudo o que e seu; rola ate o card,
+     realca e abre a demanda por cima do quadro. */
+  function irParaDemanda(el, ctx, id) {
+    var m = ((ctx.D || {}).melhorias || []).find(function (x) { return x && String(x.id) === String(id); });
+    var Q = window.AXIS_QUADRO;
+    if (!m || !Q) return;
+    var achar = function () { return el.querySelector('.qd-card[data-qd-id="' + String(m.id).replace(/"/g, '') + '"]'); };
+    if (!achar()) { EST.sprint = ''; EST.mostrar = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); }
+    var col = Q.COLUNAS_DEV.find(function (c) { return c.junto.indexOf(H.colunaDe(m)) >= 0; });
+    if (col) { EST.etapa = col.k; EST.mais[col.k] = true; }
+    redesenha(el, ctx);
+    var card = achar();
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      card.classList.add('realce');
+      setTimeout(function () { card.classList.remove('realce'); }, 2200);
+    }
+    Q.abrirItem(m);
   }
 
   function depois(el, ctx) {
@@ -889,7 +997,21 @@
         if (q === 'ntf-mais') { EST.ntfLimite += 30; redesenha(el, ctx); return; }
         // O Limpar do Meu trabalho volta para a sprint atual e so o seu time (o padrao).
         if (q === 'limpar') { EST.sprint = H.sprintAtual() || ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
+        if (q === 'sprint-todas') { EST.sprint = ''; redesenha(el, ctx); return; }
+        // A faixa e o numero do prazo vencido levam ate a demanda (dev.html: `devIrPara`, `limparFiltrosDev`).
+        if (q === 'risco-abre') { irParaDemanda(el, ctx, b.getAttribute('data-id')); return; }
+        if (q === 'risco-limpa') { EST.sprint = ''; EST.mostrar = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
+        if (q === 'risco') {
+          var um = el.querySelectorAll('[data-ini="risco-abre"]');
+          var fx = el.querySelector('#ini-risco');
+          if (um.length === 1) { irParaDemanda(el, ctx, um[0].getAttribute('data-id')); return; }
+          if (fx) { fx.scrollIntoView({ behavior: 'smooth', block: 'center' }); fx.focus({ preventScroll: true }); }
+          return;
+        }
       }
+      // "e mais N" da coluna do Meu trabalho: mostra o resto (o painel do dev nao corta).
+      var mb = e.target.closest('[data-mais]');
+      if (mb && el.contains(mb)) { EST.mais[mb.getAttribute('data-mais')] = true; redesenha(el, ctx); return; }
       // Cartao do quadro pessoal: o cartao inteiro abre o item, menos o botao
       // de acao dentro dele.
       if (e.target.closest('a, button')) return;
@@ -904,6 +1026,14 @@
     if (tm) tm.onchange = function () { if (window.AXIS_ACOES) AXIS_ACOES.times(tm.value); redesenha(el, ctx); var n = el.querySelector('[data-ini="times"]'); if (n) n.focus(); };
     var sel = el.querySelector('[data-ini="cron-dev"]');
     if (sel) sel.onchange = function () { EST.cronDev = sel.value; EST.cronLimite = 40; redesenha(el, ctx); };
+    /* O quadro do Meu trabalho e o do Quadro: clique abre a demanda por cima,
+       o card arrasta (e "Mover para…" no celular) e as etapas deslizam. */
+    var Q = window.AXIS_QUADRO;
+    if (Q && el.querySelector('#ini-rolo')) {
+      Q.ligarQuadro(el, { estado: EST });
+      Q.sincEtapa(el, EST, true);
+    }
+    if (Q) Q.pintaItem(false);
   }
 
   var AD = ['admin', 'analista', 'dev'];

@@ -36,10 +36,20 @@
 
   function nova(eu) { return !!(eu && eu.interface_nova); }
 
-  /** Para onde vai, no app, quem esta na tela antiga `pagina` com o `hash`. */
-  function rotaNova(pagina, hash) {
-    var base = ROTA_NOVA[String(pagina || '').toLowerCase()];
+  /** Para onde vai, no app, quem esta na tela antiga `pagina` com o `hash`
+   *  (e a `busca`, o `?…` do endereco). */
+  function rotaNova(pagina, hash, busca) {
+    var pg = String(pagina || '').toLowerCase();
+    var base = ROTA_NOVA[pg];
     if (!base) return '';
+    // mensageria.html?codigo=AX-123 e a conversa daquela demanda: no app, a aba
+    // Conversa do Item. Sem codigo, e a API de demandas.
+    var cod = (String(busca || '').match(/[?&]codigo=([^&#]+)/i) || [])[1];
+    if (pg === 'mensageria.html' && cod) {
+      cod = decodeURIComponent(cod).trim().toUpperCase();
+      if (/^\d+$/.test(cod)) cod = 'AX-' + cod;
+      if (/^AX-\d+$/.test(cod)) return 'item/' + cod + '/conversa';
+    }
     // admin.html#AX-123 e dev.html#AX-123 abrem a demanda: no app e o Item.
     var h = decodeURIComponent(String(hash || '').replace(/^#/, ''));
     if (/^AX-\d+$/i.test(h)) return 'item/' + h.toUpperCase();
@@ -61,7 +71,7 @@
 
   /** Na tela antiga: quem tem a marca vai para o app. Devolve true se mandou. */
   function decidirNaTelaAntiga() {
-    var r = rotaNova(pagina(), location.hash);
+    var r = rotaNova(pagina(), location.hash, location.search);
     if (!r || querAntiga() || !nova(eu())) return false;
     location.replace('axis.html#' + r);
     return true;

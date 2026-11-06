@@ -31,6 +31,8 @@
      mesclar        mescConfirmar (admin.html): a outra entra nesta e sai do
                     fluxo, sem ser apagada; o patch e da absorvida
      separar        mescDesfazer (admin.html)
+     excluir        deleteMelhoria + kbExcluir (admin.html): so o PM/PO; a
+                    base vai sem a demanda (`semADemanda`, `gravaExclusao`)
      juntar         gJuntarConfirmar (gantt.html): varias demandas que ja
                     existem passam a ser parte desta, em lote — o mesmo elo
                     do `vincular` (`elo`), com o ciclo recusado antes
@@ -127,7 +129,7 @@
     var valem = PV.assinaturasValidas(m, c.aprovadores);
     if (valem.length >= PV.ASSINATURAS_SPIKE) return '';
     return 'Este spike tem ' + valem.length + ' de ' + PV.ASSINATURAS_SPIKE + ' aprovações — ' +
-           'as assinaturas ficam no editor da Área administrativa.';
+           'quem aprova spike assina na seção Entrega do Item.';
   }
 
   /** As travas de qualquer movimento, na ordem do `kbDrop`. */
@@ -493,6 +495,67 @@
       mesclado_em: '', mesclado_data: '', mesclado_por: '', oculto: false } };
   }
 
+  /* EXCLUIR (`deleteMelhoria` + `kbExcluir`, admin.html). So o PM/PO: o
+     admin.html e a rota `publish` sao do papel admin. Excluir nao e um campo:
+     o admin publica a base SEM a demanda (`_deletedIds`). Aqui a regra
+     devolve `excluir` (o id que sai), e `semADemanda` tira ela da base fresca
+     na hora de gravar. */
+  function excluir(m, a, c) {
+    if (txt((c || {}).papel) !== 'admin') return falha('Só o PM/PO exclui demandas.');
+    if (!m || !m.id) return falha('Demanda não encontrada.');
+    return { ok: true, excluir: m.id, patch: {}, msg: 'Demanda removida.' };
+  }
+  /** A base sem a demanda `id` (puro). `achou` diz se ela ainda estava la. */
+  function semADemanda(base, id) {
+    var lista = ((base || {}).melhorias || []);
+    var fica = lista.filter(function (m) { return !m || m.id !== id; });
+    return { base: Object.assign({}, base, { melhorias: fica }), achou: fica.length !== lista.length };
+  }
+
+  /* O SELETOR "MOVER PARA" — as etapas que as telas antigas oferecem a cada
+     perfil, num lugar so: o `m-status` do editor do admin (todas, Negada
+     inclusive) e o `ms-status` do painel do dev (`ETAPAS_DO_DEV`; nada quando
+     a demanda esta com o PM/PO, a barreira do `saveStatus`). `via` diz que
+     gesto grava: `mover`; `entregar`, que pede as horas e o texto, como o
+     select do dev pede ao escolher uma validacao; ou `negar`, com o motivo
+     (o `field-negada` do admin). A entrega so sai de Em andamento ou da area,
+     que e o que a regra `entregar` aceita. */
+  var ROTULO_DO_DEV = { em_andamento: 'Em Andamento', validacao_area: 'Mandar para a área conferir', validacao: 'Entregar para validação' };
+  function etapasDoSeletor(m, c) {
+    var papel = txt((c || {}).papel);
+    var atual = etapa(m);
+    if (papel === 'admin' || papel === 'analista') {
+      return ETAPAS_VALIDAS.filter(function (e) { return e !== atual; })
+        .map(function (e) { return { v: e, r: rotulo(e), via: e === 'negada' ? 'negar' : 'mover' }; });
+    }
+    if (!ehDev(c) || !m) return [];
+    if (['validacao', 'concluido', 'negada'].indexOf(atual) >= 0 || soLeitura(m, c)) return [];
+    var entrega = destinosDeEntrega(m, c);
+    return ETAPAS_DO_DEV.filter(function (e) {
+      return e !== atual && (e === 'em_andamento' || entrega.indexOf(e) >= 0);
+    }).map(function (e) { return { v: e, r: ROTULO_DO_DEV[e], via: e === 'em_andamento' ? 'mover' : 'entregar' }; });
+  }
+
+  /* AS HORAS QUE A ENTREGA PROPOE (`msSubAplicaTotal`, dev.html): com hora
+     lancada em algum passo, a soma das subtarefas; sem nenhuma, o campo de
+     sempre. `n` e quantos passos tem hora (a nota "Somado de N passos"). */
+  function horasDaEntrega(m, c) {
+    var S = mod(c, 'SUBTAREFA');
+    var l = S ? S.lista(m) : [];
+    var tot = S ? S.horasTotal(l) : null;
+    if (tot === null || tot === undefined) return { horas: (m && m.horas_realizadas) || '', somado: false, n: 0 };
+    return { horas: tot, somado: true, n: l.filter(function (x) { return String((x || {}).horas || '').trim() !== ''; }).length };
+  }
+
+  /* O DESTAQUE DA APRESENTACAO (`destaqueAlterna`, admin.html): a estrela
+     liga e desliga em um clique, em qualquer etapa. E do PM/PO, como o
+     admin.html. */
+  function destaque(m, a, c) {
+    if (txt((c || {}).papel) !== 'admin') return falha('O destaque da apresentação é do PM/PO.');
+    var liga = !(m && m.destaque);
+    return { ok: true, patch: { destaque: liga }, msg: liga ? 'Marcada como destaque da apresentação.' : 'Destaque removido.' };
+  }
+
   // ══ OS GESTOS DO PAINEL DO DEV E A CONVERSA (puras) ════════════════════
   /* O QUE SO EXISTIA NO dev.html E NA mensageria.html. Cada regra e copia da
      funcao de la, devolvendo o patch em vez de mexer no `state`:
@@ -616,6 +679,66 @@
     if (!f || !SP) return true;
     return f === '__fora__' ? SP.foraDaSprint(m) : SP.naSprint(m, f);
   }
+
+  /* O ARRASTE DO CARD ENTRE COLUNAS — `kbDrop` (admin.html) e `onDragOver`
+     + `onDrop` (dev.html), por perfil. `soltarEm` devolve o que o gesto faz,
+     sem gravar:
+       { via: 'nada' }                         a mesma coluna
+       { via: 'recusa', erro, campo }          o card nao sai do lugar
+       { via: 'mover' | 'entregar' | 'negar', destino }
+     PM/PO (admin e analista): toda coluna recebe, e as travas sao as do
+     `mover` (`travaDoMovimento`, na ordem do kbDrop), conferidas quando o
+     gesto grava. Soltar em Negada pede o motivo: o app nao nega sem ele.
+     Dev: so as `ETAPAS_DO_DEV`, com a frase de `COLUNAS_BLOQUEADAS_MSG` nas
+     outras; a trava de sprint (que no dev.html apaga a coluna ja no
+     `onDragOver`), a homologacao, a dependencia aberta (`checkDepBlock`) e,
+     nas validacoes, a entrega com as horas e o texto (`openStatusModal`).
+     `junto`: as etapas da coluna de destino (no painel do dev, Planejado
+     reune Em aprovacao de requisitos); soltar onde o card ja esta e nada. */
+  var COLUNAS_BLOQUEADAS_MSG = {
+    backlog: 'O Backlog recebe o que você abre. Tirar uma demanda de andamento e devolvê-la para lá é repriorizar — fale com o PM/PO.',
+    planning: 'Quem leva uma demanda para o Planning é o PM/PO — é ele que monta a pauta da reunião.',
+    planejado: 'Planejar (definir data e sprint) é do PM/PO. Se a demanda não é sua para agora, fale com ele.',
+    concluido: 'Quem conclui é o PM/PO, ao validar. Entregue para validação e ele fecha.'
+  };
+  var DEP_NAO_TRAVA = ['planejado', 'em_andamento', 'atrasado', 'validacao'];
+  function travaSprintDoDev(m, destino, c) {
+    var SP = mod(c, 'SPRINTPO');
+    var r = SP ? SP.travaDeAlocacao(m, etapaGravada(m, c), destino, c && c.hoje) : null;
+    return r && r.trava ? r.motivo : '';
+  }
+  /** A coluna acende para receber? (`onDragOver` do dev.html; no admin, sempre.) */
+  function podeSoltar(m, destino, c) {
+    if (!ehDev(c)) return true;
+    return ETAPAS_DO_DEV.indexOf(destino) >= 0 && !travaSprintDoDev(m, destino, c);
+  }
+  /** O card arrasta? O admin arrasta todos; o dev, os do painel dele. */
+  function arrastavel(m, c) {
+    var papel = txt((c || {}).papel);
+    if (papel === 'admin' || papel === 'analista') return !!m;
+    return ehDev(c) && mostraNoPainel(m, c, '');
+  }
+  function soltarEm(m, destino, c, junto) {
+    destino = txt(destino);
+    var ja = Array.isArray(junto) && junto.length ? junto : [destino];
+    if (!m || ja.indexOf(etapaGravada(m, c)) >= 0) return { via: 'nada' };
+    if (!ehDev(c)) return { via: destino === 'negada' ? 'negar' : 'mover', destino: destino };
+    if (ETAPAS_DO_DEV.indexOf(destino) < 0) {
+      return falhaVia(COLUNAS_BLOQUEADAS_MSG[destino] || 'Esta coluna não é movida pelo Painel Dev.', '');
+    }
+    var ts = travaSprintDoDev(m, destino, c);
+    if (ts) return falhaVia(ts, '');
+    var HO = mod(c, 'HOMOLOGACAO');
+    var hb = HO ? HO.barra(m, destino, c.hoje) : null;
+    if (hb) return falhaVia(hb.motivo, hb.campo === 'etapa' ? '' : hb.campo);
+    var VI = mod(c, 'VINCULO');
+    if (DEP_NAO_TRAVA.indexOf(destino) < 0 && VI) {
+      var abertas = VI.abertos(c.lista || [], m.id);
+      if (abertas.length) return falhaVia('Conclua a dependência antes de avançar: "' + (abertas[0].titulo || '') + '"', '');
+    }
+    return { via: destino === 'em_andamento' ? 'mover' : 'entregar', destino: destino };
+  }
+  function falhaVia(erro, campo) { var f = falha(erro, campo); f.via = 'recusa'; return f; }
 
   /* A DEMANDA DE OUTRA PESSOA ABRE EM LEITURA (`msModoLeitura`, dev.html): o
      dev mexe no que esta no nome dele ou no que ainda nao tem dono. */
@@ -836,6 +959,22 @@
       anexos: antes.concat(novos.map(function (x) { return { nome: x.nome, tipo: x.tipo, tamanho: x.tamanho, chave: x.chave }; })) } };
   }
 
+  /* TIRAR UM ANEXO (`msRemoveAnexo` do dev.html; o ✕ de `mRenderAnexosEdit`
+     no admin): a lista sem ele. Quem pode e quem pode anexar. `a` = { i,
+     nome }: o nome confere que o indice ainda aponta para o mesmo arquivo. */
+  function tirarAnexo(m, a, c) {
+    a = a || {};
+    var l = Array.isArray((m || {}).anexos) ? copia(m.anexos) : [];
+    var i = Number(a.i);
+    if (!(i >= 0 && i < l.length) || (a.nome != null && txt((l[i] || {}).nome) !== txt(a.nome))) {
+      return falha('Este anexo não está mais na demanda: recarregue a tela.');
+    }
+    var pode = anexar(m, { novos: [{ nome: '-' }] }, c);
+    if (!pode.ok) return pode;
+    l.splice(i, 1);
+    return { ok: true, patch: { anexos: l }, msg: 'Anexo retirado.' };
+  }
+
   /* A MENSAGEM DA CONVERSA (mensageria.html). Quem e quando vem do servidor; o
      corpo e o do envio de la. Com anexo, o nome dele fecha o texto: o arquivo
      vai para os anexos da demanda e a conversa diz o que foi mandado. */
@@ -877,11 +1016,11 @@
   }
 
   var REGRAS_DO_DEV = { pegar: pegar, subtarefas: subtarefas, salvarEntrega: salvarEntrega, referencias: referencias,
-                        grill: grill, vincular: vincular, anexar: anexar, mensagem: mensagem };
+                        grill: grill, vincular: vincular, anexar: anexar, tirarAnexo: tirarAnexo, mensagem: mensagem };
 
   var REGRAS = {
-    mesclar: mesclar, separar: separar, juntar: juntar, soltar: soltar,
-    casoUso: casoUso,
+    mesclar: mesclar, separar: separar, juntar: juntar, soltar: soltar, excluir: excluir,
+    casoUso: casoUso, destaque: destaque,
     mover: mover, validar: validar, devolver: devolver, homologar: homologar, replanejar: replanejar,
     pausar: pausar, pedirPausa: pedirPausa, desistirPausa: desistirPausa, aprovarPausa: aprovarPausa,
     recusarPausa: recusarPausa, retomar: retomar, negar: negar, entregar: entregar
@@ -889,14 +1028,16 @@
   var api = {
     REGRAS: REGRAS, gestoSemDev: gestoSemDev, marcaConclusao: marcaConclusao, destinosDeEntrega: destinosDeEntrega,
     tiraInicioDoBacklog: tiraInicioDoBacklog, assumeAoComecar: assumeAoComecar,
-    candidatasMescla: candidatasMescla, mescladasDe: mescladasDe,
-    STATUS_ADMIN: STATUS_ADMIN, STATUS_DEV: STATUS_DEV, ETAPAS_DO_DEV: ETAPAS_DO_DEV, rotulo: rotulo
+    candidatasMescla: candidatasMescla, mescladasDe: mescladasDe, semADemanda: semADemanda,
+    STATUS_ADMIN: STATUS_ADMIN, STATUS_DEV: STATUS_DEV, ETAPAS_DO_DEV: ETAPAS_DO_DEV, rotulo: rotulo,
+    etapasDoSeletor: etapasDoSeletor, horasDaEntrega: horasDaEntrega
   };
   Object.assign(REGRAS, REGRAS_DO_DEV);
   Object.assign(api, { SUB: SUB, donoDoCard: donoDoCard, mostraNoPainel: mostraNoPainel, doMeuTime: doMeuTime, timeDeOutro: timeDeOutro,
                        sprintsDoPainel: sprintsDoPainel, casaSprintDoPainel: casaSprintDoPainel,
                        devsParaVincular: devsParaVincular, pessoasDaConversa: pessoasDaConversa,
                        sugestoesArroba: sugestoesArroba, escolheArroba: escolheArroba });
+  Object.assign(api, { soltarEm: soltarEm, podeSoltar: podeSoltar, arrastavel: arrastavel, COLUNAS_BLOQUEADAS_MSG: COLUNAS_BLOQUEADAS_MSG });
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
   // ══ INTERFACE ═════════════════════════════════════════════════════════
@@ -1062,6 +1203,39 @@
     return out;
   }
 
+  /* A EXCLUSAO GRAVA SEM O PATCH: e a base fresca SEM a demanda, pelo mesmo
+     `GRAVACAO.gravar` (pre-voo, `base` contra corrida, uma nova tentativa no
+     409). O `ler` tira a demanda a cada leitura, entao a nova tentativa
+     tambem sai sem ela. Se outra pessoa ja a excluiu, nao ha o que gravar. */
+  async function gravaExclusao(r) {
+    var G = raiz.GRAVACAO;
+    if (!G) { H.toast('gravacao.js não carregado.', 'erro'); return { ok: false }; }
+    var sumiu = false, out;
+    try {
+      out = await G.gravar({
+        papel: AX.APP.papel, patch: {}, credenciais: AX.APP.token ? { token: AX.APP.token } : {},
+        ler: function () {
+          return H.api('dados').then(function (b) { var s = semADemanda(b, r.excluir); sumiu = !s.achou; return s.base; });
+        },
+        enviar: async function (corpo, replacer) {
+          if (sumiu) return { status: 200, corpo: { ja_excluida: true } };
+          var res = await fetch(AX.WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo, replacer) });
+          return { status: res.status, corpo: await res.json().catch(function () { return {}; }) };
+        }
+      });
+    } catch (e) {
+      out = { ok: false, status: e.status, erro: 'Sem conexão com o servidor: ' + (e.message || e) };
+    }
+    if (!out.ok) {
+      H.toast(out.status === 401 ? 'Sessão expirada — saia e entre de novo.' : (out.erro || 'Não foi possível excluir.'), 'erro');
+      return out;
+    }
+    H.ir('quadro');
+    H.toast(sumiu ? 'A demanda já tinha sido excluída por outra pessoa.' : r.msg);
+    try { await H.recarregar(); } catch (_) { AX.desenhar(true); }
+    return out;
+  }
+
   /** Roda a regra e grava. `a` ja traz o que a pessoa escolheu. */
   async function aplicar(acao, m, a) {
     var regra = REGRAS[acao];
@@ -1106,7 +1280,10 @@
       if (col === 'validacao_area' && !(HO && HO.registro(m))) poe('homologar', 'Registrar homologação', 'check');
       if (sit === 'aguardando') { var ped = P.pedido(m); if (ped && H.meusNomes().concat([quem()]).indexOf(ped.por) >= 0) poe('desistirPausa', 'Cancelar pedido de pausa', 'x'); }
       else if (sit === 'pausada') poe('retomar', 'Retomar', 'refresh');
-      else if (col === 'em_andamento') poe('pedirPausa', 'Pedir pausa', 'pause');
+      // Pedir pausa em qualquer etapa aberta (`devPausaRender`, dev.html).
+      else if (aberta) poe('pedirPausa', 'Pedir pausa', 'pause');
+      // O select "Mover para" do card (`ms-status`), com as etapas do dev.
+      if (etapasDoSeletor(m, contexto()).length) poe('moverPara', 'Mover para…', 'board');
     }
     return out;
   }
@@ -1149,14 +1326,33 @@
       return aplicar('mover', m, { destino: destino });
     },
 
+    /* O SELETOR UNICO (`etapasDoSeletor`): um select, como o do card antigo.
+       Mover grava aqui; Negada pede o motivo e a entrega pede as horas e o
+       texto, cada uma na caixa do proprio gesto. */
     moverPara: async function (m) {
-      var col = H.colunaDe(m);
-      var lista = AX.APP.papel === 'dev' ? ['em_andamento'] : ETAPAS_VALIDAS.filter(function (e) { return e !== 'negada'; });
-      var ops = lista.filter(function (e) { return e !== col; }).map(function (e) { return { v: e, r: rotEtapa(e) }; });
-      var v = await caixa({ titulo: 'Mover ' + cod(m), texto: 'Hoje em ' + rotEtapa(col) + '. A regra de cada etapa é conferida antes de gravar.',
-        campos: [{ nome: 'destino', tipo: 'opcoes', opcoes: ops }], ok: 'Mover', valida: validaCom('mover', m) });
-      if (v) return aplicar('mover', m, v);
+      var ops = etapasDoSeletor(m, contexto());
+      if (!ops.length) { H.toast('Pelo seu perfil, esta demanda não muda de etapa daqui.', 'erro'); return; }
+      var achar = function (v) { return ops.find(function (o) { return o.v === v; }) || null; };
+      var v = await caixa({ titulo: 'Mover ' + cod(m), texto: 'Hoje em ' + rotEtapa(etapa(m) || H.colunaDe(m)) + '. A regra de cada etapa é conferida antes de gravar.',
+        campos: [{ nome: 'destino', rotulo: 'Mover para', tipo: 'lista', valor: '', obrig: true,
+                   opcoes: [{ v: '', r: '— escolha a etapa —' }].concat(ops.map(function (o) { return { v: o.v, r: o.r }; })),
+                   nota: ops.some(function (o) { return o.via === 'entregar'; }) ? 'Mandar para a área ou entregar pede as horas e o que foi implementado.' : '' }],
+        ok: 'Mover', valida: function (x) { var o = achar(x.destino); return o && o.via === 'mover' ? validaCom('mover', m)(x) : ''; } });
+      var op = v && achar(v.destino);
+      if (!op) return;
+      if (op.via === 'negar') return GESTOS.negar(m);
+      if (op.via === 'entregar') return GESTOS.entregar(m, { getAttribute: function () { return op.v; } });
+      return aplicar('mover', m, { destino: op.v });
     },
+
+    /* A ESTRELA (`destaqueAlterna`): um clique grava, sem caixa. */
+    destaque: function (m) { return aplicar('destaque', m, {}); },
+
+    /* AS ASSINATURAS DO SPIKE (`spikeAssinar`, admin.html): rota propria, e
+       quem assina vem da SESSAO no Worker — a tela nao manda nome. Depois,
+       le a base de novo: quantas valem depende de quem aprova agora. */
+    spikeAssinar: function (m) { return assinaSpike(m, true); },
+    spikeRetirar: function (m) { return assinaSpike(m, false); },
 
     validar: async function (m) {
       var aviso = String(m.implementacao || '').trim() ? '' : '\n\nO dev não descreveu o que foi implementado: sem esse texto o relatório do comitê fica vazio para esta demanda.';
@@ -1250,6 +1446,18 @@
         campos: [{ nome: 'motivo', rotulo: 'Motivo da negativa', tipo: 'area', valor: m.motivo_negacao || '', obrig: true }],
         ok: 'Negar', perigo: true, valida: validaCom('negar', m) });
       if (v) return aplicar('negar', m, v);
+    },
+
+    /* EXCLUIR (`kbExcluir`): a pergunta traz o NOME da demanda — "nao ha como
+       desfazer" sem dizer qual ensina a clicar sem ler. "Removida" so depois
+       de o servidor confirmar (`mPersistir` do admin). */
+    excluir: async function (m) {
+      var r = REGRAS.excluir(m, {}, contexto());
+      if (!r.ok) { recusa(m, r); return; }
+      var nome = (m.codigo ? m.codigo + ' · ' : '') + (m.titulo || '(sem título)');
+      var v = await caixa({ titulo: 'Excluir ' + (m.codigo || 'demanda'),
+        texto: '"' + nome + '" sai do quadro e de todos os relatórios. Não há como desfazer.', ok: 'Excluir', perigo: true });
+      if (v) return gravaExclusao(r);
     },
 
     /* O CASO DE USO (o painel `m-caso-uso` do editor do admin): o texto e
@@ -1355,7 +1563,9 @@
         campos.push({ nome: 'destino', rotulo: 'Entregar para', tipo: 'opcoes', valor: ds[0],
           opcoes: ds.map(function (d) { return { v: d, r: rotEtapa(d), d: NOTA[d] }; }) });
       }
-      campos.push({ nome: 'horas', rotulo: 'Horas de desenvolvimento', tipo: 'numero', valor: m.horas_realizadas || '', obrig: true });
+      var hz = horasDaEntrega(m, c);
+      campos.push({ nome: 'horas', rotulo: 'Horas de desenvolvimento', tipo: 'numero', passo: '0.25', valor: hz.horas, obrig: true,
+        nota: hz.somado ? 'Somado de ' + hz.n + (hz.n === 1 ? ' passo' : ' passos') + ' das subtarefas.' : '' });
       campos.push({ nome: 'implementacao', rotulo: 'O que foi implementado', tipo: 'area', valor: m.implementacao || '', dica: 'É o texto que a área e o PM/PO leem para validar.', obrig: true });
       campos.push({ nome: 'resumo', rotulo: 'Resumo da entrega', tipo: 'area', linhas: 2, valor: m.resumo_entrega || '', dica: 'Vai para o relatório e a apresentação.' });
       var fixo = campos[0].nome === 'destino' ? {} : { destino: ds[0] };
@@ -1447,7 +1657,7 @@
       var fixo = { naCaixa: { horas: 1 } };
       var v = await caixa({ titulo: 'Corrigir a entrega de ' + cod(m),
         texto: 'A demanda segue com o PM/PO: a etapa não muda. Muda o que ele lê para validar.',
-        campos: [{ nome: 'horas', rotulo: 'Horas de desenvolvimento', tipo: 'numero', passo: '0.25', valor: m.horas_realizadas || '', obrig: true },
+        campos: [{ nome: 'horas', rotulo: 'Horas de desenvolvimento', tipo: 'numero', passo: '0.25', valor: horasDaEntrega(m, contexto()).horas, obrig: true },
                  { nome: 'resumo', rotulo: 'Resumo da entrega', tipo: 'area', linhas: 3, max: 300, valor: m.resumo_entrega || '',
                    dica: 'Uma frase do que mudou: vai para o relatório e a apresentação.', obrig: true },
                  { nome: 'implementacao', rotulo: 'O que foi implementado', tipo: 'area', valor: m.implementacao || '',
@@ -1514,7 +1724,27 @@
       return grava({ id: r.id }, r);
     }
   };
+  /* TIRAR UM ANEXO (o ✕ da secao ANEXOS do Item): pergunta qual, e grava a
+     lista sem ele. */
+  GESTOS_DO_DEV.tirarAnexo = async function (m, el) {
+    var i = el ? +el.getAttribute('data-axa-i') : -1;
+    var a = (m.anexos || [])[i];
+    var r = REGRAS.tirarAnexo(m, { i: i, nome: a ? a.nome : null }, contexto());
+    if (!r.ok) { recusa(m, r); return; }
+    var v = await caixa({ titulo: 'Tirar o anexo', texto: '"' + (a.nome || 'anexo') + '" sai da lista de anexos de ' + cod(m) + '.', ok: 'Tirar', perigo: true });
+    if (v) return grava(m, r);
+  };
   Object.assign(GESTOS, GESTOS_DO_DEV);
+
+  async function assinaSpike(m, assinar) {
+    var corpo;
+    try { corpo = await H.api('spike-assinar', { id: m.id, retirar: !assinar }); }
+    catch (e) { H.toast(e.message || 'Não foi possível registrar a aprovação.', 'erro'); return { ok: false }; }
+    try { await H.recarregar(); } catch (_) { AX.desenhar(true); }
+    var faltam = (corpo && corpo.faltam) || 0;
+    H.toast(assinar ? (faltam ? 'Aprovado. Ainda faltam ' + faltam + '.' : 'Aprovado — o spike já pode concluir.') : 'Sua aprovação foi retirada.');
+    return { ok: true };
+  }
 
   /* A MARCA DE QUEM E O CARD, para o dev (a faixa `kcard-dono` do dev.html):
      no nome dele, do time com outra pessoa, ou na fila sem dono. */

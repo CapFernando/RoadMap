@@ -92,7 +92,11 @@
       '.axa .bk-passos span{flex:1;padding:12px;font-size:12.5px;font-weight:700;text-align:center;background:var(--sf3);color:var(--tx2);border-right:1px solid var(--bd2)}',
       '.axa .bk-passos span:last-child{border-right:0}',
       '.axa .bk-passos small{display:block;font-weight:500;color:var(--tx3);font-size:11.5px;margin-top:2px}',
-      '@container app (max-width: 760px){.axa .bk-passos{flex-direction:column}.axa .bk-passos span{border-right:0;border-bottom:1px solid var(--bd2)}.axa .bk-fil select.in{max-width:none;flex:1 1 150px}}'
+      '@container app (max-width: 760px){.axa .bk-passos{flex-direction:column}.axa .bk-passos span{border-right:0;border-bottom:1px solid var(--bd2)}.axa .bk-fil select.in{max-width:none;flex:1 1 150px}' +
+        // A lista vira cartoes (.tc do nucleo); dentro do grupo, sem cartao dentro de cartao.
+        '.axa .bk-tab{min-width:0}.axa .bk-fil input.in{flex:1 1 150px}.axa .bk-gh{flex-wrap:wrap}.axa .bk-gb{margin-left:0;flex:1 1 80px}' +
+        '.axa .bk-grp .tc-ln{margin:0;border-radius:0;border-width:0 0 1px;border-color:var(--bd3);background:transparent}.axa .bk-grp .tc-ln:last-child{border-bottom:0}' +
+        '.axa .bk-ln .tt{white-space:normal}.axa .bk-ln .cm{white-space:normal}}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -227,7 +231,7 @@
 
   function devCel(m) {
     var ds = H.devsDe(m);
-    if (!ds.length) return H.av('', 26);
+    if (!ds.length) return '<span class="row">' + H.av('', 26) + '</span>';
     return '<span class="row" style="gap:0" title="' + H.esc(ds.join(' / ')) + '">' + H.av(ds[0], 26) +
       (ds.length > 1 ? '<span style="font-size:11px;color:var(--tx3);margin-left:4px">+' + (ds.length - 1) + '</span>' : '') + '</span>';
   }
@@ -240,17 +244,18 @@
   function linha(m, eDev) {
     var pz = prazoCel(m);
     var cam = H.caminho(m.tema_id);
-    return '<a class="bk-ln' + (eDev && H.minha(m) ? ' minha' : '') + '" href="' + H.hrefItem(m) + '">' +
-      '<span class="ci">' + H.esc(m.codigo || '—') + '</span>' +
-      '<span style="display:flex;flex-direction:column;min-width:0"><span class="tt">' + H.esc(m.titulo || '(sem título)') + '</span>' +
+    // Celulas com `data-label`: no celular a linha vira cartao (tabela-cartao do nucleo).
+    return '<a class="bk-ln tc-ln' + (eDev && H.minha(m) ? ' minha' : '') + '" href="' + H.hrefItem(m) + '">' +
+      '<span class="ci" data-tc="topo">' + H.esc(m.codigo || '—') + '</span>' +
+      '<span style="display:flex;flex-direction:column;min-width:0" data-tc="titulo"><span class="tt">' + H.esc(m.titulo || '(sem título)') + '</span>' +
       // Com quem esta e a entrega ao usuario: a linha da lista de Melhorias do admin (372b92f).
       '<span class="cm">' + (cam ? H.esc(cam) : 'Sem sistema') + (W.AXIS_SPRINTS ? ' · ' + W.AXIS_SPRINTS.comQuem(m) : '') + '</span>' +
       // Impacto e urgencia ao lado do titulo, como na lista de Melhorias do admin.
       (H.chipsReq(m) ? '<span class="row" style="gap:4px;flex-wrap:wrap;margin-top:3px">' + H.chipsReq(m) + '</span>' : '') + '</span>' +
-      tipoCel(m) +
-      '<span class="et">' + chipColuna(m) + '</span>' +
-      sprintCel(m) + pontosCel(m) + devCel(m) +
-      '<span class="pz" style="color:' + pz.cor + '"' + (pz.titulo ? ' title="' + H.esc(pz.titulo) + '"' : '') + '>' + H.esc(pz.txt) + '</span></a>';
+      H.celula(tipoCel(m), 'Tipo') +
+      '<span class="et" data-label="Etapa">' + chipColuna(m) + '</span>' +
+      H.celula(sprintCel(m), 'Sprint') + H.celula(pontosCel(m), 'Pontos') + H.celula(devCel(m), 'Dev') +
+      '<span class="pz" data-tc="topo-fim" style="color:' + pz.cor + '"' + (pz.titulo ? ' title="' + H.esc(pz.titulo) + '"' : '') + '>' + H.esc(pz.txt) + '</span></a>';
   }
 
   /* A ORDEM DENTRO DO GRUPO: aberta antes de fechada; entre as abertas, a de
@@ -404,8 +409,8 @@
     var gs = grupos(lista, D);
     return {
       chips: htmlChips(base),
-      corpo: nota + '<div style="overflow-x: auto;"><div class="bk-tab">' +
-        '<div class="bk-cols"><span>ITEM</span><span>TÍTULO</span><span>TIPO</span><span>ETAPA</span><span>SPRINT</span><span>PONTOS</span><span>DEV</span><span style="text-align:right">PRAZO</span></div>' +
+      corpo: nota + '<div style="overflow-x: auto;"><div class="bk-tab tc">' +
+        '<div class="bk-cols tc-cab"><span>ITEM</span><span>TÍTULO</span><span>TIPO</span><span>ETAPA</span><span>SPRINT</span><span>PONTOS</span><span>DEV</span><span style="text-align:right">PRAZO</span></div>' +
         gs.map(function (g) { return htmlGrupo(g, eDev); }).join('') + '</div></div>'
     };
   }
@@ -418,6 +423,11 @@
     var op = function (v, r) { return '<option value="' + H.esc(v) + '"' + (F.dev === v ? ' selected' : '') + '>' + H.esc(r) + '</option>'; };
     return op('', 'Todos os devs') + (eDev && H.meusNomes().length ? op(MINHAS, 'Só as minhas') : '') + op(SEM_DEV, 'Sem dev') +
       lista.map(function (n) { return op(n, n); }).join('');
+  }
+
+  /** Quantos seletores estao fora do padrao (o numero do "Filtros (n)"). */
+  function nFiltros() {
+    return (F.agrupar !== 'projeto' ? 1 : 0) + (F.sprint ? 1 : 0) + (F.tipo ? 1 : 0) + (F.tema ? 1 : 0) + (F.dev ? 1 : 0);
   }
 
   function renderLista(ctx) {
@@ -437,7 +447,8 @@
       '<div class="bk-fil">' +
       '<label for="bk-q" style="position:absolute;left:-9999px">Buscar no backlog</label>' +
       '<input class="in" id="bk-q" type="search" autocomplete="off" placeholder="AX-179, título, dev, solicitante" value="' + H.esc(F.q) + '">' +
-      '<select class="in" id="bk-agr" aria-label="Agrupar">' +
+      // No celular os seletores recolhem no botao "Filtros (n)" (H.filtros); a busca fica a mao.
+      H.filtros('<select class="in" id="bk-agr" aria-label="Agrupar">' +
       sel('projeto', 'Agrupar por projeto', F.agrupar) + sel('sistema', 'Agrupar por sistema', F.agrupar) + sel('tema', 'Agrupar por tema', F.agrupar) +
       sel('sprint', 'Agrupar por sprint', F.agrupar) + sel('nada', 'Sem agrupar', F.agrupar) + '</select>' +
       (W.AXIS_SPRINTS ? W.AXIS_SPRINTS.controle('bk-sprint', F.sprint, W.AXIS_SPRINTS.opcoes(H.visiveis()), function (v) {
@@ -446,7 +457,7 @@
       '<select class="in" id="bk-tipo" aria-label="Tipo">' + sel('', 'Todos os tipos', F.tipo) + sel('evolucao', 'Evolução', F.tipo) +
       sel('sustentacao', 'Sustentação', F.tipo) + sel(SEM_TIPO, 'Sem tipo', F.tipo) + '</select>' +
       '<select class="in" id="bk-tema" aria-label="Sistema">' + temasOp + '</select>' +
-      '<select class="in" id="bk-dev" aria-label="Dev">' + opcoesDev(D, eDev) + '</select>' +
+      '<select class="in" id="bk-dev" aria-label="Dev">' + opcoesDev(D, eDev) + '</select>', nFiltros(), { id: 'backlog' }) +
       '</div><div id="bk-corpo" style="display:flex;flex-direction:column;gap:12px">' + c.corpo + '</div>';
   }
 
@@ -457,6 +468,7 @@
       var c = htmlCorpo(ctx.D, eDev);
       el.querySelector('#bk-chips').innerHTML = c.chips;
       el.querySelector('#bk-corpo').innerHTML = c.corpo;
+      H.filtrosN('backlog', nFiltros());
     };
     var t = null;
     var q = el.querySelector('#bk-q');
@@ -556,7 +568,7 @@
     if (sp) chips.push(H.chip('Sprint ' + H.esc(W.SPRINTPO ? W.SPRINTPO.rotuloCurto(sp) : sp), 'bk'));
     (m.anexos || []).slice(0, 3).forEach(function (a) { chips.push(H.chip(H.ico('clip') + ' ' + H.esc(a.nome || 'arquivo'), 'bk')); });
     if ((m.anexos || []).length > 3) chips.push(H.chip('+' + ((m.anexos || []).length - 3) + ' anexos', 'bk'));
-    if (m.spike) chips.push(H.chip(H.ico('search') + ' Spike: pede as aprovações no editor', 'pu'));
+    if (m.spike) chips.push(H.chip(H.ico('search') + ' Spike: as aprovações ficam na seção Entrega do Item', 'pu'));
 
     var devolvida = W.DEVOLUCAO ? W.DEVOLUCAO.motivo(m) : String(m.validacao_obs || '');
 
@@ -725,20 +737,20 @@
             : AC.botao('pausar', m, 'Pausar', 'btns" style="height:28px', { titulo: 'Suspende o prazo: os dias parados não contam como atraso' })) + '</span>';
       } else if (eDev && H.minha(m)) acao = '<a class="btns" href="' + H.hrefItem(m) + '" title="Entregar ou pedir pausa pelo item">Abrir</a>';
       return '<tr class="click" data-href="' + H.hrefItem(m) + '"' + (eDev && H.minha(m) ? ' style="box-shadow:inset 3px 0 0 var(--ac)"' : '') + '>' +
-        '<td style="max-width:420px"><span class="row" style="gap:8px;min-width:0"><span class="code">' + H.esc(m.codigo || '—') + '</span>' +
+        '<td style="max-width:420px" data-tc="titulo"><span class="row" style="gap:8px;min-width:0"><span class="code">' + H.esc(m.codigo || '—') + '</span>' +
         '<span style="display:flex;flex-direction:column;min-width:0"><span class="ell" style="color:var(--tx);font-weight:700">' + H.esc(m.titulo || '(sem título)') + '</span>' +
         '<span class="ell" style="font-size:11.5px;color:var(--tx3)">' + H.esc(H.caminho(m.tema_id) || 'Sem sistema') + (m.projeto_id && H.projeto(m.projeto_id) ? ' · ' + H.esc(H.projeto(m.projeto_id).codigo || '') : '') + '</span></span></span></td>' +
-        '<td><span class="row" style="gap:8px">' + (ds.length ? H.av(ds[0], 26) + '<span class="ell" style="max-width:150px">' + H.esc(ds.join(' / ')) + '</span>' : H.av('', 26) + '<span style="color:var(--tx4)">sem dev</span>') + '</span></td>' +
-        '<td class="mono" style="font-size:12px">' + H.esc(H.dm(H.prazoDe(m)) || '—') + '</td>' +
-        '<td>' + (a > 0 ? H.chip('+' + a + ' d', 'dg') : '<span style="color:var(--tx4)">—</span>') + '</td>' +
-        '<td>' + chipColuna(m) + '</td>' +
-        '<td class="mono" title="' + (rg ? 'Prazo andou ' + rg.dias + ' dias desde ' + H.dm(rg.de) + ' (' + rg.mudancas + ' mudanças)' : 'Prazo nunca remarcado') + '">' + (rg ? '+' + rg.sprints + ' spr.' : '—') + '</td>' +
-        '<td>' + acao + '</td></tr>';
+        '<td data-label="Dev"><span class="row" style="gap:8px">' + (ds.length ? H.av(ds[0], 26) + '<span class="ell" style="max-width:150px">' + H.esc(ds.join(' / ')) + '</span>' : H.av('', 26) + '<span style="color:var(--tx4)">sem dev</span>') + '</span></td>' +
+        '<td class="mono" style="font-size:12px" data-label="Prazo">' + H.esc(H.dm(H.prazoDe(m)) || '—') + '</td>' +
+        '<td data-label="Atraso">' + (a > 0 ? H.chip('+' + a + ' d', 'dg') : '<span style="color:var(--tx4)">—</span>') + '</td>' +
+        '<td data-label="Etapa">' + chipColuna(m) + '</td>' +
+        '<td class="mono" data-label="Remarc." title="' + (rg ? 'Prazo andou ' + rg.dias + ' dias desde ' + H.dm(rg.de) + ' (' + rg.mudancas + ' mudanças)' : 'Prazo nunca remarcado') + '">' + (rg ? '+' + rg.sprints + ' spr.' : '—') + '</td>' +
+        '<td data-tc="acao">' + acao + '</td></tr>';
     }).join('');
     var mais = lista.length > vis.length
       ? '<div class="bk-mais">Mostrando ' + vis.length + ' de ' + lista.length + '<button type="button" class="btns" data-bk-vmais="1">Mostrar mais ' + Math.min(POR_PAGINA, lista.length - vis.length) + '</button></div>' : '';
     return cab + faixa + kpis +
-      '<section class="pn"><table class="tbl"><thead><tr><th>ITEM</th><th>DEV</th><th>PRAZO</th><th>ATRASO</th><th>ETAPA</th><th title="Sprints que o prazo andou desde a primeira data">REMARC.</th><th>AÇÃO</th></tr></thead><tbody>' +
+      '<section class="pn"><table class="tbl tc"><thead><tr><th>ITEM</th><th>DEV</th><th>PRAZO</th><th>ATRASO</th><th>ETAPA</th><th title="Sprints que o prazo andou desde a primeira data">REMARC.</th><th>AÇÃO</th></tr></thead><tbody>' +
       linhas + '</tbody></table>' + mais + '</section>' +
       '<div class="lock">' + H.ico('info') + '<span>Pausar suspende o prazo: os dias parados não contam como atraso. Replanejar muda a data, e a remarcação fica no histórico da demanda (coluna REMARC.).</span></div>';
   }
