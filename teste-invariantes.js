@@ -25024,6 +25024,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           ok(pF.total === 10 && pF.validados === 5 && pF.aguardando === 3 && pF.emCurso === 2 && pF.pct === 80,
              '10 itens, 5 fechados e 3 em validacao: 80% da sprint (em validacao conta como entrega)',
              JSON.stringify({ t: pF.total, f: pF.validados, v: pF.aguardando, a: pF.emCurso, pct: pF.pct }));
+          const rF = SPA.rankingDaSprint(dF, r2);
+          ok(rF.length === 1 && rF[0].entregues === 8 && rF[0].pct === 80 && rF[0].validados === 5,
+             'o ranking por pessoa usa a mesma conta: fechadas + em validacao',
+             JSON.stringify(rF[0]));
           // Devolvida para ajuste ja nao esta em validacao: volta a ser item em aberto.
           dF.melhorias[7].status_planejamento = 'em_andamento';
           const pD = SPA.placarDaSprint(dF, r2);

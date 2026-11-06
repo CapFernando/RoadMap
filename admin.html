@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="756a6d9f20">
+<html lang="pt-BR" data-build="25130f3969">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1678,7 +1678,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=d4c225eafd"></script>
+<script src="sprint.js?v=6e9d8b30f1"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -5336,8 +5336,6 @@ function renderEntregasSprint() {
   const pts = ms.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
   const ptsFeitos = ms.filter(m => sitEs(m) === 'entregue').reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
   const aberta = m => sitEs(m) === 'aberta';
-  const vencidas = ms.filter(m => aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) &&
-                                  m.entrega_usuario < hoje).length;
   const comProj = ms.filter(m => m.projeto_id && (state.projetos || []).some(p => p.id === m.projeto_id)).length;
   /* ═══ O RESUMO EM CARTOES (04/11/2026) ════════════════════════════════
      "Melhore esse campo para maior visibilidade. Traga o que tem na sprint, o
@@ -5347,7 +5345,13 @@ function renderEntregasSprint() {
      Clicar num cartao filtra a lista; clicar de novo volta a mostrar tudo.
      Embaixo, o que falta por pessoa — o "faltando no nome". */
   const temDono = m => !!String(m.dev || '').trim();
-  const vencida = m => aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) && m.entrega_usuario < hoje;
+  /* VENCIDA = em aberto com a Entrega dev (`entrega`, o prazo do dev — o mesmo
+     do filtro "Vencidas" do Kanban) ou a entrega ao usuario antes de hoje. Na
+     S1-11 a entrega ao usuario foi toda remarcada para novembro; o atraso real
+     esta no prazo do dev (06/11/2026). `diaVenc` = a data vencida mais antiga. */
+  const ehDia = x => /^\d{4}-\d{2}-\d{2}$/.test(String(x || ''));
+  const diaVenc = m => [m.entrega, m.entrega_usuario].filter(x => ehDia(x) && x < hoje).sort()[0] || '';
+  const vencida = m => aberta(m) && !!diaVenc(m);
   /* ENTREGUE DA SPRINT = FECHADA + EM VALIDACAO (06/11/2026): "a sprint conta
      por itens em aberto x entregues. A partir do momento que a demanda esta em
      validacao da area ou validacao PM/PO, deve contar como uma entrega da
@@ -5381,7 +5385,23 @@ function renderEntregasSprint() {
   const porPessoa = {};
   lFaltaCom.forEach(m => { const k = String(m.dev).trim(); (porPessoa[k] = porPessoa[k] || []).push(m); });
   const pessoas = Object.keys(porPessoa).sort((a, b) => porPessoa[b].length - porPessoa[a].length || a.localeCompare(b, 'pt-BR'));
-  document.getElementById('es-pessoas').innerHTML = pessoas.length
+  /* OS VENCIDOS POR DEV (06/11/2026): "ao clicar em faltando, eu quero que me
+     traga os vencidos por dev (para eu saber com quem estao) me permitindo
+     clicar por pessoa e logo abaixo ter a lista das demandas atrasadas por
+     sprint." Com o cartao Faltando ativo, a linha conta so as vencidas (entrega
+     ao usuario antes de hoje), de quem tem mais para quem tem menos; a lista
+     embaixo agrupa as atrasadas pela sprint em que a entrega venceu. */
+  const modoVenc = _esFiltro === 'falta_com';
+  const pessoasVenc = pessoas.map(p => [p, porPessoa[p].filter(vencida).length]).filter(x => x[1])
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'));
+  document.getElementById('es-pessoas').innerHTML = modoVenc
+    ? (pessoasVenc.length
+        ? '<span class="rot">Vencidos por pessoa:</span>' + pessoasVenc.map(([p, v]) =>
+            `<span class="es-pessoa venc${_esPessoa === p ? ' ativo' : ''}" onclick="esPessoa(${esc(JSON.stringify(p))})" ` +
+            `title="Clique para ver as atrasadas de ${esc(p)} · ${porPessoa[p].length} faltando no total">` +
+            `${esc(p)} <b>${v}</b> vencida${v === 1 ? '' : 's'}</span>`).join('')
+        : '<span class="rot">Vencidos por pessoa:</span><span style="color:var(--green)">nenhuma entrega vencida</span>')
+    : pessoas.length
     ? '<span class="rot">Faltando por pessoa:</span>' + pessoas.map(p => {
         const l = porPessoa[p], v = l.filter(vencida).length;
         return `<span class="es-pessoa${v ? ' venc' : ''}${_esPessoa === p ? ' ativo' : ''}" ` +
@@ -5423,29 +5443,47 @@ function renderEntregasSprint() {
     resumoPessoa.className = '';
     resumoPessoa.innerHTML = '';
   }
+  const vencidas = ms.filter(vencida).length;
   document.getElementById('es-resumo').textContent = vencidas ? `${vencidas} com entrega vencida` : '';
   if (!ms.length) {
     box.innerHTML = '<div class="empty">Nenhuma demanda nesta sprint.</div>';
     return;
   }
   const filtrada = (_esFiltro === 'entregues' ? lEntregues : _esFiltro === 'aguardando' ? lAguardando
-                 : _esFiltro === 'falta_com' ? lFaltaCom
+                 : _esFiltro === 'falta_com' ? lFaltaCom.filter(vencida)
                  : _esFiltro === 'falta_sem' ? lFaltaSem : ms).filter(m => !_esPessoa || daPessoa(m));
+  // No modo Faltando: quantas ainda estao no prazo (ou sem data) e ficaram fora.
+  const noPrazo = modoVenc ? lFaltaCom.filter(m => !vencida(m) && (!_esPessoa || daPessoa(m))).length : 0;
+  const notaPrazo = noPrazo ? `<div class="es-kpi-sub" style="margin:4px 0 0">+ ${noPrazo} faltando ainda no prazo ou sem data de entrega` +
+    ` — <a href="#" onclick="esFiltrar('todas');return false">ver a sprint toda</a></div>` : '';
   if (!filtrada.length) {
-    box.innerHTML = '<div class="empty">Nada nesta situação.</div>';
+    box.innerHTML = '<div class="empty">' + (modoVenc ? 'Nenhuma demanda com entrega vencida.' : 'Nada nesta situação.') + '</div>' + notaPrazo;
     return;
   }
 
   const grupos = {};
-  filtrada.forEach(m => { const k = m.tema_id || '__sem_tema__'; (grupos[k] = grupos[k] || []).push(m); });
-  const nomeTema = k => k === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === k)?.nome || '—');
+  /* Atrasadas: o grupo e a sprint em que a entrega ao usuario venceu, da mais
+     antiga para a mais recente. Fora desse modo, o grupo e o tema. */
+  const sprintVenc = m => SPRINTPO.sprintCorrente(diaVenc(m), ferEs) || '';
+  filtrada.forEach(m => { const k = modoVenc ? 'venc:' + sprintVenc(m) : (m.tema_id || '__sem_tema__'); (grupos[k] = grupos[k] || []).push(m); });
+  const nomeTema = k => {
+    if (k.startsWith('venc:')) {
+      const r = k.slice(5);
+      const fx = r && SPRINTPO.faixaDaSprint ? SPRINTPO.faixaDaSprint(r, ferEs) : null;
+      const dm = d => d.slice(8, 10) + '/' + d.slice(5, 7);
+      return 'Venceu na ' + (SPRINTPO.rotuloCurto(r) || 'sprint ?') + (fx ? ' · ' + dm(fx.de) + ' a ' + dm(fx.ate) : '');
+    }
+    return k === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === k)?.nome || '—');
+  };
+  const primeiroDia = k => grupos[k].reduce((d, m) => diaVenc(m) < d ? diaVenc(m) : d, '9999');
   const chaves = Object.keys(grupos).sort((a, b) => {
+    if (modoVenc) return primeiroDia(a).localeCompare(primeiroDia(b));
     if (a === '__sem_tema__') return 1;
     if (b === '__sem_tema__') return -1;
     return nomeTema(a).localeCompare(nomeTema(b), 'pt-BR', { sensitivity: 'base' });
   });
   // Dentro do tema: pela entrega ao usuario, sem data no fim.
-  const dataDe = m => m.entrega_usuario || '9999';
+  const dataDe = m => (modoVenc ? diaVenc(m) : m.entrega_usuario) || '9999';
   const dataHTML = m => {
     if (!m.entrega_usuario) return '<span style="color:var(--text3)">📅 Entrega usuário: a definir</span>';
     let cor = '', tag = '';
@@ -5458,6 +5496,12 @@ function renderEntregasSprint() {
     return `<span style="${cor}">📅 Entrega usuário: ${formatDate(m.entrega_usuario)}${tag}</span>`;
   };
 
+  const devHTML = m => {
+    const dias = Math.round((new Date(hoje + 'T00:00:00') - new Date(m.entrega + 'T00:00:00')) / 86400000);
+    return dias > 0
+      ? `<span style="color:var(--red-tx,#F9A0A0);font-weight:600">⏰ Entrega dev: ${formatDate(m.entrega)} (vencida há ${dias}d)</span>`
+      : `<span>⏰ Entrega dev: ${formatDate(m.entrega)}</span>`;
+  };
   box.innerHTML = chaves.map(k => {
     const linhas = grupos[k].sort((a, b) => dataDe(a).localeCompare(dataDe(b)) ||
                                             (a.titulo || '').localeCompare(b.titulo || ''))
@@ -5475,7 +5519,7 @@ function renderEntregasSprint() {
               ${m.poker_pontos != null ? `<span style="font-size:11px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 7px;">🃏 ${m.poker_pontos}</span>` : ''}
               ${pj ? `<span title="Faz parte do projeto ${esc(pj.nome || '')}" style="font-size:11px;background:#341A6E;color:#C9AEFF;border-radius:4px;padding:2px 7px;">📁 ${pj.codigo ? esc(pj.codigo) + ' · ' : ''}${esc(pj.nome || '')}</span>` : ''}
             </div>
-            <div class="card-sub">${com} · ${dataHTML(m)}` +
+            <div class="card-sub">${com} · ${modoVenc && ehDia(m.entrega) ? devHTML(m) + ' · ' : ''}${dataHTML(m)}` +
               `${statusKey(m) === 'concluido' && m.concluido_em ? ' · ✅ Concluída em ' + formatDate(String(m.concluido_em).slice(0, 10)) : ''}</div>
           </div>
         </div>`;
@@ -5484,7 +5528,7 @@ function renderEntregasSprint() {
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:8px;">${esc(nomeTema(k))} <span style="font-weight:400;opacity:.7;">(${grupos[k].length})</span></div>
       ${linhas}
     </div>`;
-  }).join('');
+  }).join('') + notaPrazo;
 }
 
 function renderTemas() {
@@ -10433,7 +10477,7 @@ function renderGerSprint() {
         'então a coluna de itens não soma o total da sprint; os pontos somam</span>' : '') +
       '</div>' +
       '<table class="spr-rk"><thead><tr><th>Dev</th><th>Validados</th>' +
-      '<th>Pontos</th><th>Cumprimento</th><th>Esperando</th><th>Em curso</th>' +
+      '<th>Pontos</th><th>Cumprimento</th><th>' + (rk.some(d => d.entregues != null) ? 'Em validação' : 'Esperando') + '</th><th>Em curso</th>' +
       '<th>Saíram</th></tr></thead><tbody>' +
       rk.map(d => '<tr>' +
         '<td class="spr-rk-nome">' + esc(d.nome) + '</td>' +

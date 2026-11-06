@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="63d025fb73">
+<html lang="pt-BR" data-build="8b4a51b11b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -753,7 +753,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=d4c225eafd"></script>
+<script src="sprint.js?v=6e9d8b30f1"></script>
 <!-- A frente de cada um (`pipelines.js`): a vitrine e o backlog sem dono da
      sprint aparecem só para o time da mesma frente — ver `doMeuTime`. -->
 <script src="requisitos.js?v=1987238fe2"></script>
@@ -2355,13 +2355,16 @@ function renderSprintDev() {
       (p.aguardando ? bloco(p.aguardando, null, p.entregues != null ? 'em validação (já contam)' : 'esperando validação') : '');
 
   const temDupla = rk.some(d => d.dupla);
+  const rkNova = rk.some(d => d.entregues != null);
   const eu = DEVNOME.norm(currentDev || '');
   rkEl.innerHTML = !rk.length ? '' :
     '<table class="dsp-rk"><thead><tr><th>#</th><th>Dev</th>' +
     '<th title="Pontos das demandas que o PM/PO validou, de todos os pontos da pessoa na sprint">Pontos</th>' +
     '<th title="Demandas validadas pelo PM/PO, de todas as da pessoa na sprint">Itens</th>' +
-    '<th title="Itens validados ÷ itens da pessoa na sprint">% da sprint</th>' +
-    '<th title="Entregues, esperando o PM/PO validar">Esperando</th>' +
+    (rkNova ? '<th title="(Fechadas + em validação) ÷ itens da pessoa na sprint">% da sprint</th>' +
+              '<th title="Em validação da área ou do PM/PO: já contam como entrega da sprint">Em validação</th>'
+            : '<th title="Itens validados ÷ itens da pessoa na sprint">% da sprint</th>' +
+              '<th title="Entregues, esperando o PM/PO validar">Esperando</th>') +
     '<th>Em curso</th></tr></thead><tbody>' +
     rk.map((d, i) => '<tr class="' + (eu && DEVNOME.norm(d.nome) === eu ? 'dsp-eu' : '') + '">' +
       '<td class="dsp-pos">' + (i + 1) + 'º</td>' +
@@ -2373,8 +2376,10 @@ function renderSprintDev() {
       '<td>' + (d.aguardando || '—') + '</td>' +
       '<td>' + (d.emCurso || '—') + '</td>' +
     '</tr>').join('') + '</tbody></table>' +
-    '<div class="dsp-nota">Ordem: itens validados, depois pontos. Só conta o que o PM/PO ' +
-    'validou (Concluído).' + (temDupla ? ' Demanda de dupla conta inteira para os dois na ' +
+    '<div class="dsp-nota">' + (rkNova
+      ? 'Ordem: entregues (fechadas + em validação), depois pontos. O % da sprint soma o que ' +
+        'o PM/PO fechou e o que está em validação; os pontos só entram depois que o PM/PO fecha.'
+      : 'Ordem: itens validados, depois pontos. Só conta o que o PM/PO validou (Concluído).') + (temDupla ? ' Demanda de dupla conta inteira para os dois na ' +
     'coluna de itens — por isso ela pode não somar o total; os pontos são repartidos e somam.' : '') +
     '</div>';
 }
