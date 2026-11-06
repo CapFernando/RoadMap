@@ -974,10 +974,13 @@
     var h = '<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">' + controlesPeriodo(S, 'sprint') + sel('Trilha', 'trilha', trilhas, _rf.trilha, 180) + '</div>';
     if (!p) return h + H.vazio('refresh', 'Nenhuma demanda nesta sprint', 'O placar nasce quando o PM/PO repassa demandas para a sprint.');
     var g = G();
+    /* EM VALIDACAO CONTA COMO ENTREGA (relRenderSprint, admin.html, fdf14e2): no
+       regime de entrega o cumprimento e (fechadas + em validacao) / itens. */
+    var nova = !!(raiz.SPRINTPO.sprintNoRegimeDeEntrega && raiz.SPRINTPO.sprintNoRegimeDeEntrega(j.sprint, S.feriados || []));
     h += '<div class="gx-g gx-k4">' +
-      g.k('Validados pelo PM/PO', p.validados + ' de ' + p.total, p.pct + '% por item', g.corPct(p.pct)) +
-      g.k('Pontos validados', p.pontosValidados + ' de ' + p.pontosTotal, p.pctPontos === null ? 'sem pontos na sprint' : p.pctPontos + '% por ponto', g.corPct(p.pctPontos)) +
-      g.k('Esperando validação', H.num(p.aguardando), 'entregues pelo dev', p.aguardando ? 'var(--wn-t)' : '') +
+      g.k('Validados pelo PM/PO', p.validados + ' de ' + p.total, p.pct + '% ' + (nova ? 'de cumprimento (fechadas + em validação)' : 'por item'), g.corPct(p.pct)) +
+      g.k('Pontos validados', p.pontosValidados + ' de ' + p.pontosTotal, p.pctPontos === null ? 'sem pontos na sprint' : p.pctPontos + '% por ponto' + (nova ? ' (com os em validação)' : ''), g.corPct(p.pctPontos)) +
+      g.k(nova ? 'Em validação' : 'Esperando validação', H.num(p.aguardando), nova ? 'já contam como entrega' : 'entregues pelo dev', p.aguardando ? 'var(--wn-t)' : '') +
       g.k('Saíram sem entregar', H.num(p.saiu), 'contam no total', p.saiu ? 'var(--dg-t)' : '') + '</div>' +
       '<span class="note">' + esc(p.rotulo + ' · ' + p.sub) + (p.temDupla ? ' · demanda de dupla conta para os dois' : '') + '</span>';
     h += p.ranking.length ? '<div class="gx-tw"><table class="tbl"><thead><tr><th>DEV</th><th class="num">VALIDADOS</th><th class="num">PONTOS</th><th class="num">%</th></tr></thead><tbody>' +

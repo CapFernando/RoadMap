@@ -3628,6 +3628,11 @@ async function contasMigrarAgora(db) {
      se resolve na tela, e uma pessoa que deixa a empresa nao trava a regra nem a
      faz falhar calada. */
   await colunaSeFaltar(db, 'usuario', 'aprova_spike', 'INTEGER NOT NULL DEFAULT 0');
+  /* INTERFACE NOVA (app AXIS) LIGADA POR CONTA. O admin decide quem passa a
+     usar o axis.html; quem nao tem a marca segue nas telas de sempre. Vem no
+     login e no quem-sou, e e por ela que as telas mandam cada pessoa para a
+     interface certa. Padrao 0: no dia do deploy ninguem muda de tela. */
+  await colunaSeFaltar(db, 'usuario', 'interface_nova', 'INTEGER NOT NULL DEFAULT 0');
   // E-mail unico, mas so entre quem tem e-mail (contas antigas ficam com NULL).
   try { await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_usuario_email ON usuario(email) WHERE email IS NOT NULL').run(); } catch (_) {}
 }
@@ -3664,8 +3669,10 @@ async function identifica(env, body) {
     try {
       await contasMigrar(db);
       const r = await db.prepare(
-        `SELECT s.expira_em, u.id, u.login, u.nome, u.email, u.papel, u.ativo,
-                u.nome_demandas, u.ultimo_acesso
+        // `u.*`, e nao a lista de colunas: uma coluna nova (interface_nova) que a
+        // migracao ainda nao criou viraria erro de SQL e derrubaria TODA sessao
+        // no primeiro acesso depois do deploy.
+        `SELECT s.expira_em, u.*
            FROM sessao s JOIN usuario u ON u.id = s.usuario_id
           WHERE s.token = ?`).bind(String(body.token)).first();
       if (r && r.ativo && new Date(r.expira_em) > new Date()) {
@@ -3687,7 +3694,8 @@ async function identifica(env, body) {
         }
         return { papel: r.papel, usuario: { id: r.id, login: r.login, nome: r.nome,
                                            email: r.email || '',
-                                           nome_demandas: r.nome_demandas || '' } };
+                                           nome_demandas: r.nome_demandas || '',
+                                           interface_nova: !!r.interface_nova } };
       }
     } catch (_) {}
   }
@@ -7290,7 +7298,8 @@ async function rotear(request, env, _histFila) {
       // botoes — que e exatamente o que este campo existe para evitar.
       return json({ ok: true, token, expira_em: expira, senha_redefinida_em: avisoReset,
                     usuario: { login: u.login, nome: u.nome, papel: u.papel,
-                               nome_demandas: u.nome_demandas || '' } }, 200, headers);
+                               nome_demandas: u.nome_demandas || '',
+                               interface_nova: !!u.interface_nova } }, 200, headers);
     }
 
     // ── Meu vinculo: o nome que EU uso nas demandas ─────────────────
@@ -7734,7 +7743,7 @@ async function rotear(request, env, _histFila) {
         // nenhuma, nao havia nada certo para escolher.
         const r = await env.POKER_DB.prepare(
           `SELECT id, login, nome, email, papel, ativo, pendente, criado_em, ultimo_acesso,
-                  nome_demandas, reset_em, aprova_spike
+                  nome_demandas, reset_em, aprova_spike, interface_nova
              FROM usuario ORDER BY pendente DESC, nome`).all();
         // Pedidos de senha em aberto, para o admin resolver na mesma tela.
         const p = await env.POKER_DB.prepare(
@@ -7909,6 +7918,22 @@ async function rotear(request, env, _histFila) {
 
       /* A MARCA DE APROVADOR DE SPIKE. Fica junto de `papel` e `ativo` porque e
          a mesma natureza — permissao de conta, e so admin mexe. */
+      // Liga ou desliga a interface nova (app AXIS) de uma conta. `login` vazio
+      // com `todos_admins` liga para todos os admins ativos de uma vez.
+      if (op === 'interface') {
+        const liga = body.nova ? 1 : 0;
+        if (body.todos_admins) {
+          await env.POKER_DB.prepare("UPDATE usuario SET interface_nova = ? WHERE papel = 'admin' AND ativo = 1")
+            .bind(liga).run();
+          return json({ ok: true, todos_admins: true, nova: !!liga }, 200, headers);
+        }
+        const loginI = String(body.login || '').trim().toLowerCase();
+        const uI = await env.POKER_DB.prepare('SELECT id FROM usuario WHERE login = ?').bind(loginI).first();
+        if (!uI) return json({ error: 'nao_encontrado' }, 404, headers);
+        await env.POKER_DB.prepare('UPDATE usuario SET interface_nova = ? WHERE id = ?').bind(liga, uI.id).run();
+        return json({ ok: true, login: loginI, nova: !!liga }, 200, headers);
+      }
+
       if (op === 'aprova-spike') {
         const loginA = String(body.login || '').trim().toLowerCase();
         const uA = await env.POKER_DB.prepare(

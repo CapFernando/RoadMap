@@ -545,6 +545,10 @@
     }
 
     var pctPl = p.pctPontos != null ? p.pctPontos + '% dos pontos' : 'sem pontuação para medir';
+    /* EM VALIDACAO CONTA COMO ENTREGA (renderGerSprint, admin.html, fdf14e2): no
+       regime de entrega o placar traz `entregues` (fechadas + em validacao) e o
+       cumprimento e sobre ele; o cartao da validacao diz que elas ja contam. */
+    var novaRegra = p.entregues != null;
     h += '<div class="sp-k5">' +
       kpi('Capacidade', H.num(cap), 'pts', cap
         ? plural(pessoas, 'pessoa', 'pessoas') + ' × 30 pts · alocado ' + H.num(aloc) + (cap ? ' (' + Math.round(aloc / cap * 100) + '%)' : '')
@@ -552,10 +556,14 @@
       kpi('Planejado', H.num(pl.pts), 'pts', plural(pl.n, 'item', 'itens') + ' até o início' + (rep ? ' · ' + rep + ' repassad' + (rep === 1 ? 'o' : 'os') : '') +
         (p.saiu ? ' · ' + p.saiu + ' saí' + (p.saiu === 1 ? 'u' : 'ram') + ' sem entregar' : '')) +
       kpi('Adicionado depois', H.num(ad.pts), 'pts', ad.n ? plural(ad.n, 'item', 'itens') + ' depois de iniciada' : 'nada entrou depois do início', ad.n ? 'wn' : '', ad.n ? 'var(--wn-t)' : '') +
-      kpi('Entregue e validado', H.num(p.pontosValidados), 'pts', pctPl + ' · ' + p.validados + ' de ' + p.total + ' itens (' + p.pct + '%)', 'ok', 'var(--ok-t)') +
+      (novaRegra
+        ? kpi('Entregue', H.num(p.pontosEntregues), 'pts', pctPl + ' · ' + p.entregues + ' de ' + p.total + ' itens (' + p.pct + '%: ' +
+            plural(p.validados, 'fechado', 'fechados') + ' + ' + p.aguardando + ' em validação)', 'ok', 'var(--ok-t)')
+        : kpi('Entregue e validado', H.num(p.pontosValidados), 'pts', pctPl + ' · ' + p.validados + ' de ' + p.total + ' itens (' + p.pct + '%)', 'ok', 'var(--ok-t)')) +
       // Regra de 05/11 (3ca7514): aguardando = foi para validacao (area ou PM/PO) nesta sprint e o PM/PO ainda nao aprovou.
-      kpi(p.regraEntrega ? 'Aguardando aprovação' : 'Aguardando validação', H.num(p.pontosAguardando), 'pts', p.aguardando
-        ? plural(p.aguardando, 'item espera', 'itens esperam') + (p.regraEntrega ? ' a aprovação (área ou PM/PO); contam nesta sprint ao aprovar' : ' o PM/PO; contam aqui ao validar')
+      kpi(novaRegra ? 'Em validação' : p.regraEntrega ? 'Aguardando aprovação' : 'Aguardando validação', H.num(p.pontosAguardando), 'pts', p.aguardando
+        ? (novaRegra ? plural(p.aguardando, 'item', 'itens') + ' na área ou com o PM/PO · já contam como entrega'
+           : plural(p.aguardando, 'item espera', 'itens esperam') + (p.regraEntrega ? ' a aprovação (área ou PM/PO); contam nesta sprint ao aprovar' : ' o PM/PO; contam aqui ao validar'))
         : 'nada esperando o PM/PO', p.aguardando ? 'in' : '', p.aguardando ? 'var(--in-t)' : '') +
       '</div>';
 
@@ -1290,6 +1298,13 @@
      Sprint anterior a regra (`sprintNoRegimeDeEntrega`): a conta antiga, pela
      sprint marcada. Devolve 'entregue', 'aguardando', 'aberta', 'negada' ou
      null (fora desta sprint) — o `sitEs` do admin. */
+  /* EM VALIDACAO CONTA COMO ENTREGA DA SPRINT (admin.html, fdf14e2, 06/11/2026):
+     "a sprint conta por itens em aberto x entregues. A partir do momento que a
+     demanda esta em validacao da area ou validacao PM/PO, deve contar como uma
+     entrega da sprint." 10 itens, 5 fechados, 3 em validacao -> 8 entregues,
+     80%. O cartao Entregues soma as fechadas e as em validacao, e o quinto
+     cartao (Aguardando aprovacao) saiu. A devolvida para ajuste ja nao esta em
+     validacao: volta a ser item em aberto (`situacaoNaSprint`, sprint.js). */
   function esSituacao(SPm, etapa, r, feriados) {
     var regra = !!(SPm.sprintNoRegimeDeEntrega && SPm.sprintNoRegimeDeEntrega(r, feriados));
     var sit = function (m) {
@@ -1303,19 +1318,46 @@
     };
     return { regra: regra, sit: sit };
   }
-  function esResumo(SPm, etapa, vivas, r, hoje, projetos, feriados) {
+  /* A ESTEIRA (admin.html, fdf14e2): "Crie um filtro com Dados/BI, Sales OPs e
+     desenvolvimento para sabermos o andamento por esteira." O `esteiraDe` do
+     admin, com o PIPELINES e os perfis por parametro — a mesma separacao do
+     filtro Times do painel do dev (`doMeuTime`): marcada Sales Ops (e nao
+     Dados) e Sales Ops; marcada Dados/BI, ou de dev da frente de Dados, e
+     Dados/BI; o resto — inclusive sem frente — e Desenvolvimento. */
+  var ES_ESTEIRAS = [['dev', 'Desenvolvimento', 'laptop'], ['dados', 'Dados/BI', 'chart'], ['sales', 'Sales Ops', 'trend']];
+  function esEsteiraDe(PI, perfis, m) {
+    if (m && m.sales_ops && !m.dados_bi) return 'sales';
+    if (m && m.dados_bi) return 'dados';
+    if (PI && PI.FRENTE_DADOS && PI.daDemanda(m, perfis) === PI.FRENTE_DADOS) return 'dados';
+    return 'dev';
+  }
+  /** O resumo da aba. `esteira` ('' = todas) recorta a sprint; `esteiraDe(m)`
+   *  diz a esteira de cada demanda. O andamento por esteira e sempre sobre a
+   *  sprint inteira, como no admin. */
+  function esResumo(SPm, etapa, vivas, r, hoje, projetos, feriados, esteira, esteiraDe) {
     var S = esSituacao(SPm, etapa, r, feriados || []), sit = S.sit;
-    var ms = vivas.filter(function (m) {
+    var todas = vivas.filter(function (m) {
       if (!S.regra) return SPm.naSprint(m, r);
       var st = sit(m);
       return st === 'negada' ? SPm.naSprint(m, r) : !!st;
     });
+    var deE = esteiraDe || function () { return 'dev'; };
+    var esteiras = ES_ESTEIRAS.map(function (e) {
+      var daqui = todas.filter(function (m) { return deE(m) === e[0]; });
+      var l = daqui.filter(function (m) { return sit(m) !== 'negada'; });
+      var agu = l.filter(function (m) { return sit(m) === 'aguardando'; }).length;
+      var ent = l.filter(function (m) { return sit(m) === 'entregue'; }).length + agu;
+      return { k: e[0], rot: e[1], ico: e[2], n: daqui.length, total: l.length, entregues: ent, aguardando: agu,
+               pct: l.length ? Math.round(ent / l.length * 100) : 0 };
+    });
+    var ms = todas.filter(function (m) { return !esteira || deE(m) === esteira; });
     var aberta = function (m) { return sit(m) === 'aberta'; };
     var temDono = function (m) { return !!String(m.dev || '').trim(); };
     var vencida = function (m) { return aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) && m.entrega_usuario < hoje; };
     var negadas = ms.filter(function (m) { return etapa(m) === 'negada'; }).length;
-    var entregues = ms.filter(function (m) { return sit(m) === 'entregue'; });
+    var fechadas = ms.filter(function (m) { return sit(m) === 'entregue'; });
     var aguardando = ms.filter(function (m) { return sit(m) === 'aguardando'; });
+    var entregues = fechadas.concat(aguardando);
     var faltaCom = ms.filter(function (m) { return aberta(m) && temDono(m); });
     var faltaSem = ms.filter(function (m) { return aberta(m) && !temDono(m); });
     var validas = ms.length - negadas;
@@ -1328,9 +1370,9 @@
     faltaCom.forEach(function (m) { var k = String(m.dev).trim(); (porPessoa[k] = porPessoa[k] || []).push(m); });
     var pessoas = Object.keys(porPessoa).sort(function (a, b) { return porPessoa[b].length - porPessoa[a].length || a.localeCompare(b, 'pt-BR'); })
       .map(function (n) { return { nome: n, n: porPessoa[n].length, vencidas: porPessoa[n].filter(vencida).length }; });
-    return { ms: ms, regra: S.regra, sit: sit, aberta: aberta, vencida: vencida,
-             entregues: entregues, aguardando: aguardando, faltaCom: faltaCom, faltaSem: faltaSem, negadas: negadas, validas: validas,
-             pctEntregues: pctDe(entregues.length), pctAguardando: pctDe(aguardando.length),
+    return { ms: ms, todas: todas, esteira: esteira || '', esteiras: esteiras, regra: S.regra, sit: sit, aberta: aberta, vencida: vencida,
+             entregues: entregues, fechadas: fechadas, aguardando: aguardando, faltaCom: faltaCom, faltaSem: faltaSem, negadas: negadas, validas: validas,
+             pctEntregues: pctDe(entregues.length),
              pctFaltaCom: pctDe(faltaCom.length), pctFaltaSem: pctDe(faltaSem.length),
              comProj: comProj, vencidas: ms.filter(vencida).length, vencCom: faltaCom.filter(vencida).length, pessoas: pessoas };
   }
@@ -1343,8 +1385,9 @@
     var daPessoa = function (m) { return String(m.dev || '').trim() === nome; };
     if (!nome || !x.ms.some(daPessoa)) return null;
     var lp = x.ms.filter(daPessoa);
-    var ent = lp.filter(function (m) { return x.sit(m) === 'entregue'; }).length;
+    // Em validacao conta como entregue (fdf14e2); o numero dela vem ao lado.
     var agu = lp.filter(function (m) { return x.sit(m) === 'aguardando'; }).length;
+    var ent = lp.filter(function (m) { return x.sit(m) === 'entregue'; }).length + agu;
     var neg = lp.filter(function (m) { return x.sit(m) === 'negada'; }).length;
     var falta = lp.filter(x.aberta);
     var val = lp.length - neg;
@@ -1402,7 +1445,7 @@
                : '<span style="color:var(--tx4)">Entrega usuário: a definir</span>');
   }
 
-  var _ent = { filtro: 'todas', pessoa: '' };
+  var _ent = { filtro: 'todas', pessoa: '', esteira: '' };
 
   function abaEntregas(el, ctx) {
     var D = ctx.D;
@@ -1414,20 +1457,38 @@
     var opcoes = ops.map(function (o) {
       return '<option value="' + esc(o.key) + '"' + (o.key === r ? ' selected' : '') + '>' + esc(o.label + (o.key === agora ? ' (atual)' : '') + ' · ' + o.n) + '</option>';
     }).join('');
-    var x = esResumo(SP(), H.colunaDe, vivas, r, H.hoje(), D.projetos || [], fer(D));
+    var PI = raiz.PIPELINES;
+    var x = esResumo(SP(), H.colunaDe, vivas, r, H.hoje(), D.projetos || [], fer(D), _ent.esteira,
+      function (m) { return esEsteiraDe(PI, D.devs_perfil, m); });
     var pes = esDaPessoa(x, _ent.pessoa);
     if (!pes) _ent.pessoa = '';
-    if (_ent.filtro === 'aguardando' && !x.regra) _ent.filtro = 'todas';
+    // O cartao "Aguardando aprovacao" saiu: em validacao ja esta em Entregues (fdf14e2).
+    if (_ent.filtro === 'aguardando') _ent.filtro = 'todas';
     var f = r ? SP().faixaDaSprint(r, fer(D)) : null;
 
     var h = '<header class="sp-hd"><div class="tt"><div class="row" style="gap:10px">' +
       '<h1 class="h1">Entregas da sprint ' + esc(r ? curto(r) : '') + '</h1>' + (r ? chipsSituacao(D, r) : '') + '</div>' +
       '<span class="sub">' + (f ? esc(txtFaixa(f)) + ' · ' : '') + 'As demandas da sprint por tema, com quem está cada uma, a entrega ao usuário e o projeto de que fazem parte.' +
       (x.vencidas ? ' <b style="color:var(--dg-t)">' + plural(x.vencidas, 'com entrega vencida', 'com entrega vencida') + '.</b>' : '') + '</span></div>' +
-      '<div class="ac"><select class="sp-sel" id="sp-sel-es" aria-label="Sprint">' + opcoes + '</select></div></header>';
+      '<div class="ac"><select class="sp-sel" id="sp-sel-est" aria-label="Esteira"><option value="">Todas as esteiras (' + x.todas.length + ')</option>' +
+      x.esteiras.map(function (e) {
+        return '<option value="' + e.k + '"' + (_ent.esteira === e.k ? ' selected' : '') + '>' + esc(e.rot) + ' (' + e.n + ')</option>';
+      }).join('') + '</select>' +
+      '<select class="sp-sel" id="sp-sel-es" aria-label="Sprint">' + opcoes + '</select></div></header>';
 
-    if (!x.ms.length) {
+    if (!x.todas.length) {
       el.innerHTML = h + '<section class="sp-pn">' + H.vazio('inbox', 'Nenhuma demanda nesta sprint', 'O PM/PO repassa as demandas para a sprint pelo Quadro ou pelo Planejamento.') + '</section>';
+      return;
+    }
+    // O andamento por esteira (fdf14e2): sempre sobre a sprint inteira; clicar filtra, como o seletor.
+    h += '<div class="es-pes"><span class="lab">ANDAMENTO POR ESTEIRA</span>' + x.esteiras.map(function (e) {
+      var on = _ent.esteira === e.k;
+      return '<button type="button" class="chip c-' + (e.total && e.entregues === e.total ? 'ok' : 'bk') + ' es-pn' + (on ? ' on' : '') + '" data-es-esteira="' + e.k + '" aria-pressed="' + on + '"' +
+        ' title="' + (on ? 'Clique de novo para ver todas as esteiras' : 'Clique para ver só esta esteira') + '">' + ico(e.ico) + ' ' + esc(e.rot) +
+        ' <b>' + e.entregues + '/' + e.total + '</b> entregues · ' + e.pct + '%' + (e.aguardando ? ' (' + e.aguardando + ' em validação)' : '') + '</button>';
+    }).join('') + '</div>';
+    if (!x.ms.length) {
+      el.innerHTML = h + '<section class="sp-pn">' + H.vazio('inbox', 'Nenhuma demanda desta esteira na sprint', 'Clique na esteira de novo para ver a sprint inteira.') + '</section>';
       return;
     }
     var cartao = function (k, v, rot, sub, cor, borda, extra) {
@@ -1437,14 +1498,11 @@
         '<span class="l">' + rot + '</span><span class="v"' + (cor ? ' style="color:' + cor + '"' : '') + '>' + v + '</span>' +
         '<span class="s">' + sub + '</span>' + (extra || '') + '</button>';
     };
-    // Com a regra de 05/11 entra o quinto cartao, "Aguardando aprovacao", fora do Faltando.
-    h += '<div class="' + (x.regra ? 'sp-k5' : 'sp-k4') + '">' +
+    // Entregues = fechadas + em validacao (fdf14e2); o quinto cartao saiu.
+    h += '<div class="sp-k4">' +
       cartao('todas', x.ms.length, 'Na sprint', plural(x.ms.length, 'task', 'tasks') + (x.negadas ? ' · ' + plural(x.negadas, 'negada', 'negadas') : '') + ' · ' + x.comProj + ' em projeto') +
-      cartao('entregues', x.entregues.length, 'Entregues', x.entregues.length + ' de ' + plural(x.validas, 'task', 'tasks') + ' · ' + x.pctEntregues + '%', 'var(--ok-t)', 'ok',
+      cartao('entregues', x.entregues.length, 'Entregues', plural(x.fechadas.length, 'fechada', 'fechadas') + ' + ' + x.aguardando.length + ' em validação · ' + x.pctEntregues + '% da sprint', 'var(--ok-t)', 'ok',
         '<span class="sp-bar"><i style="width:' + x.pctEntregues + '%;background:var(--ok)"></i></span>') +
-      (x.regra ? cartao('aguardando', x.aguardando.length, 'Aguardando aprovação',
-        x.aguardando.length ? x.pctAguardando + '% · foram para validação nesta sprint' : 'nada parado na validação',
-        x.aguardando.length ? 'var(--in-t)' : '', x.aguardando.length ? 'in' : '') : '') +
       cartao('falta_com', x.faltaCom.length, 'Faltando · com responsável', x.pctFaltaCom + '% das tasks' +
         (x.vencCom ? ' · <b style="color:var(--dg-t)">' + plural(x.vencCom, 'com entrega vencida', 'com entrega vencida') + '</b>' : ''),
         x.faltaCom.length ? 'var(--wn-t)' : '', x.faltaCom.length ? 'wn' : '') +
@@ -1464,7 +1522,7 @@
       h += '<div class="es-pr" role="status"><span class="row" style="gap:6px">' + ico('user') + ' <b>' + esc(pes.nome) + '</b></span>' +
         '<span><b>' + pes.total + '</b> na sprint</span>' +
         '<span style="color:var(--ok-t)"><b>' + pes.entregues + '</b> ' + (pes.entregues === 1 ? 'entregue' : 'entregues') + (pes.pct != null ? ' · ' + pes.pct + '%' : '') + '</span>' +
-        (pes.aguardando ? '<span style="color:var(--in-t)"><b>' + pes.aguardando + '</b> aguardando aprovação</span>' : '') +
+        (pes.aguardando ? '<span style="color:var(--in-t)">(' + pes.aguardando + ' em validação)</span>' : '') +
         '<span style="color:var(--wn-t)"><b>' + pes.faltando + '</b> faltando</span>' +
         (pes.vencidas ? '<span style="color:var(--dg-t)"><b>' + pes.vencidas + '</b> com entrega vencida</span>' : '') +
         (pes.negadas ? '<span>' + plural(pes.negadas, 'negada', 'negadas') + '</span>' : '') +
@@ -1472,9 +1530,9 @@
         '<button type="button" class="btns" data-es-pessoa="" style="margin-left:auto;height:28px">Ver todos</button></div>';
     }
 
-    var lista = (_ent.filtro === 'entregues' ? x.entregues : _ent.filtro === 'aguardando' ? x.aguardando : _ent.filtro === 'falta_com' ? x.faltaCom
+    var lista = (_ent.filtro === 'entregues' ? x.entregues : _ent.filtro === 'falta_com' ? x.faltaCom
       : _ent.filtro === 'falta_sem' ? x.faltaSem : x.ms).filter(function (m) { return !pes || pes.casa(m); });
-    var ROT = { todas: 'tudo', entregues: 'só as entregues', aguardando: 'só o que aguarda a aprovação do PM/PO',
+    var ROT = { todas: 'tudo', entregues: 'só as entregues (fechadas e em validação)',
                 falta_com: 'só o que falta com responsável', falta_sem: 'só o que falta sem responsável' };
     var recorte = (_ent.filtro === 'todas' ? '' : ROT[_ent.filtro]) + (pes ? (_ent.filtro === 'todas' ? 'as tasks' : ',') + ' de ' + pes.nome : '');
     h += '<section class="sp-pn" style="gap:6px"><div class="hh"><h2 class="h2">Por tema <span class="note" style="font-family:var(--font-ui);font-weight:600">· ' + lista.length + '</span></h2>' +
@@ -1911,6 +1969,8 @@
       if (sel) sel.addEventListener('change', function () { _esc.n = 25; H.ir('sprints/atual/' + sel.value); });
       var selEs = el.querySelector('#sp-sel-es');
       if (selEs) selEs.addEventListener('change', function () { H.ir('sprints/entregas/' + selEs.value); });
+      var selEst = el.querySelector('#sp-sel-est');
+      if (selEst) selEst.addEventListener('change', function () { _ent.esteira = selEst.value; AX.desenhar(true); });
       var selPl = el.querySelector('#sp-sel-pl');
       if (selPl) selPl.addEventListener('change', function () { H.ir('sprints/planning/' + selPl.value); });
       var proj = el.querySelector('#sp-proj');
@@ -1925,6 +1985,9 @@
           if (ef.hasAttribute('data-es-pessoa')) _ent.pessoa = '';
           AX.desenhar(true); return;
         }
+        // A esteira no "Andamento por esteira": so ela; de novo, todas (fdf14e2).
+        var ee = e.target.closest('[data-es-esteira]');
+        if (ee) { var evv = ee.getAttribute('data-es-esteira'); _ent.esteira = _ent.esteira === evv ? '' : evv; AX.desenhar(true); return; }
         // O nome em "Faltando por pessoa": as tasks dela; de novo, todos.
         var ep = e.target.closest('[data-es-pessoa]');
         if (ep) { var pv = ep.getAttribute('data-es-pessoa'); _ent.pessoa = _ent.pessoa === pv ? '' : pv; AX.desenhar(true); return; }

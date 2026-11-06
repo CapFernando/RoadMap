@@ -77,6 +77,12 @@ const semComentario = (t) => String(t || '')
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
   .replace(/^\s*\/\/.*$/gm, ' ');
 const WC = semComentario(W);
+/* AS TELAS ANTIGAS VOLTARAM A SER AS DA MAIN (06/11/2026), com os emojis de
+   enfeite nos avisos ("🏃 3 repassadas", "⚡ 2 vencidas"); o app nao tem emoji.
+   Nas comparacoes de TEXTO entre as duas o enfeite sai do lado da tela antiga —
+   o numero, a ordem e as palavras continuam tendo de ser os mesmos. */
+const semEmoji = (t) => String(t == null ? '' : t)
+  .replace(/(?:[\u{1F300}-\u{1FAFF}\u2600-\u26FF\u2705\u270E\u2728\u23E9-\u23FA\u25B6]\uFE0F?) ?/gu, '');
 const lerTela = (f) => fs.readFileSync(f, 'utf8');
 const ADMIN = lerTela('admin.html');
 const GANTT = lerTela('gantt.html');
@@ -9448,7 +9454,7 @@ ok(CAP.SPRINTS_PARA_ALERTA === 2, 'o alerta comeca acima de duas sprints');
    esta na sprint sem ter passado. Uma sprint de 60 pontos toda estimada por fora
    era indistinguivel de uma de 60 votados em reuniao.                          */
 (() => {
-  ok(/<i class="axi axi-cards"><\/i> <b>\$\{pontosTotal\}<\/b> pt planejados/.test(GANTT),
+  ok(/🃏 <b>\$\{pontosTotal\}<\/b> pt planejados/.test(GANTT),
      'a primeira linha e o cruzamento: planejado x entregue');
   ok(/cq-r"[^>]*>Valid\.<\/span>/.test(GANTT) &&
      /cq-r"[^>]*>S\/plan<\/span>/.test(GANTT) &&
@@ -19740,9 +19746,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          titulo(limpo));
       ok(KB.every(o => !o.label || titulo(limpo).includes(o.label.replace(/^[▲△⏸]\s*/, ''))),
          'e nenhuma opcao fica de fora dele');
-      ok(/<i class="axi axi-pause"><\/i> 5\/31<\/button>/.test(filtrado),
+      ok(/⏸/.test(rotulo(filtrado)) && /5\/31/.test(rotulo(filtrado)),
          'e com a pausa ligada o contador mostra a marca e o recorte',
-         filtrado.slice(filtrado.lastIndexOf('">') + 2));
+         rotulo(filtrado));
       ok(/class="kb-count filtrado"/.test(filtrado) && !/filtrado/.test(limpo),
          'e se declara filtrado, para a coluna recortada nao parecer vazia');
       ok(KB.filter(o => o.key).every(o => o.marca),
@@ -20144,7 +20150,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
 
     /* E A TELA NAO INVENTA UM NUMERO ENQUANTO NAO SABE. "0/3" num spike
        assinado faz quem le o quadro cobrar assinatura de quem ja assinou. */
-    ok(/Conferindo as aprovações/.test(ADMIN) && /<i class="axi axi-search"><\/i> …/.test(ADMIN),
+    ok(/Conferindo as aprovações/.test(ADMIN) && /🔬 …/.test(ADMIN),
        'o selo e o painel dizem que estao conferindo, em vez de mostrar 0 de 3');
     /* E TENTA DE NOVO. Desistir calado na primeira falha deixava a tela cega
        pelo resto da sessao. */
@@ -24314,7 +24320,12 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(pl.pontosValidados === 22 && pl.pontosTotal === 92,
        'a pontuacao e a dos validados aqui, sobre tudo que passou',
        pl.pct + '% · ' + pl.pontosValidados + '/' + pl.pontosTotal);
-    ok(pl.pctPontos === 24,
+    /* REGRA DE 06/11/2026: em validacao CONTA como entrega da sprint. 3 fechadas
+       + 1 em validacao de 8 = 50% por item; (22 + 21) / 92 pontos = 47%. */
+    ok(pl.pct === 50 && pl.entregues === 4,
+       'o cumprimento da sprint soma fechadas e em validacao',
+       'por item ' + pl.pct + '%');
+    ok(pl.pctPontos === 47,
        'e ha o percentual por PONTO ao lado, que pesa o tamanho',
        'por item ' + pl.pct + '%, por ponto ' + pl.pctPontos + '%');
     ok(SP.placarDaSprint({ sprints: [], melhorias: [
@@ -25028,6 +25039,23 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
              JSON.stringify({ s1: [e1.validados, e1.aguardando], s2: e2.total }));
           ok(SPA.placarDaSprint(dE, 'S5-10-2026').regraEntrega === undefined,
              'sprint anterior a regra segue a conta antiga, pela sprint marcada');
+          /* O EXEMPLO DO FERNANDO (06/11/2026): "10 itens na sprint, 5 fechados,
+             3 em validacao, 2 demandas em aberto ainda (80% da sprint concluida)". */
+          const mkF = (id, et, ida) => Object.assign({ id, status_planejamento: et, sprint_po: r2,
+            sprint_po_historico: hsE(r2), dev: 'Ana', poker_pontos: 1 }, ida ? { primeira_validacao_em: '2026-11-10' } : {});
+          const dF = { feriados: [], melhorias: [
+            mkF('1', 'concluido', 1), mkF('2', 'concluido', 1), mkF('3', 'concluido', 1), mkF('4', 'concluido', 1), mkF('5', 'concluido', 1),
+            mkF('6', 'validacao', 1), mkF('7', 'validacao_area', 1), mkF('8', 'validacao', 1),
+            mkF('9', 'em_andamento'), mkF('10', 'planejado')] };
+          const pF = SPA.placarDaSprint(dF, r2);
+          ok(pF.total === 10 && pF.validados === 5 && pF.aguardando === 3 && pF.emCurso === 2 && pF.pct === 80,
+             '10 itens, 5 fechados e 3 em validacao: 80% da sprint (em validacao conta como entrega)',
+             JSON.stringify({ t: pF.total, f: pF.validados, v: pF.aguardando, a: pF.emCurso, pct: pF.pct }));
+          // Devolvida para ajuste ja nao esta em validacao: volta a ser item em aberto.
+          dF.melhorias[7].status_planejamento = 'em_andamento';
+          const pD = SPA.placarDaSprint(dF, r2);
+          ok(pD.aguardando === 2 && pD.emCurso === 3 && pD.pct === 70,
+             'a devolvida para ajuste volta a ser item em aberto da sprint', 'pct ' + pD.pct);
         }
         ok(SPA.acompanhamentoDaSprint(dA, rA, null, '2026-11-05').filter(x => x.situacao === 'na_area').length === 2,
            'o acompanhamento ainda mostra a task, marcada como na area');
@@ -25915,46 +25943,73 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       { id: 'e9', codigo: 'AX-909', titulo: 'so a Bia', status_planejamento: 'planejado', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
         dev: 'Bia', poker_pontos: 1, tema_id: 't2' }
     ];
-    const msE = ms.concat(extrasE);
-    const stateE = { melhorias: msE, temas, projetos, feriados: ['2026-11-02'] };
+    /* A ESTEIRA (fdf14e2): marcas de Dados/BI e Sales Ops espalhadas (algumas
+       com as duas) e um dev da frente de Dados no cadastro, para as tres
+       esteiras terem o que contar — inclusive a de Dados sem a marca. */
+    const msE = ms.map((m, i) => Object.assign({}, m, { dados_bi: i % 6 === 1, sales_ops: i % 5 === 2 })).concat(extrasE);
+    const stateE = { melhorias: msE, temas, projetos, feriados: ['2026-11-02'], devs_perfil: { Davi: { pipeline: 'Dados & Power BI' }, Ana: { axcred: true } } };
     const vivasE = msE.filter(m => !m.mesclado_em);
-    const esAdm = new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', 'document', BASE_ADM + '\nlet _esSprint = \'\';\nlet _esFiltro = \'todas\';\nlet _esPessoa = \'\';\n' +
+    const esAdm = new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', 'document', 'window', BASE_ADM + '\nlet _esSprint = \'\';\nlet _esFiltro = \'todas\';\nlet _esPessoa = \'\';\nlet _esEsteira = \'\';\n' +
+      linhaAdm(/^const ES_ESTEIRAS = .*$/m) + '\n' + corpo(ADMIN, 'function esteiraDe(m) {') + '\n' +
       corpo(ADMIN, 'function opcoesSprintKb() {') + '\n' + corpo(ADMIN, 'function renderEntregasSprint() {') +
-      '\nreturn function (s, f, p) { _esSprint = s; _esFiltro = f; _esPessoa = p || \'\'; renderEntregasSprint(); return _esPessoa; };');
-    const esApp = new Function([corpo(SPT, 'function esSituacao(SPm, etapa, r, feriados) {'), corpo(SPT, 'function esResumo(SPm, etapa, vivas, r, hoje, projetos, feriados) {'),
+      '\nreturn function (s, f, p, e) { _esSprint = s; _esFiltro = f; _esPessoa = p || \'\'; _esEsteira = e || \'\'; renderEntregasSprint(); return _esPessoa; };');
+    const esApp = new Function([(SPT.match(/^ {2}var ES_ESTEIRAS = .*$/m) || [''])[0], corpo(SPT, 'function esEsteiraDe(PI, perfis, m) {'),
+      corpo(SPT, 'function esSituacao(SPm, etapa, r, feriados) {'), corpo(SPT, 'function esResumo(SPm, etapa, vivas, r, hoje, projetos, feriados, esteira, esteiraDe) {'),
       corpo(SPT, 'function esDaPessoa(x, nome) {'), corpo(SPT, 'function esGrupos(lista, temas) {'),
-      corpo(SPT, 'function esEntregaUsuario(m, hoje, aberta) {')].join('\n') + '\nreturn { esResumo, esDaPessoa, esGrupos, esEntregaUsuario };')();
+      corpo(SPT, 'function esEntregaUsuario(m, hoje, aberta) {')].join('\n') + '\nreturn { esEsteiraDe, esResumo, esDaPessoa, esGrupos, esEntregaUsuario };')();
+    const winE = { PIPELINES: PIPELINES_API };
+    const deEApp = (m) => esApp.esEsteiraDe(PIPELINES_API, stateE.devs_perfil, m);
+    {
+      // A esteira de cada demanda: a do app = a do admin, demanda a demanda.
+      const deEAdm = new Function('state', 'window', corpo(ADMIN, 'function esteiraDe(m) {') + '\nreturn esteiraDe;')(stateE, winE);
+      const divT = vivasE.filter(m => deEAdm(m) !== deEApp(m)).map(m => m.codigo + ' ' + deEAdm(m) + '/' + deEApp(m));
+      const nT = ['dev', 'dados', 'sales'].map(k => vivasE.filter(m => deEApp(m) === k).length);
+      ok(divT.length === 0 && nT.every(n => n > 5) && vivasE.some(m => !m.dados_bi && !m.sales_ops && deEApp(m) === 'dados'),
+         'a esteira de cada demanda no app = esteiraDe do admin (Desenvolvimento, Dados/BI pela marca ou pela frente do dev, Sales Ops)',
+         divT.slice(0, 6).join(', ') + ' [' + nT.join('/') + ']');
+    }
     const br = (d) => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4);
     const semTag = (t) => String(t).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
     const divE = [];
-    let casosE = 0, casosP = 0, comRegra = 0, comAgu = 0;
-    ['S5-10-2026', 'S1-11-2026', 'S2-11-2026', 'S4-11-2026', 'S1-12-2026'].forEach(r => ['todas', 'entregues', 'aguardando', 'falta_com', 'falta_sem'].forEach(f => {
-      const x = esApp.esResumo(SP, statusKey, vivasE, r, HOJE, projetos, stateE.feriados);
-      if (f === 'aguardando' && !x.regra) return;   // sem a regra o cartao nao existe
+    let casosE = 0, casosP = 0, comRegra = 0, comAgu = 0, casosT = 0;
+    /* O cartao "Aguardando aprovacao" saiu em fdf14e2 (em validacao conta como
+       entregue), e a sprint e vista em cada esteira e em todas. */
+    ['S5-10-2026', 'S1-11-2026', 'S2-11-2026', 'S4-11-2026', 'S1-12-2026'].forEach(r => ['', 'dev', 'dados', 'sales'].forEach(est => ['todas', 'entregues', 'falta_com', 'falta_sem'].forEach(f => {
+      const x = esApp.esResumo(SP, statusKey, vivasE, r, HOJE, projetos, stateE.feriados, est, deEApp);
       // Cada pessoa da sprint (com ou sem nada faltando), ninguem e um nome de fora.
       const nomes = [''].concat([...new Set(x.ms.map(m => String(m.dev || '').trim()).filter(Boolean))], ['Ninguem']);
       nomes.forEach(pessoa => {
         casosE++;
         if (pessoa) casosP++;
         const doc = docFalso();
-        const pAdm = esAdm(stateE, SP, PRAZO_, ET, doc)(r, f, pessoa);
+        const pAdm = esAdm(stateE, SP, PRAZO_, ET, doc, winE)(r, f, pessoa, est);
         const E = doc.els;
         const pes = esApp.esDaPessoa(x, pessoa);
-        const tag = r + '/' + f + '/' + (pessoa || '-');
+        const tag = r + '/' + (est || 'todas') + '/' + f + '/' + (pessoa || '-');
+        if (est) casosT++;
+        // A esteira: o seletor (com a contagem) e a linha de andamento, sempre sobre a sprint inteira.
+        const opT = [...E['es-esteira'].innerHTML.matchAll(/<option value="([^"]*)"( selected)?>([^<]*)<\/option>/g)]
+          .map(a => a[1] + (a[2] ? '*' : '') + ':' + (a[3].match(/\((\d+)\)$/) || [])[1]);
+        const opTP = ['Todas'].concat(x.esteiras.map(e => e.k)).map((k, i) => (i ? k + (est === k ? '*' : '') + ':' + x.esteiras[i - 1].n : ':' + x.todas.length));
+        if (JSON.stringify(opT) !== JSON.stringify(opTP)) divE.push(tag + ' seletor de esteira ' + opT.join(' ') + ' / ' + opTP.join(' '));
+        const linT = [...E['es-esteiras'].innerHTML.matchAll(/class="es-pessoa( ativo)?"[^>]*>([\s\S]*?)<\/span>/g)]
+          .map(a => (a[1] ? '*' : '') + semEmoji(semTag(a[2])));
+        const linTP = x.esteiras.map(e => (est === e.k ? '*' : '') + e.rot + ' ' + e.entregues + '/' + e.total + ' entregues · ' + e.pct + '%' +
+          (e.aguardando ? ' (' + e.aguardando + ' em validação)' : ''));
+        if (JSON.stringify(linT) !== JSON.stringify(linTP)) divE.push(tag + ' andamento por esteira ' + JSON.stringify(linT) + ' / ' + JSON.stringify(linTP));
         if (x.regra) comRegra++;
         if (x.aguardando.length) comAgu++;
         if (pAdm !== (pes ? pes.nome : '')) divE.push(tag + ' pessoa valendo ' + pAdm + '/' + (pes ? pes.nome : ''));
         if (String(E['es-conta'].textContent) !== String(x.ms.length)) divE.push(tag + ' conta ' + E['es-conta'].textContent + '/' + x.ms.length);
         const kv = [...E['es-kpis'].innerHTML.matchAll(/class="ger-kpi-value"[^>]*>([^<]*)</g)].map(a => a[1]).join(',');
-        const kp = x.ms.length ? [x.ms.length, x.entregues.length].concat(x.regra ? [x.aguardando.length] : [], [x.faltaCom.length, x.faltaSem.length]).join(',') : '';
+        const kp = x.ms.length ? [x.ms.length, x.entregues.length, x.faltaCom.length, x.faltaSem.length].join(',') : '';
         if (kv !== kp) divE.push(tag + ' cartoes ' + kv + '/' + kp);
         const subs = [...E['es-kpis'].innerHTML.matchAll(/class="es-kpi-sub">([\s\S]*?)<\/div>/g)].map(a => semTag(a[1]));
         if (x.ms.length) {
           const espera = [x.ms.length + ' task(s)' + (x.negadas ? ' · ' + x.negadas + ' negada(s)' : '') + ' · ' + x.comProj + ' em projeto',
-            x.entregues.length + ' de ' + x.validas + ' task(s) · ' + x.pctEntregues + '%']
-            .concat(x.regra ? [x.aguardando.length ? x.pctAguardando + '% · foram para validação nesta sprint' : 'nada parado na validação'] : [],
-              [x.pctFaltaCom + '% das tasks' + (x.vencCom ? ' · ' + x.vencCom + ' com entrega vencida' : ''),
-               x.faltaSem.length ? x.pctFaltaSem + '% das tasks · precisam de dono' : 'todas têm dono']);
+            x.fechadas.length + ' fechada(s) + ' + x.aguardando.length + ' em validação · ' + x.pctEntregues + '% da sprint',
+            x.pctFaltaCom + '% das tasks' + (x.vencCom ? ' · ' + x.vencCom + ' com entrega vencida' : ''),
+            x.faltaSem.length ? x.pctFaltaSem + '% das tasks · precisam de dono' : 'todas têm dono'];
           if (JSON.stringify(subs) !== JSON.stringify(espera)) divE.push(tag + ' notas ' + JSON.stringify(subs) + ' / ' + JSON.stringify(espera));
         }
         const pes1 = [...E['es-pessoas'].innerHTML.matchAll(/class="es-pessoa[^"]*"[^>]*>([\s\S]*?)<\/span>/g)].map(a => semTag(a[1]));
@@ -25964,15 +26019,16 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         const ativo = (E['es-pessoas'].innerHTML.match(/class="es-pessoa[^"]* ativo"[^>]*>([^<]*) </) || [])[1] || '';
         const ativoP = pes && x.pessoas.some(p => p.nome === pes.nome) ? pes.nome : '';
         if (ativo !== ativoP) divE.push(tag + ' nome marcado ' + ativo + '/' + ativoP);
-        const resA = semTag(E['es-pessoa-resumo'].innerHTML.replace(/<\/span>/g, ' </span>'));
+        // O 👤 do admin (tela da main) e um icone no app.
+        const resA = semEmoji(semTag(E['es-pessoa-resumo'].innerHTML.replace(/<\/span>/g, ' </span>')));
         const resP = pes ? [pes.nome, pes.total + ' na sprint', pes.entregues + ' entregue(s)' + (pes.pct != null ? ' · ' + pes.pct + '%' : '')]
-          .concat(pes.aguardando ? [pes.aguardando + ' aguardando aprovação'] : [], [pes.faltando + ' faltando'],
+          .concat(pes.aguardando ? ['(' + pes.aguardando + ' em validação)'] : [], [pes.faltando + ' faltando'],
             pes.vencidas ? [pes.vencidas + ' com entrega vencida'] : [], pes.negadas ? [pes.negadas + ' negada(s)'] : [], [pes.pontos + ' pts', 'Ver todos']).join(' ') : '';
         if (resA !== resP) divE.push(tag + ' resumo da pessoa "' + resA + '" / "' + resP + '"');
         const venc = (E['es-resumo'].textContent.match(/^(\d+)/) || [0, 0])[1];
         if (+venc !== x.vencidas) divE.push(tag + ' vencidas ' + venc + '/' + x.vencidas);
         // A lista: grupos, ordem e a entrega ao usuario de cada linha.
-        const lista = (f === 'entregues' ? x.entregues : f === 'aguardando' ? x.aguardando : f === 'falta_com' ? x.faltaCom : f === 'falta_sem' ? x.faltaSem : x.ms)
+        const lista = (f === 'entregues' ? x.entregues : f === 'falta_com' ? x.faltaCom : f === 'falta_sem' ? x.faltaSem : x.ms)
           .filter(m => !pes || pes.casa(m));
         const gs = esApp.esGrupos(lista, temas);
         const gA = [...E['es-lista'].innerHTML.matchAll(/margin-bottom:8px;">([^<]*) <span[^>]*>\((\d+)\)/g)].map(a => a[1] + ':' + a[2]);
@@ -25987,28 +26043,33 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         }));
         if (JSON.stringify(lA) !== JSON.stringify(lP)) divE.push(tag + ' linhas ' + lA.slice(0, 4).join('|') + ' / ' + lP.slice(0, 4).join('|'));
       });
-    }));
-    ok(divE.length === 0 && comRegra > 20 && comAgu > 10 && casosP > 30,
-       'Entregas por sprint do app = renderEntregasSprint do admin: cartoes (com Aguardando aprovacao na regra de 05/11), notas, por pessoa, a pessoa clicada, grupos, ordem e entrega ao usuario (' +
-       casosE + ' sprint x filtro x pessoa)', divE.slice(0, 4).join(' ;; ') + ` [regra ${comRegra}, aguardando ${comAgu}, pessoa ${casosP}]`);
+    })));
+    ok(divE.length === 0 && comRegra > 20 && comAgu > 10 && casosP > 30 && casosT > 60,
+       'Entregas por sprint do app = renderEntregasSprint do admin: cartoes (Entregues = fechadas + em validacao, fdf14e2), notas, por pessoa, a pessoa clicada, o filtro e o andamento por esteira, grupos, ordem e entrega ao usuario (' +
+       casosE + ' sprint x esteira x filtro x pessoa)', divE.slice(0, 4).join(' ;; ') + ` [regra ${comRegra}, aguardando ${comAgu}, pessoa ${casosP}, esteira ${casosT}]`);
     {
       // A regra de 05/11 na amostra: o que a S1-11 e a S2-11 contam, pelo codigo.
       const cod = (l) => l.map(m => m.codigo).filter(c => /^AX-9/.test(c)).sort().join();
-      const s1 = esApp.esResumo(SP, statusKey, vivasE, 'S1-11-2026', HOJE, projetos, stateE.feriados);
-      const s2 = esApp.esResumo(SP, statusKey, vivasE, 'S2-11-2026', HOJE, projetos, stateE.feriados);
-      const s5 = esApp.esResumo(SP, statusKey, vivasE, 'S5-10-2026', HOJE, projetos, stateE.feriados);
-      ok(cod(s1.entregues) === 'AX-901,AX-905,AX-907' && cod(s1.aguardando) === 'AX-902,AX-906' && cod(s1.faltaCom) === 'AX-904,AX-908,AX-909' &&
-         cod(s2.entregues) === 'AX-904' && cod(s2.aguardando) === 'AX-903' && !cod(s2.ms).includes('AX-901') && !cod(s2.ms).includes('AX-905') &&
+      const s1 = esApp.esResumo(SP, statusKey, vivasE, 'S1-11-2026', HOJE, projetos, stateE.feriados, '', deEApp);
+      const s2 = esApp.esResumo(SP, statusKey, vivasE, 'S2-11-2026', HOJE, projetos, stateE.feriados, '', deEApp);
+      const s5 = esApp.esResumo(SP, statusKey, vivasE, 'S5-10-2026', HOJE, projetos, stateE.feriados, '', deEApp);
+      /* Regra de 06/11 (fdf14e2): em validacao conta como entregue da sprint, e a
+         devolvida para ajuste (AX-906) volta a ser item em aberto. */
+      ok(cod(s1.fechadas) === 'AX-901,AX-905,AX-907' && cod(s1.aguardando) === 'AX-902' && cod(s1.entregues) === 'AX-901,AX-902,AX-905,AX-907' &&
+         cod(s1.faltaCom) === 'AX-904,AX-906,AX-908,AX-909' &&
+         cod(s2.fechadas) === 'AX-904' && cod(s2.aguardando) === 'AX-903' && cod(s2.entregues) === 'AX-903,AX-904' && !cod(s2.ms).includes('AX-901') && !cod(s2.ms).includes('AX-905') &&
          !s5.regra && s1.regra && !cod(s5.ms),
-         'entregue so depois do PM/PO, na sprint da primeira ida para validacao; reentrega conta uma vez; a devolvida espera aprovacao; sprint antes da regra fica na conta antiga',
-         JSON.stringify({ s1: [cod(s1.entregues), cod(s1.aguardando), cod(s1.faltaCom)], s2: [cod(s2.entregues), cod(s2.aguardando), cod(s2.ms)] }));
+         'entregue = fechada pelo PM/PO ou em validacao, na sprint da primeira ida para validacao; reentrega conta uma vez; a devolvida volta a ser item em aberto; sprint antes da regra fica na conta antiga',
+         JSON.stringify({ s1: [cod(s1.fechadas), cod(s1.aguardando), cod(s1.faltaCom)], s2: [cod(s2.fechadas), cod(s2.aguardando), cod(s2.ms)] }));
     }
     ok(/var ops = spOpcoesSprint\(SP\(\), vivas, H\.hoje\(\), fer\(D\)\)\.filter\(function \(o\) \{ return o\.key && o\.key !== '__fora__'; \}\);/.test(SPT) &&
-       /var x = esResumo\(SP\(\), H\.colunaDe, vivas, r, H\.hoje\(\), D\.projetos \|\| \[\], fer\(D\)\);/.test(SPT) && /esGrupos\(lista, D\.temas \|\| \[\]\)/.test(SPT) &&
+       /var x = esResumo\(SP\(\), H\.colunaDe, vivas, r, H\.hoje\(\), D\.projetos \|\| \[\], fer\(D\), _ent\.esteira,\s*function \(m\) \{ return esEsteiraDe\(PI, D\.devs_perfil, m\); \}\);/.test(SPT) &&
+       /var PI = raiz\.PIPELINES;/.test(SPT) && /data-es-esteira="' \+ e\.k \+ '"/.test(SPT) && /_ent\.esteira = _ent\.esteira === evv \? '' : evv;/.test(SPT) &&
+       /_ent\.esteira = selEst\.value;/.test(SPT) && /esGrupos\(lista, D\.temas \|\| \[\]\)/.test(SPT) &&
        /var pes = esDaPessoa\(x, _ent\.pessoa\);/.test(SPT) && /\.filter\(function \(m\) \{ return !pes \|\| pes\.casa\(m\); \}\);/.test(SPT) &&
        /comQuemHtml\(m, x\.aberta\(m\)\)/.test(SPT) && /data-es-pessoa="' \+ esc\(pp\.nome\) \+ '"/.test(SPT) &&
        /_ent\.pessoa = _ent\.pessoa === pv \? '' : pv;/.test(SPT),
-       'e a aba Entregas le das funcoes medidas acima: as sprints do filtro, o resumo com os feriados, a pessoa clicada (de novo, todos) e a entrega ao usuario pela situacao');
+       'e a aba Entregas le das funcoes medidas acima: as sprints do filtro, o resumo com os feriados e a esteira (seletor e linha, de novo, todas), a pessoa clicada (de novo, todos) e a entrega ao usuario pela situacao');
     // ── As datas do card no tamanho da sprint (585196d e 84bc1b8) ─────────
     /* O `mSprintDatas` do admin roda num DOM de mentira ao lado do
        `pintaSemana` do formulario do app, nos mesmos gestos: abrir o card
@@ -26039,7 +26100,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
               if (lim(a) !== lim(b)) divS.push(tag + ' limites ' + lim(a) + ' / ' + lim(b));
               if (a.usu.value !== b.usu.value) divS.push(tag + ' entrega ao usuario ' + a.usu.value + ' / ' + b.usu.value);
               if (a.usu.value !== usu0) preencheu++;
-              const tA = semTag(a.sem.textContent), tB = semTag(b.sem.innerHTML);
+              const tA = semEmoji(semTag(a.sem.textContent)), tB = semTag(b.sem.innerHTML);
               if (a.ini.min && tA !== tB) divS.push(tag + ' aviso "' + tA + '" / "' + tB + '"');
               if (/fora da semana/.test(tB)) foraN++;
             })))));
@@ -27109,10 +27170,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           const opts = { prazo: PRAZO_, etapaDe: statusKey };
           const t = APP.cicloTextoIniciar(SP, base(), r, HOJE, opts);
           const c = APP.cicloIniciar(SP, base(), r, QUEM, HOJE, opts);
-          const A = saida.tipo === 'err' ? 'RECUSA ' + saida.toast : vista(st) + ' | ' + String(saida.toast).replace(/^▶ /, '');
+          const A = saida.tipo === 'err' ? 'RECUSA ' + semEmoji(saida.toast) : vista(st) + ' | ' + semEmoji(saida.toast);
           const B = c.ok ? vista(comApp(base(), c)) + ' | ' + c.msg : 'RECUSA ' + c.erro;
           if (A !== B) div.push(r + ': ' + A.slice(-160) + ' // ' + B.slice(-160));
-          if (saida.conf && (saida.conf.texto !== t.texto || saida.conf.titulo.replace(/^▶ /, '') !== t.titulo)) div.push(r + ' pergunta: ' + JSON.stringify(saida.conf) + ' // ' + JSON.stringify(t));
+          if (saida.conf && (semEmoji(saida.conf.texto) !== t.texto || semEmoji(saida.conf.titulo) !== t.titulo)) div.push(r + ' pergunta: ' + JSON.stringify(saida.conf) + ' // ' + JSON.stringify(t));
         }
         ok(div.length === 0, 'iniciar no app = o sprintIniciar do admin: a mesma pergunta, as vencidas prioritarias, as pausadas, o registro em `sprints` e o aviso (5 sprints, inclusive em curso, fechada e invalida)', div.slice(0, 2).join(' | '));
         const c = APP.cicloIniciar(SP, base(), 'S2-11-2026', QUEM, HOJE, { prazo: PRAZO_, etapaDe: statusKey });
@@ -27169,7 +27230,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           const st = base(), saida = {};
           await loteAdm(st, { sel: ids }, saida).aplicar(alvo);
           const c = APP.cicloRepassar(SP, base(), ids, alvo, QUEM, HOJE);
-          const A = saida.tipo === 'err' ? 'RECUSA ' + saida.toast : vista(st) + ' | ' + saida.toast;
+          const A = saida.tipo === 'err' ? 'RECUSA ' + semEmoji(saida.toast) : vista(st) + ' | ' + semEmoji(saida.toast);
           const B = c.ok ? vista(comApp(base(), c)) + ' | ' + c.msg : 'RECUSA ' + c.erro;
           if (A !== B) div.push(alvo + '/' + ids + ': ' + A.slice(-140) + ' // ' + B.slice(-140));
         }
@@ -27210,7 +27271,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           const st = base(), saida = {};
           await fechAdm(st, saida).aplicar(rr, copia(d));
           const c = APP.cicloFechar(SP, base(), rr, QUEM, HOJE, copia(d), statusKey);
-          const A = saida.tipo === 'err' ? 'RECUSA ' + saida.toast : vista(st) + ' | ' + saida.toast;
+          const A = saida.tipo === 'err' ? 'RECUSA ' + semEmoji(saida.toast) : vista(st) + ' | ' + semEmoji(saida.toast);
           const B = c.ok ? vista(comApp(base(), c)) + ' | ' + c.msg : 'RECUSA ' + c.erro;
           if (A !== B) div.push(rr + ': ' + A.slice(-160) + ' // ' + B.slice(-160));
         }
@@ -27241,7 +27302,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           const L = arv(), por = id => L.filter(x => x.id === id)[0];
           const fs2 = sel.slice(1).map(por).filter(Boolean);
           const rr = sel.length < 2 || !por(sel[0]) || !fs2.length ? null : AC.REGRAS.juntar(por(sel[0]), { filhas: fs2 }, { papel: 'admin', lista: L, R: { VINCULO } });
-          const A = !saida.salvou ? (saida.tipo === 'err' ? 'RECUSA ' + saida.toast : 'NADA') : JSON.stringify(st.melhorias) + ' | ' + saida.toast;
+          const A = !saida.salvou ? (saida.tipo === 'err' ? 'RECUSA ' + semEmoji(saida.toast) : 'NADA') : JSON.stringify(st.melhorias) + ' | ' + semEmoji(saida.toast);
           const B = !rr ? 'NADA' : !rr.ok ? 'RECUSA ' + rr.erro : JSON.stringify(arv().map(m => Object.assign(m, rr.patches[m.id] || {}))) + ' | ' + rr.msg;
           if (A !== B) div.push(sel + ': ' + A + ' // ' + B);
         }
@@ -27391,13 +27452,16 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       try {
         const dif = (a, b) => { const A = JSON.stringify(a), B = JSON.stringify(b); if (A === B) return ''; let i = 0; while (i < A.length && A[i] === B[i]) i++; return A.slice(Math.max(0, i - 80), i + 80) + ' // ' + B.slice(Math.max(0, i - 80), i + 80); };
         // ── A apuracao do congelamento e o deck do mes ───────────────────
+        /* O titulo do deck e a marca de cada tela: o admin da main diz "Roadmap de
+           Melhorias", o app diz "AXIS". O resto do objeto tem de ser o mesmo. */
+        const marca = (x) => (x && typeof x === 'object' && /^(Roadmap de Melhorias|AXIS)$/.test(x.titulo) ? Object.assign({}, x, { titulo: '(marca)' }) : x);
         const divA = [], divD = [], divC = [], semItens = [];
         let nDest = 0, nNome = 0;
         for (const iso of ['2026-08', '2026-09', '2026-10', '2026-11', '2026-12']) {
           const ano = +iso.slice(0, 4), mes = +iso.slice(5, 7);
           const vals = { 'ger-mes': { value: String(mes) }, 'ger-ano': { value: String(ano) } };
           const a1 = await admin(S, vals, {}).apresGerar({ soApuracao: true });
-          const d1 = dif(a1, FE.apuracao(S, { ano, mes, soApuracao: true }));
+          const d1 = dif(marca(a1), marca(FE.apuracao(S, { ano, mes, soApuracao: true })));
           if (d1 || !a1.kpi) divA.push(iso + ' ' + d1);
           // O congelado nao leva as demandas inteiras: o Worker recusa acima de 1 MB.
           if (!a1.pontos || 'itens' in a1.pontos || !('porDev' in a1.pontos)) semItens.push(iso);
@@ -27412,7 +27476,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           const c2 = {};
           await admin(S, vals, c2).apresGerar({});
           const dB = FE.apuracao(S, { ano, mes, secoes: sec, idsDestaque: dest, mensagem: '  O mês fechou.  ' });
-          const d2 = dif(c2.dados, dB);
+          const d2 = dif(marca(c2.dados), marca(dB));
           if (d2) divD.push(iso + ' ' + d2);
           if (c2.nome === FE.nomeArquivoDeck(ano, mes)) nNome++;
           const c3 = { cong: { apuracao: a1, congelado_em: '2026-11-02T10:00:00.000Z', por: 'Paula' } };
@@ -27553,34 +27617,23 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     })());
   }
 
-  /* AS TELAS ANTIGAS NAVEGAM PELO APP. O menu lateral delas (axis.js) levava a
-     elas mesmas (dev.html, gantt.html, admin.html#aba): quem clicava em "Meu
-     painel" caia no layout antigo achando que era o AXIS. E o `quem-sou` do
-     dev.html gravava o `rm_eu` SEM o papel (ele vem fora do usuario), e o menu
-     de um admin virava o de dev a cada F5. As duas coisas executadas aqui. */
-  sec('Telas antigas: menu leva ao app, e o papel nao se perde no dev.html');
+  /* AS TELAS ANTIGAS VOLTARAM A SER AS DA MAIN (06/11/2026). O menu lateral do
+     AXIS saiu delas: quem usa a interface nova vai para o app pela marca da
+     conta (`axis-interface.js`), e a tela antiga navega pelos proprios botoes.
+     Ficam os icones (`axis.js`), que os modulos compartilhados desenham. E o
+     `quem-sou` do dev.html gravava o `rm_eu` SEM o papel (ele vem fora do
+     usuario) — correcao de defeito que continua valendo, executada aqui. */
+  sec('Telas antigas: os icones e a passagem para o app, e o papel nao se perde no dev.html');
   {
     const AXJ = lerTela('axis.js');
-    const ANTIGAS = ['admin.html', 'dev.html', 'gantt.html', 'poker.html', 'follow.html', 'projetos.html', 'importar.html'];
-    const fora = [];
-    let itens = 0;
-    for (const pg of ANTIGAS) {
-      for (const papel of ['admin', 'analista', 'dev', 'consulta']) {
-        const store = { rm_eu: JSON.stringify({ nome: 'Ana', papel }) };
-        const doc = { readyState: 'complete', getElementById: () => null, querySelector: () => null, querySelectorAll: () => [],
-                      head: { appendChild() {} }, documentElement: { appendChild() {} }, createElement: () => ({}) };
-        const janela = { location: { pathname: '/' + pg }, sessionStorage: { getItem: (k) => store[k] || null }, document: doc };
-        const mod = { exports: {} };
-        new Function('window', 'document', 'sessionStorage', 'location', 'module', AXJ)(undefined, doc, janela.sessionStorage, janela.location, mod);
-        const AX = mod.exports;
-        const html = (AX.htmlMenu || (() => ''))();
-        const links = (html.match(/class="axis-sb-it[^"]*" href="([^"]+)"/g) || []).map((x) => x.replace(/.*href="/, '').replace(/"$/, ''));
-        itens += links.length;
-        links.filter((h) => !/^axis\.html#/.test(h) && h !== 'index.html').forEach((h) => fora.push(pg + '/' + papel + ' -> ' + h));
-        if (papel === 'admin' && !/PM\/PO/.test(html)) fora.push(pg + '/admin sem rotulo de admin');
-      }
-    }
-    ok(itens > 50 && !fora.length, 'o menu das telas antigas so leva ao app (e ao painel publico), em toda pagina e perfil', fora.slice(0, 4).join(' | ') || String(itens));
+    const ANTIGAS = ['admin.html', 'dev.html', 'gantt.html', 'poker.html', 'follow.html', 'projetos.html', 'importar.html', 'mensageria.html'];
+    const sem = ANTIGAS.filter((pg) => { const h = lerTela(pg); return !/<script src="axis\.js(\?v=[^"]*)?"><\/script>/.test(h) || !/<script src="axis-interface\.js(\?v=[^"]*)?"><\/script>/.test(h); });
+    const mod = { exports: {} };
+    new Function('window', 'document', 'module', AXJ)(undefined, { readyState: 'complete', head: { appendChild() {} }, documentElement: { appendChild() {} }, createElement: () => ({}),
+      getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] }, mod);
+    ok(!sem.length && !mod.exports.htmlMenu,
+       'as telas antigas carregam os icones (axis.js) e a passagem para o app (axis-interface.js), sem o menu lateral do AXIS',
+       sem.join(', ') + (mod.exports.htmlMenu ? ' | axis.js ainda publica htmlMenu' : ''));
 
     const fn = corpo(lerTela('dev.html'), 'async function sessaoDevValida(');
     const guarda = {};
@@ -27663,6 +27716,31 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(itens.length >= 10 && !barrados.length, 'todo item do menu abre para cada perfil que o ve (analista inclusive)', barrados.join(', ') || String(itens.length));
     ok(telas.item && telas.item.papeis.indexOf('consulta') >= 0 && telas.item.papeis.indexOf('analista') >= 0,
        'o Item abre para consulta (leitura, as acoes dependem de H.pode) e para analista');
+  }
+
+  /* A INTERFACE NOVA E POR CONTA (axis-interface.js + coluna interface_nova do
+     Worker). Sem a marca a pessoa fica nas telas de sempre; com ela, cada tela
+     antiga leva a equivalente do app, e o app devolve quem nao tem a marca. */
+  sec('Interface por conta: quem vai para o app e quem fica nas telas de sempre');
+  {
+    const I = require('./axis-interface.js');
+    ok(!I.nova(null) && !I.nova({ papel: 'admin' }) && !I.nova({ interface_nova: false }) && I.nova({ interface_nova: true }),
+       'sem a marca na sessao (inclusive sessao antiga, sem o campo) e interface antiga');
+    ok(I.rotaNova('admin.html', '') === 'inicio' && I.rotaNova('dev.html', '') === 'inicio/meu' &&
+       I.rotaNova('gantt.html', '') === 'planejamento' && I.rotaNova('ADMIN.HTML', '#ax-887') === 'item/AX-887' &&
+       I.rotaNova('dev.html', '#AX-12') === 'item/AX-12' && I.rotaNova('index.html', '') === '',
+       'cada tela antiga tem a sua rota no app; #AX-n abre o Item; o painel publico nao muda');
+    ok(I.destinoAntigo('admin') === 'admin.html' && I.destinoAntigo('dev') === 'dev.html' &&
+       I.destinoAntigo('analista') === 'dev.html' && I.destinoAntigo('consulta') === 'index.html',
+       'quem nao tem a marca volta a tela de sempre do seu perfil');
+    const WK = lerTela('cloudflare-worker/worker.js');
+    ok(/colunaSeFaltar\(db, 'usuario', 'interface_nova', 'INTEGER NOT NULL DEFAULT 0'\)/.test(WK) &&
+       /SELECT s\.expira_em, u\.\*/.test(WK) && /interface_nova: !!r\.interface_nova/.test(WK) && /interface_nova: !!u\.interface_nova/.test(WK) &&
+       /if \(op === 'interface'\)/.test(WK),
+       'Worker: coluna com padrao desligado, sessao le u.* (coluna nova nao derruba ninguem antes da migracao), login e quem-sou devolvem a marca');
+    const APPJ = lerTela('axis-app.js');
+    ok(/function interfaceCerta\(\)/.test(APPJ) && /if \(!interfaceCerta\(\)\) return;/.test(APPJ),
+       'o app devolve para a tela de sempre quem nao tem a marca, antes de desenhar');
   }
 
   /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir

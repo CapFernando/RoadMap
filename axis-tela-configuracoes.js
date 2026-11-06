@@ -564,7 +564,7 @@
         chave: 'u:' + u.login, u: u, login: u.login, nome: u.nome || u.login, email: u.email || '', papel: u.papel || 'consulta',
         status: u.pendente ? 'pendente' : (u.ativo ? 'ativo' : 'off'), nomeDev: nd, declarado: decl.join(' / '),
         frente: (desenvolve || ehAtivo(nd)) ? frenteDe(nd, D) : { txt: '', padrao: false },
-        axcred: !!(perf && perf.axcred), spike: !!u.aprova_spike,
+        axcred: !!(perf && perf.axcred), spike: !!u.aprova_spike, nova: !!u.interface_nova,
         capacidade: nd && ehAtivo(nd), acesso: u.ultimo_acesso || '', criado: u.criado_em || '',
         dem: contaDemandas(decl.length ? decl : (nd ? [nd] : []))
       };
@@ -761,6 +761,7 @@
     h += '<span class="note">' + H.plural(p.dem.abertas, 'demanda aberta', 'demandas abertas') + ' · ' + H.plural(p.dem.total, 'no total', 'no total') + '</span>' +
       '<span class="lab" style="margin-top:6px">PERMISSÕES EXTRAS</span>' +
       (p.papel !== 'semconta' ? sw('Aprova spike', p.spike, 'Pode assinar a aprovação de um spike', 'u-spike', dLogin) : '') +
+      (p.papel !== 'semconta' && p.status !== 'pendente' ? sw('Interface nova', p.nova, 'Usa o app AXIS; desligado, entra nas telas de sempre', 'u-interface', dLogin) : '') +
       (noDev ? sw('DEV-AXCred', p.axcred, 'Aparece primeiro no Planejamento', 'perfil-axcred', dDev) : '');
     if (p.status !== 'semconta') {
       h += '<span class="note" style="font-size:12px">' + (p.acesso ? 'Último acesso em ' + esc(quando(p.acesso)) : '<span style="color:var(--wn-t)">Nunca entrou com a conta</span> (pode estar usando a senha geral)') +
@@ -821,7 +822,8 @@
   }
 
   function secPessoas(ctx) {
-    var acoes = H.pode('configurar') ? '<button type="button" class="btnp" data-cfg-acao="u-criar">' + ico('plus') + ' Criar conta</button>' : '';
+    var acoes = H.pode('configurar') ? '<button type="button" class="btn" data-cfg-acao="u-interface-admins" title="Liga a interface nova para todos os admins ativos">Interface nova para todos os admins</button>' +
+      '<button type="button" class="btnp" data-cfg-acao="u-criar">' + ico('plus') + ' Criar conta</button>' : '';
     return cab('Pessoas e perfis', 'Contas (login próprio) e a lista de devs da base: papel, nome nas demandas, frente, capacidade e as permissões extras. O que se muda aqui vale para o admin, o Gantt e o Worker.', acoes) +
       '<div class="row" style="flex-wrap:wrap;gap:8px"><span id="cfg-pes-f" class="row" style="flex-wrap:wrap;gap:8px;flex:1 1 320px;min-width:0">' + chipsPessoas(ctx.D) + '</span>' +
       '<input class="in cfg-q" id="cfg-pes-q" type="search" placeholder="Buscar pessoa" value="' + esc(est.pesBusca) + '" aria-label="Buscar pessoa"></div>' +
@@ -1081,6 +1083,19 @@
         valida: function (x) { return txt(x.nome).length < 3 ? { erro: 'Informe o nome completo.', campo: 'nome' } : ''; } });
       if (!v) return;
       return chamaConta('nome', { login: login, nome: txt(v.nome) }, 'Nome corrigido.');
+    },
+    /* INTERFACE NOVA POR CONTA (axis-interface.js). Ligada, a pessoa passa a
+       usar o app; desligada, volta as telas de sempre na proxima tela que abrir. */
+    'u-interface': async function (el) {
+      var login = el.getAttribute('data-cfg-login'), u = contaDe(login) || {};
+      var liga = !u.interface_nova;
+      return chamaConta('interface', { login: login, nova: liga },
+        liga ? '"' + login + '" passa a usar a interface nova na próxima tela que abrir.' : '"' + login + '" volta às telas de sempre.');
+    },
+    'u-interface-admins': async function () {
+      if (window.confirmar && !(await window.confirmar({ titulo: 'Interface nova para todos os admins',
+          texto: 'Todos os admins ativos passam a usar o app AXIS na próxima tela que abrirem. Dá para desligar um a um depois.', ok: 'Ligar' }))) return;
+      return chamaConta('interface', { todos_admins: true, nova: true }, 'Interface nova ligada para todos os admins.');
     },
     'u-spike': async function (el) {
       var login = el.getAttribute('data-cfg-login'), u = contaDe(login) || {};

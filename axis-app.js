@@ -683,7 +683,21 @@
     btn.setAttribute('aria-expanded', 'true');
   }
 
+  /* QUEM NAO TEM A INTERFACE NOVA LIGADA VOLTA PARA A TELA DE SEMPRE
+     (axis-interface.js). Decide primeiro pelo `rm_eu` da sessao, para nem
+     desenhar o app, e depois confirma com o servidor: o admin pode ter ligado
+     ou desligado a marca desde o login. */
+  function interfaceCerta() {
+    lerSessao();
+    var I = raiz.AXIS_INTERFACE;
+    if (!I || !APP.token || I.nova(APP.eu)) return true;
+    location.replace(I.destinoAntigo(APP.papel));
+    return false;
+  }
+
   async function iniciarApp() {
+    if (!interfaceCerta()) return;
+    if (raiz.AXIS_INTERFACE) raiz.AXIS_INTERFACE.atualizar().then(function (e) { if (e) interfaceCerta(); });
     desenhar();
     try {
       await carregar();

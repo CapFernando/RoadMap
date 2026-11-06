@@ -1,19 +1,11 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   AXIS — casca compartilhada: icones e menu lateral.
+   AXIS — os icones de traco (`.axi`), para o app e para as telas antigas.
 
-   AS TELAS NAO MUDARAM DE FUNCAO, so de casa. Cada tela continua sendo o
-   arquivo que era, com o login e a sessao que tinha; o menu lateral apenas
-   junta os caminhos que antes estavam espalhados em botoes de cabecalho e na
-   regua de abas do admin, nos grupos do AXIS (DOC-17 §17.1).
-
-   O MENU DEPENDE DO PAPEL. Um dev que clicasse em "Quadro" cairia no login do
-   admin e leria "sua conta e de dev e nao abre a area administrativa" — o
-   menu oferecendo uma porta que nao abre. O papel vem do `rm_eu` que as telas
-   ja gravam no login; sem ele, vale o papel que a propria tela exige.
-
-   OS ITENS DO ADMIN SAO ABAS. Dentro do admin o clique chama `switchTab`; de
-   fora, grava `rm_admin_tab` (a mesma chave que o admin ja le ao abrir, em
-   `restoreLastTab`) e navega. Nenhum endereco novo foi inventado.
+   As telas antigas voltaram a ser as de sempre (a interface nova e o app
+   axis.html, ligado por conta: axis-interface.js). Ficou aqui so o que elas
+   ainda usam: os modulos compartilhados (sprint.js, resumo-dev.js,
+   resumo-projeto.js, selo-validacao.js...) desenham icones `.axi`, e sem este
+   CSS eles sairiam em branco.
 
    Publica em `window.AXIS` e em `module.exports`, como os outros modulos.
    ───────────────────────────────────────────────────────────────────────── */
@@ -131,200 +123,7 @@
     return r.join('\n');
   }
 
-  // ── O menu ────────────────────────────────────────────────────────────
-  /* O MENU LEVA AO APP AXIS. As telas antigas continuam no ar (quem tem o
-     endereco ainda chega nelas), mas a navegacao e a do app: o mesmo menu, com
-     os mesmos grupos e nomes de `axis-app.js`. `pg` (pagina antiga) e `aba`
-     (aba do admin.html) servem SO para marcar o item da tela em que a pessoa
-     esta; o link e sempre o do app. */
-  var A = ['admin'], AD = ['admin', 'analista', 'dev'], ADC = ['admin', 'analista', 'dev', 'consulta'], AC = ['admin', 'consulta'];
-  var MENU = [
-    { grupo: 'Trabalho', itens: [
-      { id: 'inicio',     rotulo: 'Início',          ico: 'home',     href: 'axis.html#inicio',          papeis: ADC },
-      { id: 'dev',        rotulo: 'Meu trabalho',    ico: 'user',     href: 'axis.html#inicio/meu',      papeis: AD,  pg: 'dev.html' },
-      { id: 'kanban',     rotulo: 'Quadro',          ico: 'board',    href: 'axis.html#quadro',          papeis: AD,  aba: 'kanban' },
-      { id: 'melhorias',  rotulo: 'Backlog',         ico: 'menu',     href: 'axis.html#backlog',         papeis: AD,  aba: 'melhorias' },
-      { id: 'gantt',      rotulo: 'Planejamento',    ico: 'calendar', href: 'axis.html#planejamento',    papeis: AD,  pg: 'gantt.html' },
-      { id: 'projetos',   rotulo: 'Projetos',        ico: 'package',  href: 'axis.html#projetos',        papeis: ADC, aba: 'projetos', pg: 'projetos.html' },
-      { id: 'poker',      rotulo: 'Planning Poker',  ico: 'cards',    href: 'axis.html#poker',           papeis: AD,  pg: 'poker.html' }
-    ] },
-    { grupo: 'Acompanhamento', itens: [
-      { id: 'follow',     rotulo: 'Acompanhamentos', ico: 'flag',     href: 'axis.html#acompanhamentos', papeis: A,   pg: 'follow.html' },
-      { id: 'publico',    rotulo: 'Painel público',  ico: 'globe',    href: 'index.html',                papeis: ADC }
-    ] },
-    { grupo: 'Análises', itens: [
-      { id: 'gerencial',  rotulo: 'Painéis',           ico: 'chart',   href: 'axis.html#paineis',    papeis: AC, aba: 'gerencial' },
-      { id: 'relatorios', rotulo: 'Relatórios',        ico: 'receipt', href: 'axis.html#relatorios', papeis: AC, aba: 'relatorios' },
-      { id: 'mes',        rotulo: 'Fechamento do mês', ico: 'clock',   href: 'axis.html#fechamento', papeis: A,  aba: 'mes' }
-    ] },
-    { grupo: 'Configurações', itens: [
-      { id: 'temas',      rotulo: 'Catálogo de sistemas', ico: 'layers', href: 'axis.html#configuracoes/catalogo', papeis: A, aba: 'temas' },
-      { id: 'usuarios',   rotulo: 'Pessoas e perfis',     ico: 'users',  href: 'axis.html#configuracoes/pessoas',  papeis: A, aba: 'usuarios' },
-      { id: 'importar',   rotulo: 'Importar demandas',    ico: 'upload', href: 'axis.html#importar',               papeis: A, pg: 'importar.html' }
-    ] }
-  ];
-
-  function pagina() {
-    var p = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
-    return p || 'index.html';
-  }
-
-  function eu() {
-    try { return JSON.parse(sessionStorage.getItem('rm_eu') || 'null') || null; } catch (_) { return null; }
-  }
-
-  /* O papel gravado no login manda. Sem ele (senha compartilhada, aba nova),
-     a pagina diz: quem esta no painel do dev e dev; quem esta em qualquer outra
-     tela interna passou pelo login de admin dela. */
-  function papel() {
-    var e = eu();
-    if (e && e.papel) return e.papel;
-    return pagina() === 'dev.html' ? 'dev' : 'admin';
-  }
-
-  function abaAdminAtiva() {
-    var c = document.querySelector('.tab-content.active');
-    return c && c.id ? c.id.replace(/^tab-/, '') : 'melhorias';
-  }
-
-  function itemAtivo() {
-    var p = pagina();
-    if (p === 'admin.html') return abaAdminAtiva();
-    for (var g = 0; g < MENU.length; g++) {
-      for (var i = 0; i < MENU[g].itens.length; i++) {
-        if (MENU[g].itens[i].pg === p) return MENU[g].itens[i].id;
-      }
-    }
-    return '';
-  }
-
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
-
-  function iniciais(nome) {
-    var p = String(nome || '').trim().split(/\s+/).filter(Boolean);
-    if (!p.length) return '';
-    return ((p[0][0] || '') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
-  }
-
-  function htmlMenu() {
-    var meu = papel(), ativo = itemAtivo();
-    var h = '<a class="axis-sb-logo" href="axis.html#inicio" aria-label="AXIS — início">' +
-      '<span class="axis-sb-mark"><img src="axis/marca/axis-leao-branco.png" alt=""></span>' +
-      '<span class="axis-sb-word">AX<i>IS</i></span></a>';
-    MENU.forEach(function (g) {
-      var itens = g.itens.filter(function (it) { return it.papeis.indexOf(meu) >= 0; });
-      if (!itens.length) return;
-      h += '<div class="axis-sb-grp"><span class="axis-sb-lab">' + esc(g.grupo) + '</span>';
-      itens.forEach(function (it) {
-        h += '<a class="axis-sb-it' + (it.id === ativo ? ' on' : '') + '" href="' + it.href + '"' +
-          ' data-axis-item="' + it.id + '"' +
-          (it.id === ativo ? ' aria-current="page"' : '') + '>' +
-          icone(it.ico) + '<span class="axis-sb-t">' + esc(it.rotulo) + '</span></a>';
-      });
-      h += '</div>';
-    });
-    var e = eu() || {};
-    var nome = e.nome || e.login || '';
-    var rotPapel = { admin: 'PM/PO · Admin', analista: 'Analista de requisitos', dev: 'Dev', consulta: 'Consulta' }[meu] || meu;
-    h += '<div class="axis-sb-user">' +
-      '<span class="axis-sb-av">' + (esc(iniciais(nome)) || icone('user', '16px')) + '</span>' +
-      '<span class="axis-sb-quem"><b>' + (esc(nome) || 'Minha conta') + '</b><small>' + esc(rotPapel) + '</small></span>' +
-      (SAIR[pagina()] ? '<button type="button" class="axis-sb-sair" data-axis-acao="sair" title="Sair" aria-label="Sair">' + icone('logout', '16px') + '</button>' : '') +
-      '</div>';
-    return h;
-  }
-
-  /* O logout de cada tela, pelo nome. Nao da para procurar "qualquer funcao
-     chamada sair": no poker, `sair()` e sair DA SALA — e apaga o voto da
-     rodada. Tela fora desta lista nao ganha o botao. */
-  var SAIR = { 'admin.html': 'doLogout', 'gantt.html': 'doLogout', 'dev.html': 'sairDev', 'follow.html': 'sair' };
-
-  function rotuloDe(id) {
-    for (var g = 0; g < MENU.length; g++) {
-      for (var i = 0; i < MENU[g].itens.length; i++) {
-        if (MENU[g].itens[i].id === id) return MENU[g].itens[i].rotulo;
-      }
-    }
-    return '';
-  }
-
-  function marcar(id) {
-    // No admin o titulo do cabecalho e o da secao aberta: "Administracao" nao
-    // dizia em que aba a pessoa estava, agora que a regua de abas sumiu.
-    if (pagina() === 'admin.html') {
-      var h1 = document.querySelector('#admin-app .header-left h1');
-      var r = rotuloDe(id);
-      if (h1 && r) h1.textContent = r;
-    }
-    var nav = document.querySelector('.axis-sb');
-    if (!nav) return;
-    var its = nav.querySelectorAll('.axis-sb-it');
-    for (var i = 0; i < its.length; i++) {
-      var on = its[i].getAttribute('data-axis-item') === id;
-      its[i].classList.toggle('on', on);
-      if (on) its[i].setAttribute('aria-current', 'page'); else its[i].removeAttribute('aria-current');
-    }
-  }
-
-  function aoClicar(ev) {
-    var a = ev.target.closest && ev.target.closest('[data-axis-acao]');
-    if (!a || a.getAttribute('data-axis-acao') !== 'sair') return;
-    // Cada tela tem o proprio logout, com a propria limpeza de sessao.
-    var sair = window[SAIR[pagina()]];
-    if (typeof sair === 'function') sair();
-  }
-
-  function montar() {
-    if (document.querySelector('.axis-sb')) return;
-    var nav = document.createElement('nav');
-    nav.className = 'axis-sb';
-    nav.setAttribute('aria-label', 'Menu principal');
-    nav.innerHTML = htmlMenu();
-    nav.addEventListener('click', aoClicar);
-    document.body.insertBefore(nav, document.body.firstChild);
-    document.body.classList.add('axis-com-menu');
-    marcar(itemAtivo());
-
-    // A troca de aba pode vir de dentro do admin (atalho, banner "ver
-    // atrasadas", restoreLastTab): o menu acompanha embrulhando switchTab.
-    if (pagina() === 'admin.html' && typeof window.switchTab === 'function' && !window.switchTab._axis) {
-      var orig = window.switchTab;
-      var embrulho = function (nome) {
-        var r = orig.apply(this, arguments);
-        marcar(nome);
-        return r;
-      };
-      embrulho._axis = true;
-      window.switchTab = embrulho;
-    }
-  }
-
-  // Telas que nao recebem o menu: o painel publico (sem login de equipe) e a
-  // mensageria, que abre por demanda e nao e destino de navegacao.
-  var SEM_MENU = ['index.html', 'mensageria.html', 'axis.html'];
-
-  function iniciar() {
-    if (SEM_MENU.indexOf(pagina()) >= 0) return;
-    montar();
-    // Quem entra pelo login so passa a ter `rm_eu` depois: o menu se refaz
-    // quando a sessao muda, para nao ficar mostrando o papel de antes.
-    window.addEventListener('rm-token-novo', atualizar);
-    var login = document.getElementById('login-screen');
-    if (login && typeof MutationObserver === 'function') {
-      new MutationObserver(atualizar).observe(login, { attributes: true, attributeFilter: ['style'] });
-    }
-  }
-
-  function atualizar() {
-    var nav = document.querySelector('.axis-sb');
-    if (nav) nav.innerHTML = htmlMenu();
-  }
-
-  var AXIS = { icone: icone, ICONES: ICONES, cssIcones: cssIcones, MENU: MENU, atualizarMenu: atualizar, marcar: marcar, htmlMenu: htmlMenu };
+  var AXIS = { icone: icone, ICONES: ICONES, cssIcones: cssIcones };
   if (typeof window !== 'undefined') {
     window.AXIS = AXIS;
     if (!document.getElementById('axis-icones')) {
@@ -333,8 +132,6 @@
       st.textContent = cssIcones();
       (document.head || document.documentElement).appendChild(st);
     }
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
-    else iniciar();
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = AXIS;
 })();

@@ -38,12 +38,7 @@
     var b = document.querySelector('.tema-btn');
     if (b) {
       var claro = tema === 'claro';
-      // Icone de traco, e nao emoji (DOC-18 do AXIS): o emoji muda de desenho e
-      // de linha de base conforme o sistema, e destoava dos outros icones.
-      b.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"' +
-        ' stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' +
-        (claro ? 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'
-               : 'M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z') + '"/></svg>';
+      b.textContent = claro ? '☀️' : '🌙';
       b.title = claro ? 'Tema claro — clique para escuro' : 'Tema escuro — clique para claro';
       b.setAttribute('aria-pressed', claro ? 'true' : 'false');
     }

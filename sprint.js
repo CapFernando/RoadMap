@@ -1426,7 +1426,12 @@
     var e = txt(etapa);
     if (!m || !r || e === 'negada') return null;
     var ida = sprintDaIdaValidacao(m, feriados);
-    if (ida === r) return e === 'concluido' ? 'entregue' : 'aguardando';
+    if (ida === r) {
+      if (e === 'concluido') return 'entregue';
+      /* Devolvida para ajuste já não está em validação: volta a ser item em
+         aberto da sprint (regra de 06/11 — "em validação conta como entrega"). */
+      return (e === 'validacao' || e === 'validacao_area') ? 'aguardando' : 'em_curso';
+    }
     if (!esteveNaSprint(m, r)) return null;
     if (ida) return chaveOrdem(ida) < chaveOrdem(r) ? null : 'saiu';
     if (doPO(m) !== r) return 'saiu';
@@ -1467,8 +1472,15 @@
         else if (sit === 'em_curso') { q.emCurso += 1; q.itens.emCurso.push(m); }
         else { q.saiu += 1; q.itens.saiu.push(m); }
       });
-      q.pct = q.total ? Math.round(q.validados / q.total * 100) : 0;
-      q.pctPontos = q.pontosTotal ? Math.round(q.pontosValidados / q.pontosTotal * 100) : null;
+      /* O CUMPRIMENTO DA SPRINT (06/11/2026): "a sprint conta por itens em
+         aberto x entregues. A partir do momento que a demanda está em validação
+         da área ou validação PM/PO, deve contar como uma entrega da sprint."
+         10 itens, 5 fechados, 3 em validação → 80%. `validados` continua sendo
+         só o que o PM/PO fechou; `entregues` soma os dois. */
+      q.entregues = q.validados + q.aguardando;
+      q.pontosEntregues = q.pontosValidados + q.pontosAguardando;
+      q.pct = q.total ? Math.round(q.entregues / q.total * 100) : 0;
+      q.pctPontos = q.pontosTotal ? Math.round(q.pontosEntregues / q.pontosTotal * 100) : null;
       return q;
     }
     var lista = demandasDaSprint(dados, r, trilha);

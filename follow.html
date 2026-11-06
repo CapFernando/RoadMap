@@ -7,10 +7,12 @@
        noarchive impede copia em cache. Isso reduz descoberta, NAO e controle de
        acesso: a trava de verdade e o `exigePapel(admin)` no Worker. -->
   <meta name="robots" content="noindex, nofollow, noarchive" />
-  <title>Acompanhamentos — AXIS</title>
-  <link rel="icon" type="image/svg+xml" href="axis/marca/axis-icone.svg">
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <title>Acompanhamentos — RoadMap</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
+<!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
+<script src="axis.js?v=1eb606be26"></script>
+<script src="axis-interface.js?v=f1a5f139ee"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -25,7 +27,7 @@
          gantt. O valor aqui e so o ponto de partida. */
       --nome-w:190px; --dia-w:38px; --faixa-h:26px;
     }
-    body { background:var(--bg); color:var(--text); font-family:var(--font-ui);
+    body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif;
       font-size:15px; line-height:1.6; min-height:100vh; }
 
     /* ── ENTRADA ── */
@@ -38,7 +40,7 @@
       border:1px solid var(--border); border-radius:var(--radius); color:var(--text);
       font-family:inherit; font-size:14px; outline:none; }
     .gate-box input:focus { border-color:var(--blue); }
-    .gate-box button { width:100%; padding:13px; background:linear-gradient(180deg, var(--ac-l) 0%, var(--ac) 100%); color:var(--on-ac); border:none;
+    .gate-box button { width:100%; padding:13px; background:var(--blue); color:#fff; border:none;
       border-radius:var(--radius); font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; }
     .gate-erro { color:var(--red); font-size:13px; min-height:19px; margin-top:6px; }
 
@@ -52,8 +54,7 @@
       font-size:13.5px; font-weight:600; font-family:inherit; cursor:pointer; border:none;
       text-decoration:none; transition:opacity .15s; }
     .btn:hover { opacity:.85; }
-    /* Principal no padrao AXIS: o axis.css cobre .btn-primary, nao esta classe. */
-    .btn-1 { background:linear-gradient(180deg, var(--ac-l) 0%, var(--ac) 100%); color:var(--on-ac); }
+    .btn-1 { background:var(--blue); color:#fff; }
     .btn-2 { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
     .btn-perigo { background:transparent; color:var(--red); border:1px solid var(--red); }
     .mes-nav { display:flex; align-items:center; gap:6px; }
@@ -92,7 +93,7 @@
        um retorno marcado para sabado existe. Escondendo a coluna, o chip nao teria
        onde pousar e o acompanhamento sumiria da tela — que e o defeito que o
        painel do dev acabou de ter, por outro caminho. */
-    .tl-dia.fds, .tl-cel.fds { background:var(--bg); }
+    .tl-dia.fds, .tl-cel.fds { background:#00000033; }
     .tl-dia.hoje { background:var(--amber); color:#1A1A18; }
     .tl-dia.hoje b { color:#1A1A18; }
     .tl-linha { border-top:1px solid var(--border); position:relative; }
@@ -119,8 +120,8 @@
        apontaria para um dia varios dias antes do retorno — pior do que nao ter
        ponto, porque estaria dizendo a data errada com confianca. */
     .fw.vira { flex-direction:row-reverse; padding:0 7px 0 9px; }
-    .fw.venc { background:var(--red-bg); color:var(--red-tx); } .fw.venc .pt { background:var(--red); }
-    .fw.hoje { background:var(--amber-bg); color:var(--amber-tx); } .fw.hoje .pt { background:var(--amber); }
+    .fw.venc { background:#3A1414; color:#FFB4B4; } .fw.venc .pt { background:var(--red); }
+    .fw.hoje { background:#3A2A10; color:#FFD79A; } .fw.hoje .pt { background:var(--amber); }
     .fw.feito { background:var(--bg3); color:var(--text3); }
     .fw.feito .pt { background:var(--green); }
     .fw.feito .tx { text-decoration:line-through; }
@@ -128,7 +129,7 @@
     .tl-vazio p { margin-bottom:12px; }
 
     /* ── MODAL ── */
-    .mod { display:none; position:fixed; inset:0; background:var(--overlay); z-index:100;
+    .mod { display:none; position:fixed; inset:0; background:#000000BB; z-index:100;
       align-items:center; justify-content:center; padding:20px; }
     .mod.on { display:flex; }
     .mod-cx { background:var(--bg2); border:1px solid var(--border); border-radius:16px;
@@ -160,8 +161,6 @@
       font-size:13px; display:none; z-index:200; }
     #salvando.on { display:block; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=25141b56d3">
-  <link rel="stylesheet" href="axis.css?v=d413ccd898">
 </head>
 <body>
 
@@ -250,8 +249,7 @@
 
 <div id="salvando">Salvando…</div>
 
-<script src="tema.js?v=5d9c25fd66"></script>
-<script src="axis.js?v=b9a7c89f9f"></script>
+<script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=9e20f6c47f"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script>
@@ -495,7 +493,7 @@ function diasDoMes(ano, mes) {
  * e o acompanhamento de baixo ficaria invisivel — de novo o desaparecimento
  * silencioso, que e o defeito que esta base mais repete.
  *
- * A largura e ESTIMADA (media medida com a Inter 11.5px semibold — a Manrope do AXIS tem largura parecida ~6.1px por caractere mais
+ * A largura e ESTIMADA (media do Inter 11.5px semibold ~6.1px por caractere mais
  * o enfeite). Estimativa erra alguns pixels; errar para MAIS e o lado seguro,
  * porque sobra espaco em vez de encostar.
  *

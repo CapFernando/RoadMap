@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="9528c97723">
+<html lang="pt-BR" data-build="a270fe2097">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,10 +7,9 @@
        noarchive impede copia em cache. Isso reduz descoberta, NAO e controle
        de acesso: quem tem a URL continua lendo tudo. -->
   <meta name="robots" content="noindex, nofollow, noarchive" />
-  <title>AXIS — Painel público</title>
-  <link rel="icon" type="image/svg+xml" href="axis/marca/axis-icone.svg">
+  <title>RoadMap de Melhorias — Audax Capital</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <!-- Turnstile: captcha invisivel da Cloudflare no formulario publico. O envio de
        demanda e a UNICA gravacao sem autenticacao do sistema — sem isto um script
        cria demandas em massa (o limite de 6/min por IP apenas atrasa). -->
@@ -70,7 +69,7 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: var(--font-ui);
+      font-family: 'Inter', sans-serif;
       font-size: 16px;
       line-height: 1.6;
       min-height: 100vh;
@@ -160,7 +159,7 @@
       border-radius: 20px;
       font-size: 13px;
       font-weight: 500;
-      font-family: var(--font-ui);
+      font-family: 'Inter', sans-serif;
       border: 1px solid var(--border);
       background: var(--bg3);
       color: var(--text2);
@@ -190,7 +189,7 @@
       padding: 6px 12px;
       border-radius: 20px;
       font-size: 13px;
-      font-family: var(--font-ui);
+      font-family: 'Inter', sans-serif;
       border: 1px solid var(--border);
       background: var(--bg3);
       color: var(--text2);
@@ -258,15 +257,15 @@
     .badge-refinamento{ background: var(--purple-bg); color: var(--purple-tx); }
     .badge-regra     { background: var(--teal-bg);   color: var(--teal-tx);   }
     .badge-estimada  { background: var(--amber-bg);  color: var(--amber-tx);  }
-    .badge-iniciada  { background: var(--amber-bg); color: var(--amber-tx); }
+    .badge-iniciada  { background: #3D3600;  color: #FFE14D;  }
     /* Validacao da AREA — roxo, para nao se confundir com o ambar da validacao
        do PM/PO logo ao lado no painel de parede. */
-    .badge-validacao_area { background: var(--purple-bg); color: var(--purple-tx); }
+    .badge-validacao_area { background: #2E1540; color: #D8AEF0; }
     .badge-negada    { background: var(--red-bg);    color: var(--red-tx);    }
-    .badge-levantar_req { background: var(--purple-bg); color: var(--purple-tx); }
-    .badge-planejado    { background: var(--blue-bg);   color: var(--blue-tx);   }
-    .badge-concluida    { background: var(--green-bg);  color: var(--green-tx);  }
-    .badge-planning     { background: var(--teal-bg);   color: var(--teal-tx);   }
+    .badge-levantar_req { background: #2A1A4E22;     color: #C9AEFF;          }
+    .badge-planejado    { background: #0C326022;     color: #9BC8F8;          }
+    .badge-concluida    { background: #1E420822;     color: #B2E07A;          }
+    .badge-planning     { background: #0E3A3A22;     color: #7ED8D8;          }
 
     /* A parada nao e uma etapa, e um estado SOBRE a etapa — por isso ela e um
        segundo selo ao lado, e nao uma cor diferente no primeiro. A cor sozinha
@@ -342,11 +341,9 @@
 
 
   </style>
-  <link rel="stylesheet" href="tema.css?v=25141b56d3">
-  <link rel="stylesheet" href="axis.css?v=d413ccd898">
+  <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
-<script src="tema.js?v=5d9c25fd66"></script>
-<script src="axis.js?v=b9a7c89f9f"></script>
+<script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=88870a48ae"></script>
 <script src="dialogo.js?v=9e20f6c47f"></script>
   <script src="leitura-estado.js?v=0242a709f1"></script>
@@ -359,16 +356,16 @@
 
 <header>
   <div class="header-left">
-    <h1><span class="axis-head-logo axis-logo" role="img" aria-label="AXIS"></span><span class="axis-head-t">Painel público</span></h1><span id="build-selo" title="Versão desta tela. Se não bater com a publicada, o navegador está servindo uma cópia antiga: Ctrl+Shift+R."></span>
+    <h1>🗺️ RoadMap de Melhorias</h1><span id="build-selo" title="Versão desta tela. Se não bater com a publicada, o navegador está servindo uma cópia antiga: Ctrl+Shift+R."></span>
     <p>Audax Capital · Produto &amp; Tecnologia</p>
   </div>
   <div class="header-right" style="display:flex;align-items:center;gap:16px;">
     <span id="ultima-atualizacao" style="font-size:13px;color:var(--text3)">—</span>
-    <button id="btn-nova-melhoria" onclick="openNovaMelhoria()" style="display:none;font-size:13px;color:var(--on-ac);background:var(--blue,#3B8FE8);border:1px solid var(--blue,#3B8FE8);border-radius:var(--radius);padding:6px 14px;cursor:pointer;font-weight:600;">+ Nova issue</button>
-    <button id="btn-refresh" onclick="forceRefresh()" style="font-size:13px;color:var(--text2);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Forçar atualização dos dados" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'"><i class="axi axi-refresh"></i> Atualizar</button>
-    <button onclick="openExportModal()" style="font-size:13px;color:var(--text2);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Exportar relatório" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'"><i class="axi axi-download"></i> Exportar</button>
-    <button onclick="imprimirDash()" style="font-size:13px;color:var(--text2);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Imprimir ou salvar em PDF o que está filtrado, com as datas" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'"><i class="axi axi-printer"></i> Imprimir / PDF</button>
-    <a href="admin.html" style="font-size:13px;color:var(--text2);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:color 0.15s,border-color 0.15s;" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'"><i class="axi axi-key"></i> Admin</a>
+    <button id="btn-nova-melhoria" onclick="openNovaMelhoria()" style="display:none;font-size:13px;color:#fff;background:var(--blue,#3B8FE8);border:1px solid var(--blue,#3B8FE8);border-radius:var(--radius);padding:6px 14px;cursor:pointer;font-weight:600;">+ Nova issue</button>
+    <button id="btn-refresh" onclick="forceRefresh()" style="font-size:13px;color:var(--text2);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Forçar atualização dos dados" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">↻ Atualizar</button>
+    <button onclick="openExportModal()" style="font-size:13px;color:var(--text2);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Exportar relatório" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">⬇ Exportar</button>
+    <button onclick="imprimirDash()" style="font-size:13px;color:var(--text2);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Imprimir ou salvar em PDF o que está filtrado, com as datas" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">🖨 Imprimir / PDF</button>
+    <a href="admin.html" style="font-size:13px;color:var(--text2);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:color 0.15s,border-color 0.15s;" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">⚙ Admin</a>
   </div>
 </header>
 
@@ -377,7 +374,7 @@
        nada disso existe, e sem esta caixa o documento chega ao destinatário sem
        dizer de que sistema ele fala. -->
   <div id="print-head" style="display:none">
-    <div class="ph-tit">AXIS · Painel de demandas</div>
+    <div class="ph-tit">RoadMap de Melhorias</div>
     <div class="ph-sub">Audax Capital · Produto &amp; Tecnologia</div>
     <div class="ph-rec" id="print-recorte"></div>
     <div class="ph-ger" id="print-gerado"></div>
@@ -414,7 +411,7 @@
   #nm-overlay .nm-rot-linha{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   #nm-overlay input[type=text],#nm-overlay input[type=date],#nm-overlay input[type=number],
   #nm-overlay textarea,#nm-overlay select{font-family:inherit;font-size:13.5px;color:var(--text,#ECEAE2);background:var(--bg,#0E0E0D);
-    border:1px solid var(--border);border-radius:7px;padding:8px 10px;width:100%;}
+    border:1px solid #2E2E2B;border-radius:7px;padding:8px 10px;width:100%;}
   #nm-overlay textarea{min-height:58px;resize:vertical;}
   /* Caixas em linha, quebrando quando nao cabe: em coluna elas tomariam meia tela
      para cinco palavras. */
@@ -468,7 +465,7 @@
     border:1px solid var(--border,#2E2E2B);border-radius:20px;padding:0 7px;margin-left:6px;}
   #nm-overlay input:focus,#nm-overlay textarea:focus,#nm-overlay select:focus{outline:2px solid var(--blue,#3B8FE8);outline-offset:1px;border-color:var(--blue,#3B8FE8);}
   /* Campo com problema: a mensagem sozinha nao diz ONDE corrigir. */
-  #nm-overlay .nm-erro{border-color:var(--red,#E84444) !important;box-shadow:0 0 0 3px rgba(var(--dg-rgb),.15);}
+  #nm-overlay .nm-erro{border-color:var(--red,#E84444) !important;box-shadow:0 0 0 3px rgba(232,68,68,.15);}
   /* Obrigatorio fica evidente antes de errar, nao depois. */
   #nm-overlay .nm-f{position:relative;}
   #nm-overlay .nm-add{justify-self:start;border:1px dashed var(--blue,#3B8FE8);background:transparent;color:var(--blue,#3B8FE8);
@@ -526,8 +523,8 @@
           <label class="nm-f">É um problema ou uma melhoria? *
             <select id="nm-tipo-issue" onchange="nmOnClassificacao()">
               <option value="">— Selecione —</option>
-              <option value="sustentacao">Sustentação (Erro/Bug)</option>
-              <option value="evolucao">Evolução (Melhoria)</option>
+              <option value="sustentacao">🔧 Sustentação (Erro/Bug)</option>
+              <option value="evolucao">🚀 Evolução (Melhoria)</option>
             </select>
           </label>
           <!-- IMPACTO E URGÊNCIA (03/11/2026): pedidos em toda abertura e
@@ -666,10 +663,10 @@
       <section class="nm-sec">
         <div class="nm-sec-head">Escopo</div>
         <div class="nm-grid2">
-          <label class="nm-f"><i class="axi axi-check"></i> Dentro do escopo (uma por linha) <span class="nm-opc">opcional</span>
+          <label class="nm-f">✅ Dentro do escopo (uma por linha) <span class="nm-opc">opcional</span>
             <textarea id="nm-escopo-in" style="min-height:90px"></textarea>
           </label>
-          <label class="nm-f"><i class="axi axi-ban"></i> Fora do escopo (uma por linha) <span class="nm-opc">opcional</span>
+          <label class="nm-f">❌ Fora do escopo (uma por linha) <span class="nm-opc">opcional</span>
             <textarea id="nm-escopo-out" style="min-height:90px"></textarea>
           </label>
         </div>
@@ -1011,7 +1008,7 @@ function splitDevs(devStr) {
 
 // Demandas criadas antes do campo Tipo ficam como "Sem tipo" até serem classificadas
 const SEM_TIPO = '__sem_tipo__';
-const TIPO_LABELS = { sustentacao: 'Sustentação', evolucao: 'Evolução' };
+const TIPO_LABELS = { sustentacao: '🔧 Sustentação', evolucao: '🚀 Evolução' };
 function matchTipo(m, filtro) {
   if (!filtro) return true;
   if (filtro === SEM_TIPO) return !m.tipo;
@@ -1248,7 +1245,7 @@ function buildFilterBar() {
       // O tipo ESCOLHIDO fica, mesmo zerado: sumir com ele no meio da navegacao
       // tiraria da tela a opcao que esta ativa.
       .filter(o => o.n > 0 || String(o.key) === String(_tipoFilter))];
-  if (semTipo) optTipo.push({ key: SEM_TIPO, label: 'Sem tipo', n: semTipo });
+  if (semTipo) optTipo.push({ key: SEM_TIPO, label: '⚪ Sem tipo', n: semTipo });
 
   const ativos = [_ano, _mes, _temaFilter, _statusFilter, _tipoFilter].filter(v => v !== null && v !== undefined).length;
 
@@ -1346,18 +1343,18 @@ function telaDeAcesso(msgErro) {
   if (!app) return;
   app.innerHTML = `
     <div style="max-width:520px;margin:40px auto;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:32px 28px;text-align:center;">
-      <div style="font-size:40px;margin-bottom:12px;color:var(--text2);"><i class="axi axi-lock"></i></div>
+      <div style="font-size:40px;margin-bottom:12px;">🔒</div>
       <div style="font-size:19px;font-weight:700;margin-bottom:8px;">Consulta restrita</div>
       <div style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:22px;">
         Para <b>ver</b> o roadmap, informe a senha de acesso.<br>
         Para <b>sugerir</b> uma melhoria, não precisa de senha — use o botão abaixo.
       </div>
-      ${msgErro ? `<div style="font-size:13px;color:var(--red-tx);margin-bottom:14px;">${nmEsc(msgErro)}</div>` : ''}
+      ${msgErro ? `<div style="font-size:13px;color:#F9A0A0;margin-bottom:14px;">${nmEsc(msgErro)}</div>` : ''}
       <input type="password" id="gate-senha" placeholder="Senha de acesso" autocomplete="current-password"
              style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px 14px;font-size:15px;font-family:inherit;outline:none;margin-bottom:10px;"
              onkeydown="if(event.key==='Enter')gateEntrar()">
       <button onclick="gateEntrar()"
-              style="width:100%;background:var(--blue);color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">
+              style="width:100%;background:#3B8FE8;color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">
         Entrar e consultar
       </button>
       <div style="display:flex;align-items:center;gap:10px;margin:20px 0 16px;">
@@ -1367,7 +1364,7 @@ function telaDeAcesso(msgErro) {
       </div>
       <button onclick="openNovaMelhoria()"
               style="width:100%;background:transparent;color:var(--text);border:1px solid var(--border2);border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">
-        <i class="axi axi-sparkles"></i> Sugerir uma melhoria
+        💡 Sugerir uma melhoria
       </button>
       <div style="font-size:12px;color:var(--text3);margin-top:10px;">Sugerir não exige senha.</div>
     </div>`;
@@ -1510,11 +1507,9 @@ function dashToast(msg, type = 'ok') {
     document.body.appendChild(el);
   }
   el.textContent = msg;
-  // O -bg do AXIS e translucido: a camada de baixo (--bg2) segura o fundo.
-  const tom = type === 'err' ? 'red' : 'green';
-  el.style.background = `linear-gradient(var(--${tom}-bg), var(--${tom}-bg)), var(--bg2)`;
-  el.style.color       = `var(--${tom}-tx)`;
-  el.style.border      = `1px solid rgba(var(--${type === 'err' ? 'dg' : 'ok'}-rgb), .4)`;
+  el.style.background = type === 'err' ? '#5C0A0A' : '#1E4208';
+  el.style.color       = type === 'err' ? '#F9A0A0' : '#B2E07A';
+  el.style.border      = `1px solid ${type === 'err' ? '#7A1A1A' : '#2E5A10'}`;
   el.style.opacity = '1';
   clearTimeout(_dashToastTimer);
   _dashToastTimer = setTimeout(() => { el.style.opacity = '0'; }, 5000);
@@ -1523,7 +1518,7 @@ function dashToast(msg, type = 'ok') {
 // Refresh forçado via GitHub API; fallback para raw URL se rate-limitado
 async function forceRefresh() {
   const btn = document.getElementById('btn-refresh');
-  if (btn) { btn.innerHTML = '<i class="axi axi-refresh"></i> Atualizando…'; btn.disabled = true; }
+  if (btn) { btn.textContent = '↻ Atualizando…'; btn.disabled = true; }
   try {
     // Leitura pelo Worker: sem o cache de 5 min da URL raw e sem o limite de
     // 60 req/h da API anônima, que eram os dois motivos do tratamento anterior.
@@ -1534,7 +1529,7 @@ async function forceRefresh() {
     if (window.LEITURA) LEITURA.ok();
   } catch(e) {
     // Silencioso em visibilitychange; avisa só quando o usuário clicou
-    if (btn && btn.disabled) dashToast(e.message || 'Falha ao atualizar.', 'err');
+    if (btn && btn.disabled) dashToast('⚠️ ' + (e.message || 'Falha ao atualizar.'), 'err');
     /* E A FAIXA FICA, mesmo no caminho do `visibilitychange`. O toast avisa quem
        CLICOU; a faixa responde "este dash esta velho" para quem passa na frente
        dele meia hora depois — que e o uso real de uma tela de parede. */
@@ -1543,7 +1538,7 @@ async function forceRefresh() {
       LEITURA.falhou((e && e.message) || 'falha ao atualizar');
     }
   }
-  if (btn) { btn.innerHTML = '<i class="axi axi-refresh"></i> Atualizar'; btn.disabled = false; }
+  if (btn) { btn.textContent = '↻ Atualizar'; btn.disabled = false; }
 }
 
 // A carga inicial fica no FIM do script, nao aqui. NM_PROXY_URL e declarado com
@@ -1673,13 +1668,13 @@ function buildReportHTML() {
       const bm = STATUS_BADGE_PRINT[sk] || STATUS_BADGE_PRINT.backlog;
       const badge = `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:${bm.bg};color:${bm.color};white-space:nowrap;">${bm.label}</span>`;
       const meta = [];
-      if (m.inicio)  meta.push(`Início: ${formatDate(m.inicio)}`);
+      if (m.inicio)  meta.push(`📅 Início: ${formatDate(m.inicio)}`);
       // MESMA REGRA DA TELA: papel que diverge do painel vira duas verdades.
       const dEntP = window.ENTREGAUSU ? ENTREGAUSU.aMostrar(m) : (m.entrega || '');
-      if (dEntP) meta.push(
+      if (dEntP) meta.push(`🏁 ` +
         (window.ENTREGAUSU && ENTREGAUSU.ehDoUsuario(m) ? 'Entrega ao usuário: ' : 'Entrega: ') +
         formatDate(dEntP));
-      if (m.estimativa) meta.push(`Estimativa: ${fEsc(m.estimativa)}`);
+      if (m.estimativa) meta.push(`⏱ ${fEsc(m.estimativa)}`);
       return `<div style="background:#1E1E1C;border:1px solid #2E2E2B;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:${meta.length?'6px':'0'};">
           <span style="font-size:13px;font-weight:600;color:#ECEAE2;line-height:1.4;">${fEsc(m.titulo)}</span>
@@ -1699,10 +1694,10 @@ function buildReportHTML() {
     </div>`;
   }).join('');
 
-  return `<div id="export-canvas" style="background:#0E0E0D;color:#ECEAE2;font-family:var(--font-ui);padding:32px;min-width:800px;width:800px;">
+  return `<div id="export-canvas" style="background:#0E0E0D;color:#ECEAE2;font-family:'Inter',sans-serif;padding:32px;min-width:800px;width:800px;">
     <div style="border-bottom:1px solid #2E2E2B;padding-bottom:20px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;">
       <div>
-        <div style="font-size:20px;font-weight:700;color:#ECEAE2;margin-bottom:4px;">AXIS · Painel de demandas</div>
+        <div style="font-size:20px;font-weight:700;color:#ECEAE2;margin-bottom:4px;">🗺️ RoadMap de Melhorias</div>
         <div style="font-size:13px;color:#A8A49A;">Audax Capital · Produto &amp; Tecnologia</div>
       </div>
       <div style="text-align:right;">
@@ -1766,15 +1761,15 @@ async function openExportModal() {
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;flex-direction:column;align-items:center;padding:24px;overflow-y:auto;';
 
   const panel = document.createElement('div');
-  panel.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:100%;max-width:880px;flex-shrink:0;';
+  panel.style.cssText = 'background:#161614;border:1px solid #2E2E2B;border-radius:12px;width:100%;max-width:880px;flex-shrink:0;';
 
   panel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px;">
-      <div style="font-size:13px;font-weight:600;color:var(--text2);">Relatório por tema</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #2E2E2B;flex-wrap:wrap;gap:10px;">
+      <div style="font-size:13px;font-weight:600;color:#A8A49A;">Relatório por tema</div>
       <div style="display:flex;gap:10px;align-items:center;">
-        <button id="btn-dl-img" onclick="downloadExport('img')" style="font-size:13px;background:var(--blue);color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;"><i class="axi axi-download"></i> Imagem</button>
-        <button id="btn-dl-pdf" onclick="downloadExport('pdf')" style="font-size:13px;background:var(--purple);color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;"><i class="axi axi-download"></i> PDF</button>
-        <button onclick="document.getElementById('export-overlay').remove()" style="font-size:13px;color:var(--text3);background:none;border:1px solid var(--border);border-radius:7px;padding:7px 14px;cursor:pointer;">✕ Fechar</button>
+        <button id="btn-dl-img" onclick="downloadExport('img')" style="font-size:13px;background:#3B8FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">⬇ Imagem</button>
+        <button id="btn-dl-pdf" onclick="downloadExport('pdf')" style="font-size:13px;background:#9B6FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">⬇ PDF</button>
+        <button onclick="document.getElementById('export-overlay').remove()" style="font-size:13px;color:#6E6A62;background:none;border:1px solid #2E2E2B;border-radius:7px;padding:7px 14px;cursor:pointer;">✕ Fechar</button>
       </div>
     </div>
     <div style="padding:20px;overflow-x:auto;">
@@ -1804,7 +1799,7 @@ async function downloadExport(type) {
   const btnImg = document.getElementById('btn-dl-img');
   const btnPdf = document.getElementById('btn-dl-pdf');
   const btn = type === 'img' ? btnImg : btnPdf;
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="axi axi-hourglass"></i> Gerando…'; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Gerando…'; }
 
   const el = document.getElementById('export-canvas');
   if (!el) return;
@@ -1859,8 +1854,8 @@ async function downloadExport(type) {
     await avisar('Erro ao gerar a exportacao', 'Tente novamente.');
   }
 
-  if (btnImg) { btnImg.disabled = false; btnImg.innerHTML = '<i class="axi axi-download"></i> Imagem'; }
-  if (btnPdf) { btnPdf.disabled = false; btnPdf.innerHTML = '<i class="axi axi-download"></i> PDF'; }
+  if (btnImg) { btnImg.disabled = false; btnImg.textContent = '⬇ Imagem'; }
+  if (btnPdf) { btnPdf.disabled = false; btnPdf.textContent = '⬇ PDF'; }
 }
 
 
@@ -2043,7 +2038,7 @@ function nmAtualizaGuia() {
     prox.innerHTML = falta
       ? 'Agora falta <b>' + falta.nome + '</b>.' +
         '<button type="button" class="nm-ir" onclick="nmIrPara(\'' + falta.id + '\')">ir para o campo</button>'
-      : '<i class="axi axi-check"></i> <b>Pronto para enviar.</b> Os campos opcionais ajudam a priorizar, mas você já pode mandar.';
+      : '✅ <b>Pronto para enviar.</b> Os campos opcionais ajudam a priorizar, mas você já pode mandar.';
   }
   // Marca o campo da vez e limpa o anterior.
   document.querySelectorAll('#nm-overlay .nm-f.alvo').forEach(e => e.classList.remove('alvo'));
@@ -2207,9 +2202,9 @@ function nmRenderAnexos() {
   el.innerHTML = _nmAnexos.map((a, i) => {
     const kb = (a.tamanho / 1024).toFixed(0);
     return `<div class="nm-anexo">
-      <span style="flex:1"><i class="axi axi-clip"></i> ${nmEsc(a.nome)} <span style="color:var(--text3)">(${kb} KB)</span></span>
+      <span style="flex:1">📎 ${nmEsc(a.nome)} <span style="color:#6E6A62">(${kb} KB)</span></span>
       <a href="#" onclick="nmPreview(${i});return false;">visualizar</a>
-      <button type="button" class="nm-del" style="color:var(--red);background:none;border:none;cursor:pointer;font-size:15px;" onclick="_nmAnexos.splice(${i},1);nmRenderAnexos();">✕</button>
+      <button type="button" class="nm-del" style="color:#E84444;background:none;border:none;cursor:pointer;font-size:15px;" onclick="_nmAnexos.splice(${i},1);nmRenderAnexos();">✕</button>
     </div>`;
   }).join('');
 }
@@ -2284,14 +2279,14 @@ function nmSucesso() {
   ov.id = 'nm-sucesso';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
   ov.innerHTML = `
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;max-width:440px;width:100%;padding:32px 28px;text-align:center;">
-      <div style="width:64px;height:64px;border-radius:50%;background:var(--green-bg);color:var(--green-tx);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:32px;"><i class="axi axi-check"></i></div>
-      <div style="font-size:19px;font-weight:700;color:var(--text);margin-bottom:10px;">Sugestão registrada!</div>
-      <div style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:24px;">
-        Recebemos a sua sugestão de melhoria. A equipe de Produto &amp; Tecnologia vai analisá-la em até <strong style="color:var(--text);">7 dias úteis</strong>.<br><br>
-        Acompanhe o andamento por aqui, no painel — ela já aparece no <strong style="color:var(--blue-tx);">Backlog</strong>.
+    <div style="background:#161614;border:1px solid #2E2E2B;border-radius:14px;max-width:440px;width:100%;padding:32px 28px;text-align:center;">
+      <div style="width:64px;height:64px;border-radius:50%;background:#1E4208;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:32px;">✅</div>
+      <div style="font-size:19px;font-weight:700;color:#ECEAE2;margin-bottom:10px;">Sugestão registrada!</div>
+      <div style="font-size:14px;color:#A8A49A;line-height:1.6;margin-bottom:24px;">
+        Recebemos a sua sugestão de melhoria. A equipe de Produto &amp; Tecnologia vai analisá-la em até <strong style="color:#ECEAE2;">7 dias úteis</strong>.<br><br>
+        Acompanhe o andamento por aqui, no painel — ela já aparece no <strong style="color:#9BC8F8;">Backlog</strong>.
       </div>
-      <button onclick="document.getElementById('nm-sucesso').remove()" style="font-size:14px;color:#fff;background:var(--blue);border:none;border-radius:9px;padding:11px 28px;cursor:pointer;font-weight:700;">Entendi</button>
+      <button onclick="document.getElementById('nm-sucesso').remove()" style="font-size:14px;color:#fff;background:#3B8FE8;border:none;border-radius:9px;padding:11px 28px;cursor:pointer;font-weight:700;">Entendi</button>
     </div>`;
   ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
   document.body.appendChild(ov);
@@ -2308,7 +2303,7 @@ function nmFalha(campoId, msg) {
   nmLimpaErros();
   const el = document.getElementById(campoId);
   const av = document.getElementById('nm-aviso');
-  if (av) { av.textContent = msg; av.style.display = 'block'; }
+  if (av) { av.textContent = '⚠ ' + msg; av.style.display = 'block'; }
   if (el) {
     el.classList.add('nm-erro');
     // Se o campo estiver dentro do bloco recolhido, abre antes de rolar.

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="cbcd78cfe0">
+<html lang="pt-BR" data-build="bae32fda12">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,11 +7,13 @@
        noarchive impede copia em cache. Isso reduz descoberta, NAO e controle
        de acesso: quem tem a URL continua lendo tudo. -->
   <meta name="robots" content="noindex, nofollow, noarchive" />
-  <title>Planejamento — AXIS</title>
-  <link rel="icon" type="image/svg+xml" href="axis/marca/axis-icone.svg">
+  <title>Planejamento — RoadMap de Melhorias</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
+<!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
+<script src="axis.js?v=1eb606be26"></script>
+<script src="axis-interface.js?v=f1a5f139ee"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -56,7 +58,7 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: var(--font-ui);
+      font-family: 'Inter', sans-serif;
       font-size: 14px;
       line-height: 1.5;
       min-height: 100vh;
@@ -79,13 +81,13 @@
       width: 100%; padding: 12px 14px;
       background: var(--bg3); border: 1px solid var(--border);
       border-radius: var(--radius); color: var(--text);
-      font-size: 16px; font-family: var(--font-ui);
+      font-size: 16px; font-family: 'Inter', sans-serif;
       outline: none; margin-bottom: 14px; letter-spacing: 2px;
     }
     .login-box input:focus { border-color: var(--blue); }
     .login-box button {
-      width: 100%; padding: 13px; background: var(--blue); color: var(--on-ac);
-      font-size: 16px; font-weight: 600; font-family: var(--font-ui);
+      width: 100%; padding: 13px; background: var(--blue); color: #fff;
+      font-size: 16px; font-weight: 600; font-family: 'Inter', sans-serif;
       border: none; border-radius: var(--radius); cursor: pointer;
     }
     .login-box button:hover { opacity: 0.9; }
@@ -109,7 +111,7 @@
     body.viewer #btn-viewlink { display: none !important; }
     body.viewer .gantt-card { cursor: default; }
     body.viewer::after {
-      content: 'Modo visualização'; position: fixed; bottom: 14px; right: 14px;
+      content: '👁 Modo visualização'; position: fixed; bottom: 14px; right: 14px;
       background: var(--bg3); border: 1px solid var(--border2); color: var(--text2);
       font-size: 12px; padding: 6px 12px; border-radius: 8px; z-index: 300; pointer-events: none;
     }
@@ -119,17 +121,17 @@
     .btn {
       display: inline-flex; align-items: center; gap: 5px;
       padding: 8px 14px; border-radius: var(--radius);
-      font-size: 13px; font-weight: 500; font-family: var(--font-ui);
+      font-size: 13px; font-weight: 500; font-family: 'Inter', sans-serif;
       cursor: pointer; border: none; transition: opacity 0.15s; white-space: nowrap;
     }
     .btn:hover { opacity: 0.85; }
-    .btn-primary   { background: var(--blue);  color: var(--on-ac); }
+    .btn-primary   { background: var(--blue);  color: #fff; }
     .btn-secondary { background: var(--bg3);   color: var(--text); border: 1px solid var(--border); }
     .btn-ghost     { background: transparent;  color: var(--text2); border: 1px solid var(--border); }
     .btn-nav       { background: var(--bg4); color: var(--text); border: 1px solid var(--border2); padding: 5px 14px; font-size: 18px; border-radius: 8px; font-weight: 700; cursor: pointer; }
     .anexo-link    { display:inline-flex; align-items:center; gap:4px; color:var(--blue); text-decoration:none; border:1px solid var(--border); border-radius:6px; padding:4px 9px; font-size:12px; }
     .anexo-link:hover { text-decoration:underline; }
-    .btn-nav:hover { background: var(--ac); color: var(--on-ac); border-color: var(--ac); }
+    .btn-nav:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
     .btn-sm { padding: 6px 11px; font-size: 12px; }
 
     /* ── INDICATORS ── */
@@ -273,10 +275,10 @@
     .capsp-tab td { padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
     .capsp-barra { display:inline-block; width:110px; height:7px; background:var(--bg4);
       border-radius:4px; overflow:hidden; vertical-align:middle; margin-right:6px; }
-    .capsp-barra span { display:block; height:100%; background:var(--green); }
-    .capsp-barra span.cheia { background:var(--amber); }
-    .capsp-barra span.over { background:var(--red); }
-    .capsp-over { color:var(--red); font-weight:600; }
+    .capsp-barra span { display:block; height:100%; background:#22C55E; }
+    .capsp-barra span.cheia { background:#E8A33D; }
+    .capsp-barra span.over { background:#E84444; }
+    .capsp-over { color:#E84444; font-weight:600; }
     .capsp-sug { font-size:12px; color:var(--text2); }
     .capsp-sug a { color:var(--text); cursor:pointer; text-decoration:underline dotted; margin-right:6px; }
     .capsp-nota { font-size:11.5px; color:var(--text3); margin-top:8px; }
@@ -290,7 +292,7 @@
     .filter-bar select, .filter-bar input[type="text"] {
       padding: 5px 10px; background: var(--bg3); border: 1px solid var(--border);
       border-radius: var(--radius); color: var(--text); font-size: 12px;
-      font-family: var(--font-ui); outline: none; min-width: 120px;
+      font-family: 'Inter', sans-serif; outline: none; min-width: 120px;
     }
     .filter-bar select:focus, .filter-bar input:focus { border-color: var(--blue); }
     .filter-bar select option { background: var(--bg3); }
@@ -319,7 +321,7 @@
     .backlog-search {
       width: 100%; padding: 6px 10px; font-size: 12px;
       background: var(--bg3); border: 1px solid var(--border);
-      border-radius: 6px; color: var(--text); font-family: var(--font-ui);
+      border-radius: 6px; color: var(--text); font-family: 'Inter', sans-serif;
       outline: none;
     }
     .backlog-search:focus { border-color: var(--blue); }
@@ -431,7 +433,7 @@
       cursor:pointer; font-size:11px; font-weight:700; padding:4px 9px; color:var(--text3);
       font-family:inherit; white-space:nowrap; transition:all .12s; }
     .g-axcred:hover { color:var(--text); border-color:var(--amber-tx,#FFC470); }
-    .g-axcred.on { color:var(--bg); background:var(--amber-tx,#FFC470);
+    .g-axcred.on { color:#0E0E0D; background:var(--amber-tx,#FFC470);
       border-color:var(--amber-tx,#FFC470); }
     .dev-name { font-size: 13px; font-weight: 600; color: var(--text); }
     /* O NOME VIRA BOTAO, e continua parecendo um nome.
@@ -615,7 +617,7 @@
     .rk-vazio { font-size:12px; color:var(--text3); }
     /* Origem do ponto. Ambar, nao vermelho: nao e erro, e uma ressalva de leitura. */
     .rk-estim { font-size:10.5px; color:var(--amber-tx,#FFC470); white-space:nowrap;
-      cursor:help; border:1px solid rgba(var(--wn-rgb),.4); border-radius:20px;
+      cursor:help; border:1px solid var(--amber-bd,#7A5A17); border-radius:20px;
       padding:2px 8px; background:var(--amber-bg,#2E2408); }
     body.apresentando .rk-tit { font-size:12px; }
     .rm-bloco { background:var(--bg2); border:1px solid var(--border); border-radius:10px;
@@ -764,7 +766,7 @@
     .g-limbo-quando { font-size:11.5px; color:var(--text3); flex-shrink:0; }
     .g-juntar-bar {
       display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-      background:var(--teal-bg); color:var(--teal-tx); border-bottom:1px solid rgba(var(--tl-rgb),.4);
+      background:#0E3A3A; color:#7ED8D8; border-bottom:1px solid #1A6060;
       padding:10px 24px; font-size:13px;
     }
     .g-juntar-dica { color:var(--text3); font-size:12px; }
@@ -894,7 +896,7 @@
        todo: "isto já foi repassado para alguma semana, ou ainda está solto?".
        Vermelho no atraso, por decisão do Fernando. */
     .bl-sprint { font-size:10px; font-weight:700; color:var(--green-tx,#8FE0A8);
-      background:var(--green-bg,#0E3A1E); border:1px solid rgba(var(--ok-rgb),.4);
+      background:var(--green-bg,#0E3A1E); border:1px solid #2E7D4F;
       border-radius:4px; padding:1px 6px; white-space:nowrap; cursor:help; }
     /* A COR DA SPRINT (`SPRINTPO.corDaSprint`): o chip e a faixa do card. A
        atrasada mantém o texto vermelho — a cor só marca a borda. */
@@ -904,7 +906,7 @@
     .bl-sprint.sp-fora { color:var(--text3); background:transparent;
       border:1px dashed var(--border); }
     .bl-sprint.sp-atrasada { color:var(--red-tx,#F9A0A0);
-      background:var(--red-bg,#5C0A0A); border-color:rgba(var(--dg-rgb),.4); }
+      background:var(--red-bg,#5C0A0A); border-color:#B5484D; }
     .bl-pausa { font-size:10px; font-weight:700; color:var(--text2);
       background:var(--bg4); border:1px solid var(--border2); border-radius:4px;
       padding:1px 5px; white-space:nowrap; position:relative; z-index:1; }
@@ -1113,8 +1115,8 @@
     .tag-dados { display:flex; align-items:center; gap:8px; font-weight:400; cursor:pointer;
       background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
       padding:10px 12px; font-size:13px; transition:background .12s, border-color .12s; }
-    .tag-dados:has(input:checked) { background: var(--teal-bg);
-      border-color: rgba(var(--tl-rgb),.4); color: var(--teal-tx); }
+    .tag-dados:has(input:checked) { background: var(--cyan-bg, #06363F);
+      border-color: var(--cyan-bd, #10697C); color: var(--cyan-tx, #7FD8E8); }
     /* Caixa de pausa no modal. Tokens, nao cor cravada: com #252522 o tema
        claro ficava com caixa escura e texto claro sobre fundo branco. */
     .g-pausa-box { background:var(--bg3,#1E1E1C); border:1px solid var(--border,#2E2E2B);
@@ -1128,7 +1130,7 @@
       width: 100%; padding: 10px 13px;
       background: var(--bg3); border: 1px solid var(--border);
       border-radius: var(--radius); color: var(--text);
-      font-size: 14px; font-family: var(--font-ui);
+      font-size: 14px; font-family: 'Inter', sans-serif;
       outline: none; resize: vertical;
     }
     .form-group input:focus,
@@ -1167,12 +1169,10 @@
     }
     .empty-gantt p { margin-bottom: 12px; }
 
-    /* Perigo tonal, como o .btn-danger do axis.css. */
-    .delete-btn { background: rgba(var(--dg-rgb),.14); color: var(--dg-t); border: 1px solid rgba(var(--dg-rgb),.45); }
+    .delete-btn { background: var(--red); color: #fff; }
     .delete-btn:hover { opacity: 0.85; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=25141b56d3">
-  <link rel="stylesheet" href="axis.css?v=d413ccd898">
+  <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
@@ -1182,8 +1182,7 @@
   <script src="pipelines.js?v=2374e11d52"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-dev.js?v=d113e5ce31"></script>
-<script src="tema.js?v=5d9c25fd66"></script>
-<script src="axis.js?v=b9a7c89f9f"></script>
+<script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=88870a48ae"></script>
 <script src="capacidade.js?v=efaf632603"></script>
 <script src="dialogo.js?v=9e20f6c47f"></script>
@@ -1203,7 +1202,7 @@
 <script src="mensageria-abrir.js?v=2b19b49af3"></script>
 <script src="selo-validacao.js?v=0b6fdb5439"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=a4430b25e8"></script>
+<script src="sprint.js?v=b44d765efd"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -1211,9 +1210,8 @@
 <!-- LOGIN -->
 <div id="login-screen">
   <div class="login-box">
-    <span class="axis-login-logo axis-logo" role="img" aria-label="AXIS"></span>
-    <h2>Planejamento</h2>
-    <p>Todas as demandas da tecnologia em um só eixo.</p>
+    <h2>📅 Planejamento</h2>
+    <p>RoadMap de Melhorias · Audax Capital</p>
     <input type="text" id="usuario-input" placeholder="Usuário ou e-mail" autocomplete="username"
            onkeydown="if(event.key==='Enter')document.getElementById('senha-input').focus()" />
     <input type="password" id="senha-input" placeholder="Sua senha" autocomplete="current-password"
@@ -1237,30 +1235,30 @@
   <header>
     <div class="header-left">
       <a href="admin.html" class="btn btn-ghost btn-sm">← Admin</a>
-      <a href="dev.html" class="btn btn-ghost btn-sm" target="_blank"><i class="axi axi-folder"></i> Painel Dev</a>
-      <h1><i class="axi axi-calendar"></i> Planejamento</h1>
+      <a href="dev.html" class="btn btn-ghost btn-sm" target="_blank">🗂 Painel Dev</a>
+      <h1>📅 Planejamento</h1>
       <div class="month-nav">
         <button class="btn btn-nav" onclick="prevMonth()">‹</button>
         <span id="month-label">—</span>
         <button class="btn btn-nav" onclick="nextMonth()">›</button>
       </div>
-      <button id="btn-viewlink" class="btn btn-ghost btn-sm" onclick="copiarLinkVisualizacao()" title="Gerar link de visualização (somente leitura)"><i class="axi axi-link"></i> Link Visualização</button>
+      <button id="btn-viewlink" class="btn btn-ghost btn-sm" onclick="copiarLinkVisualizacao()" title="Gerar link de visualização (somente leitura)">🔗 Link Visualização</button>
       <span id="build-selo" title="Versão desta tela. Se não bater com a publicada, o navegador está servindo uma cópia antiga: Ctrl+Shift+R."></span>
     </div>
     <div class="header-right">
-      <button class="btn btn-secondary btn-sm" onclick="openDevsModal()"><i class="axi axi-users"></i> Gerenciar Devs</button>
-      <button class="btn btn-secondary btn-sm" onclick="openAusenciasModal()"><i class="axi axi-calendar"></i> Ausências</button>
+      <button class="btn btn-secondary btn-sm" onclick="openDevsModal()">👥 Gerenciar Devs</button>
+      <button class="btn btn-secondary btn-sm" onclick="openAusenciasModal()">🌴 Ausências</button>
       <button class="btn btn-secondary btn-sm" onclick="alternarApresentacao()" id="btn-apresentar"
-              title="Esconde filtros e fila para projetar na reunião"><i class="axi axi-present"></i> Apresentar</button>
+              title="Esconde filtros e fila para projetar na reunião">📽 Apresentar</button>
       <button class="btn btn-primary btn-sm" onclick="openModal()">+ Nova issue</button>
-      <button class="btn btn-secondary btn-sm" onclick="saveToGitHub()"><i class="axi axi-save"></i> Salvar</button>
+      <button class="btn btn-secondary btn-sm" onclick="saveToGitHub()">💾 Salvar</button>
       <button class="btn btn-ghost btn-sm" onclick="abrirTrocaSenha()" title="Alterar a senha da sua conta">Minha senha</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sair</button>
     </div>
   </header>
 
-  <div id="g-stale-banner" style="display:none;align-items:center;gap:14px;flex-wrap:wrap;background:var(--amber-bg);color:var(--amber-tx);border-bottom:1px solid rgba(var(--wn-rgb),.4);padding:10px 24px;font-size:13px">
-    <span><i class="axi axi-refresh"></i> Há alterações mais novas no servidor (feitas no Admin, no Painel Dev ou por outra pessoa). Esta tela mostra uma versão anterior.</span>
+  <div id="g-stale-banner" style="display:none;align-items:center;gap:14px;flex-wrap:wrap;background:#3D3600;color:#FFE14D;border-bottom:1px solid #6B5F00;padding:10px 24px;font-size:13px">
+    <span>🔄 Há alterações mais novas no servidor (feitas no Admin, no Painel Dev ou por outra pessoa). Esta tela mostra uma versão anterior.</span>
     <button class="btn btn-secondary btn-sm" onclick="gRecarregarDoServidor()">Atualizar agora</button>
     <button class="btn btn-secondary btn-sm" onclick="gAvisaDesatualizado(false)">Depois</button>
   </div>
@@ -1292,14 +1290,14 @@
 
   <div class="filter-bar">
     <button class="btn btn-secondary btn-sm" id="g-juntar-btn" onclick="gJuntarModo(true)"
-            title="Marcar várias demandas e juntá-las numa principal"><i class="axi axi-link"></i> Juntar</button>
+            title="Marcar várias demandas e juntá-las numa principal">🔗 Juntar</button>
     <div class="filter-divider"></div>
     <label>Tipo</label>
     <select id="f-tipo" onchange="applyFilters()">
       <option value="">Todos</option>
-      <option value="sustentacao">Sustentação</option>
-      <option value="evolucao">Evolução</option>
-      <option value="__sem_tipo__">Sem tipo</option>
+      <option value="sustentacao">🔧 Sustentação</option>
+      <option value="evolucao">🚀 Evolução</option>
+      <option value="__sem_tipo__">⚪ Sem tipo</option>
     </select>
     <div class="filter-divider"></div>
     <label>Tema</label>
@@ -1341,7 +1339,7 @@
   <!-- A CAPACIDADE DA SPRINT: 30 pontos por dev, por frente, contra o que esta
        alocado na sprint — e a sugestao do que passar para a seguinte. -->
   <details class="capsp" id="capsp" open>
-    <summary><i class="axi axi-calc"></i> Capacidade da sprint <span class="capsp-res" id="capsp-res"></span></summary>
+    <summary>🧮 Capacidade da sprint <span class="capsp-res" id="capsp-res"></span></summary>
     <div class="capsp-corpo">
       <div class="capsp-topo">Sprint
         <select id="capsp-sel" onchange="_capSel = this.value; renderCapSprint()"></select>
@@ -1355,7 +1353,7 @@
     <div class="backlog-sidebar">
       <div class="backlog-header">
         <div class="backlog-header-row">
-          <span id="backlog-titulo" title="Demandas em Planning que já saíram do Planning Poker com pontuação"><i class="axi axi-cards"></i> Planning pontuado</span>
+          <span id="backlog-titulo" title="Demandas em Planning que já saíram do Planning Poker com pontuação">🃏 Planning pontuado</span>
           <span id="backlog-count" style="font-size:11px;background:var(--bg4);padding:2px 7px;border-radius:10px;">0</span>
         </div>
         <input class="backlog-search" id="backlog-search" type="text" placeholder="Buscar por código, nome, tema ou dev…" oninput="renderBacklog()" />
@@ -1404,7 +1402,7 @@
              title="Marque quando a demanda for do time de Dados/BI. A marca aparece no card do Kanban e na fila da sala do Planning Poker.">
         <input type="checkbox" id="e-dados-bi" style="width:auto;margin:0"
                onchange="if (this.checked) document.getElementById('e-sales-ops').checked = false" />
-        <i class="axi axi-chart"></i> <strong>Dados / BI</strong>
+        📊 <strong>Dados / BI</strong>
         <span style="font-size:12px;opacity:.75">— demanda do time de Dados · sprint contabilizada à parte</span>
       </label>
       <!-- SALES OPS: exclusiva com Dados/BI — cada demanda conta em um placar so. -->
@@ -1412,7 +1410,7 @@
              title="Marque quando a demanda for de Sales Ops. A sprint dela é contabilizada à parte.">
         <input type="checkbox" id="e-sales-ops" style="width:auto;margin:0"
                onchange="if (this.checked) document.getElementById('e-dados-bi').checked = false" />
-        <i class="axi axi-trend"></i> <strong>Sales Ops</strong>
+        📈 <strong>Sales Ops</strong>
         <span style="font-size:12px;opacity:.75">— demanda de Sales Ops · sprint contabilizada à parte</span>
       </label>
     </div>
@@ -1440,8 +1438,8 @@
         <label>Tipo *</label>
         <select id="e-tipo">
           <option value="">— Selecione —</option>
-          <option value="sustentacao">Sustentação</option>
-          <option value="evolucao">Evolução</option>
+          <option value="sustentacao">🔧 Sustentação</option>
+          <option value="evolucao">🚀 Evolução</option>
         </select>
       </div>
       <!-- IMPACTO E URGÊNCIA (03/11/2026): pedidos na abertura, seguem a demanda
@@ -1491,7 +1489,7 @@
                       background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);
                       padding:10px 12px;font-size:13px">
           <input type="checkbox" id="e-debito" style="width:auto;margin:0" />
-          <i class="axi axi-package"></i> Débito técnico
+          🧱 Débito técnico
         </label>
         <!-- A caixa de Dados/BI MORAVA AQUI e subiu para o alto do formulario,
              ao lado da descricao — ver a nota la. Ela continua existindo nesta
@@ -1604,7 +1602,7 @@
         <!-- MENSAGERIA. Fica junto das outras acoes do card, e nao no rodape de
              salvar: ela nao grava nada aqui — abre a leitura do registro. Some na
              Nova Tarefa, porque demanda que ainda nao existe nao tem historico. -->
-        <button id="msg-btn" class="btn btn-secondary" onclick="abreMensageria()" style="display:none"><i class="axi axi-message"></i> Mensageria</button>
+        <button id="msg-btn" class="btn btn-secondary" onclick="abreMensageria()" style="display:none">💬 Mensageria</button>
       </div>
       <button id="save-btn" class="btn btn-primary" onclick="saveTask()">Salvar</button>
     </div>
@@ -1615,7 +1613,7 @@
 <div id="modal-ausencias" class="modal-overlay" style="display:none">
   <div class="modal" style="max-width:560px">
     <button type="button" class="modal-close-btn" onclick="closeModal('modal-ausencias')" aria-label="Fechar">✕</button>
-    <h2><i class="axi axi-calendar"></i> Ausências</h2>
+    <h2>🌴 Ausências</h2>
     <div style="font-size:12px;color:var(--text3);margin:-12px 0 16px">
       Férias, atestados e folgas. Os dias entram no cálculo de capacidade e aparecem
       na linha do dev, para você realocar ou não planejar naquele período.
@@ -1663,7 +1661,7 @@
     <h2>Gerenciar Devs</h2>
     <div id="devs-list" style="margin-bottom:14px"></div>
     <div style="display:flex;gap:8px">
-      <input type="text" id="new-dev-name" placeholder="Nome do dev" style="flex:1;padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--font-ui);outline:none;font-size:14px" onkeydown="if(event.key==='Enter')addDev()" />
+      <input type="text" id="new-dev-name" placeholder="Nome do dev" style="flex:1;padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'Inter',sans-serif;outline:none;font-size:14px" onkeydown="if(event.key==='Enter')addDev()" />
       <button class="btn btn-primary" onclick="addDev()">Adicionar</button>
     </div>
 
@@ -1755,10 +1753,10 @@ let filters  = { tipo: '', tema: '', dev: '', frente: '', prio: '', sprint: '', 
 let _ausenciasTocadas = false;
 
 const AUSENCIA_TIPOS = [
-  { key: 'ferias',   label: 'Férias',    ico: 'calendar', cor: 'var(--teal)' },
-  { key: 'atestado', label: 'Atestado',  ico: 'pulse',    cor: 'var(--red)' },
-  { key: 'folga',    label: 'Folga',     ico: 'pause',    cor: 'var(--blue)' },
-  { key: 'outro',    label: 'Outro',     ico: 'pin',      cor: 'var(--purple)' },
+  { key: 'ferias',   label: '🌴 Férias',    cor: '#2BBFA0' },
+  { key: 'atestado', label: '🩺 Atestado',  cor: '#E84444' },
+  { key: 'folga',    label: '☕ Folga',     cor: '#3B8FE8' },
+  { key: 'outro',    label: '📌 Outro',     cor: '#9B6FE8' },
 ];
 const ausenciaTipo = (k) => AUSENCIA_TIPOS.find(t => t.key === k) || AUSENCIA_TIPOS[3];
 
@@ -2779,7 +2777,7 @@ function renderCapSprint() {
   const nOver = grupos.filter(e => e.capacidade && e.alocado > e.capacidade).length;
   const res = document.getElementById('capsp-res');
   if (res) res.innerHTML = SPRINTPO.rotuloCurto(_capSel) + ' · ' + aloc + ' de ' + cap + ' pts' +
-    (nOver ? ' · <span class="capsp-over"><i class="axi axi-alert"></i> ' + nOver + (nOver === 1 ? ' grupo acima' : ' grupos acima') +
+    (nOver ? ' · <span class="capsp-over">⚠ ' + nOver + (nOver === 1 ? ' grupo acima' : ' grupos acima') +
       ' da capacidade</span>' : '');
   const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const barra = e => {
@@ -2959,7 +2957,7 @@ function renderIndicators() {
   const chipPausado = nPausadas
     ? `<span class="ind-chip pausado ${filters.indicator === '__pausado__' ? 'active-filter' : ''}" ` +
       `title="Prazo suspenso. A entrega fica oculta e volta empurrada pelos dias parados." ` +
-      `onclick="toggleIndicatorFilter('__pausado__')"><i class="axi axi-pause"></i> Pausado <strong>${nPausadas}</strong></span>`
+      `onclick="toggleIndicatorFilter('__pausado__')">⏸ Pausado <strong>${nPausadas}</strong></span>`
     : '';
 
   /* MES PASSADO — o que atravessou a virada sem concluir.
@@ -3106,7 +3104,7 @@ function renderBacklog() {
         + 'por isso não aparecem no calendário ao lado. Sem pontuação do Planning Poker '
         + 'elas podem ser abertas, mas não arrastadas.';
     } else {
-      tit.innerHTML = '<i class="axi axi-cards"></i> Planning pontuado';
+      tit.textContent = '🃏 Planning pontuado';
       tit.title = 'Demandas em Planning que já saíram do Planning Poker com pontuação';
     }
   }
@@ -3144,9 +3142,9 @@ function renderBacklog() {
               justamente aqui que "já foi repassada?" precisa de resposta. */''}
         ${window.SPRINTPO ? SPRINTPO.badge(m, 'bl-sprint') : ''}
         ${window.REQUISITOS ? REQUISITOS.chips(m) : ''}
-        ${estaPausado(m) ? `<span class="bl-pausa" title="Pausada${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}"><i class="axi axi-pause"></i> ${diasPausadoAgora(m)}d</span>` : ''}
+        ${estaPausado(m) ? `<span class="bl-pausa" title="Pausada${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}">⏸ ${diasPausadoAgora(m)}d</span>` : ''}
         ${pontuado
-          ? `<span title="Pontos do Planning Poker${m.poker_media != null ? ' — média ' + String(m.poker_media).replace('.', ',') : ''}" style="font-size:10px;background:var(--blue-bg);color:var(--blue-tx);border-radius:4px;padding:2px 6px;font-weight:700"><i class="axi axi-cards"></i> ${m.poker_pontos}</span>`
+          ? `<span title="Pontos do Planning Poker${m.poker_media != null ? ' — média ' + String(m.poker_media).replace('.', ',') : ''}" style="font-size:10px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 6px;font-weight:700">🃏 ${m.poker_pontos}</span>`
           : `<span class="bl-sempt" title="Sem pontuação do Planning Poker — não pode ser arrastada para o calendário">◐ sem pontuação</span>`}
         ${tema ? `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${temaColor}22;color:${temaColor};font-weight:600">${esc(tema.nome)}</span>` : ''}
         ${m.dev ? `<span style="font-size:10px;color:var(--text3)">${esc(m.dev)}</span>` : ''}
@@ -3224,7 +3222,7 @@ function gEntregaUsuRender() {
   };
   const aviso = ENTREGAUSU.alerta(vivo);
   if (aviso) {
-    hint.innerHTML = '<span style="color:var(--red-tx,#F5A3A3)"><i class="axi axi-alert"></i> ' + esc(aviso) + '</span>';
+    hint.innerHTML = '<span style="color:var(--red-tx,#F5A3A3)">⚠ ' + esc(aviso) + '</span>';
     return;
   }
   const valor = ENTREGAUSU.data(vivo);
@@ -3738,7 +3736,7 @@ async function gJuntarConfirmar() {
      por essa funcao, e uma segunda gravacao aqui teria a mesma vida curta das
      quatro copias da conta da fila. */
   await saveToGitHub();
-  toast(filhos.length + (filhos.length === 1 ? ' demanda juntada' : ' demandas juntadas') +
+  toast('🔗 ' + filhos.length + (filhos.length === 1 ? ' demanda juntada' : ' demandas juntadas') +
         ' em ' + (principal.codigo || principal.titulo) + '.', 'ok');
 }
 
@@ -4139,8 +4137,8 @@ function renderGantt() {
         <span class="cap-text">${pct}%</span>
       </div>
       <span class="cap-text">${free} dia${free!==1?'s':''} livre${free!==1?'s':''} / ${disponivel}</span>
-      ${ausentes.size ? `<span class="cap-text ausencia-text" title="Dias úteis de ausência neste mês (fora do total disponível)"><i class="axi axi-calendar"></i> ${ausentes.size} dia${ausentes.size!==1?'s':''} ausente</span>` : ''}
-      ${conflitos ? `<span class="cap-text conflito-text" title="Há demanda planejada em dia de ausência — considere realocar"><i class="axi axi-alert"></i> ${conflitos} dia${conflitos!==1?'s':''} em conflito</span>` : ''}
+      ${ausentes.size ? `<span class="cap-text ausencia-text" title="Dias úteis de ausência neste mês (fora do total disponível)">🌴 ${ausentes.size} dia${ausentes.size!==1?'s':''} ausente</span>` : ''}
+      ${conflitos ? `<span class="cap-text conflito-text" title="Há demanda planejada em dia de ausência — considere realocar">⚠ ${conflitos} dia${conflitos!==1?'s':''} em conflito</span>` : ''}
       ${/* TRES LINHAS, E NAO UMA.
              A versao anterior punha tudo numa linha so, com "S1:57→36 S2:65→47":
              o par de numeros dentro de cada semana obrigava o olho a ler duas
@@ -4148,7 +4146,7 @@ function renderGantt() {
              S2 e sai 47" — ficava dentro de um token. Separado em duas reguas
              alinhadas, cada linha se le de uma vez e a comparacao e vertical, que
              e a direcao em que o olho compara sem esforco. */''}
-      ${(pontosTotal > 0 || totalFeito > 0) ? `<span class="cap-text poker-pontos" title="Pontos planejados (pela data do prazo combinado) contra entregues (pela data em que o dev entregou)."><i class="axi axi-cards"></i> <b>${pontosTotal}</b> pt planejados · <b class="cap-feito">${totalFeito}</b> entregues <span class="cap-pct">(${window.CAPACIDADE.rotulo(pontosTotal, totalFeito)})</span></span>` : ''}
+      ${(pontosTotal > 0 || totalFeito > 0) ? `<span class="cap-text poker-pontos" title="Pontos planejados (pela data do prazo combinado) contra entregues (pela data em que o dev entregou).">🃏 <b>${pontosTotal}</b> pt planejados · <b class="cap-feito">${totalFeito}</b> entregues <span class="cap-pct">(${window.CAPACIDADE.rotulo(pontosTotal, totalFeito)})</span></span>` : ''}
       ${/* UM QUADRO, e nao duas reguas em linha.
              As duas reguas anteriores punham rotulo + total + cinco sprints na
              MESMA linha, e a coluna do dev tem 230px (206 uteis): a conta pedia
@@ -4226,7 +4224,7 @@ function renderGantt() {
              nao da o que fazer — o numero da task e o que permite abrir e perguntar. */''}
       ${herdadasDoDev.length ? `<span class="cap-text cap-herdada" title="Demandas que atravessaram a virada do mês sem concluir. O prazo delas NÃO foi movido — continuam combinadas para a data original e contando atraso. Estes pontos ficam FORA do planejado do mês: eles já foram planejados no mês de origem.">⇥ ${herdadasDoDev.length} de ${mesesOrigem.map(x => mesAbrev(+x.slice(5, 7) - 1)).join(', ')}${ptHerdados ? ` · ${ptHerdados} pt` : ''}</span>` : ''}
       ${rolou.total ? `<span class="cap-text cap-rolou" title="Demandas remarcadas de uma sprint para outra (avanço líquido do prazo, descontados os dias de pausa).">⤼ ${rolou.total} ${rolou.total === 1 ? 'rolou de sprint' : 'rolaram de sprint'}</span>` : ''}
-      ${rolou.alerta.length ? `<span class="cap-text cap-rolou-alerta" title="Empurradas mais de ${window.CAPACIDADE.SPRINTS_PARA_ALERTA} sprints. Duas é tolerância de replanejamento; da terceira em diante a demanda está sendo adiada."><i class="axi axi-alert"></i> ${
+      ${rolou.alerta.length ? `<span class="cap-text cap-rolou-alerta" title="Empurradas mais de ${window.CAPACIDADE.SPRINTS_PARA_ALERTA} sprints. Duas é tolerância de replanejamento; da terceira em diante a demanda está sendo adiada.">⚠ ${
         rolou.alerta.map(r => `${esc(r.codigo)} (+${r.sprints})`).join(', ')
       }</span>` : ''}
     </div>`;
@@ -4343,11 +4341,11 @@ function renderGantt() {
           ${derivada ? `<span class="card-derivada" title="Esta D0 não tem data própria: a barra cobre o período das quebras. Marque início e fim nela para mandar na barra.">↔ das quebras</span>` : ''}
           ${paiNaTela ? `<button type="button" class="card-recolhe" onclick="gSoltar('${m.id}',event)" title="Tirar do grupo — volta a ser uma demanda solta">⤴</button>` : ''}
           ${m.prioridade ? `<span class="card-dot ${dotCls}"></span>` : ''}
-          ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;"><i class="axi axi-link"></i></span>` : ''}
-          ${VINCULO.abertos(state.melhorias, m.id).length ? `<span title="Tem dependência aberta" style="font-size:10px;margin-right:2px;"><i class="axi axi-hourglass"></i></span>` : ''}
-          ${pausada ? `<span class="card-pausa" title="Pausada há ${dPausa} dia(s)${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}"><i class="axi axi-pause"></i> ${dPausa}d</span>` : ''}
+          ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}
+          ${VINCULO.abertos(state.melhorias, m.id).length ? `<span title="Tem dependência aberta" style="font-size:10px;margin-right:2px;">⏳</span>` : ''}
+          ${pausada ? `<span class="card-pausa" title="Pausada há ${dPausa} dia(s)${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}">⏸ ${dPausa}d</span>` : ''}
           ${herdada ? `<span class="card-herdada" title="Veio de ${mesOrigem || 'um mês anterior'} e ainda não concluiu. O prazo NÃO foi movido — ela continua combinada para ${fmtDate(m.entrega || m.inicio)}${sprintsFora ? ` e ${emValidacao ? `foi entregue ${sprintsFora} sprint${sprintsFora > 1 ? 's' : ''} depois do combinado` : `já passou ${sprintsFora} sprint${sprintsFora > 1 ? 's' : ''} (semana${sprintsFora > 1 ? 's' : ''}) do combinado`}` : ''}.${emValidacao ? ` O DEV JÁ ENTREGOU${m.entregue_em ? ' em ' + fmtDate(m.entregue_em) : ''} — o que falta é a validação, e por isso o contador de sprints parou na entrega.` : ''} A barra ocupa do início do mês até hoje porque é o tempo que ela consumiu aqui.">${rotuloHerdada}</span>` : ''}
-          ${semPontuacao(m) ? `<span class="card-sempt" title="Sem pontos do Planning Poker: a data foi combinada sem ninguém estimar o tamanho."><i class="axi axi-cards"></i></span>` : ''}
+          ${semPontuacao(m) ? `<span class="card-sempt" title="Sem pontos do Planning Poker: a data foi combinada sem ninguém estimar o tamanho.">🃏</span>` : ''}
           ${/* O SELO DE VALIDACAO — esta demanda passou pela planning.
                 E o AVESSO do 🃏 logo acima: um diz "ninguem estimou", o outro diz
                 "foi fechada em reuniao, por fulano". Os dois nunca aparecem
@@ -4365,12 +4363,12 @@ function renderGantt() {
           ${(() => { const _pj = m.projeto_id && (state.projetos || []).find(p => p.id === m.projeto_id);
             return _pj ? `<span class="card-selo card-proj" title="${esc(_pj.nome || '')} — duplo clique abre o projeto"`
               + ` onmousedown="event.stopPropagation()"`
-              + ` ondblclick="pjAbrirDoCard(event,'${esc(m.projeto_id)}')"><i class="axi axi-folder"></i> ${esc(_pj.codigo || _pj.nome || '')}</span>` : ''; })()}
+              + ` ondblclick="pjAbrirDoCard(event,'${esc(m.projeto_id)}')">🗂 ${esc(_pj.codigo || _pj.nome || '')}</span>` : ''; })()}
           ${window.SELO ? SELO.badges(m, 'card-selo') : ''}
           <span class="card-label">${esc(m.titulo)}</span>
         </div>
-        ${tema ? `<div class="card-tema-row"><span class="tema-badge" style="background:${tColor}25;color:${tColor};border-color:${tColor}55">${esc(tema.nome)}</span>${ehGrupo ? `<span class="card-soma" title="Soma dos pontos das quebras. A D0 não pontua: o tamanho está nelas."><i class="axi axi-calc"></i> ${esc(VINCULO.frase(state.melhorias, m))}</span>` : ''}</div>` :
-          (ehGrupo ? `<div class="card-tema-row"><span class="card-soma" title="Soma dos pontos das quebras. A D0 não pontua: o tamanho está nelas."><i class="axi axi-calc"></i> ${esc(VINCULO.frase(state.melhorias, m))}</span></div>` : '')}
+        ${tema ? `<div class="card-tema-row"><span class="tema-badge" style="background:${tColor}25;color:${tColor};border-color:${tColor}55">${esc(tema.nome)}</span>${ehGrupo ? `<span class="card-soma" title="Soma dos pontos das quebras. A D0 não pontua: o tamanho está nelas.">🧮 ${esc(VINCULO.frase(state.melhorias, m))}</span>` : ''}</div>` :
+          (ehGrupo ? `<div class="card-tema-row"><span class="card-soma" title="Soma dos pontos das quebras. A D0 não pontua: o tamanho está nelas.">🧮 ${esc(VINCULO.frase(state.melhorias, m))}</span></div>` : '')}
       </div>`;
     });
     html += `</div>`; // cards-layer
@@ -4584,7 +4582,7 @@ function gSprintRender(m) {
   const ops = SPRINTPO.proximasSprints(hoje, 5, fer, SPRINTPO.rotulosFechados(state));
   const dm = s => s.slice(8, 10) + '/' + s.slice(5, 7);
   const opt = (v, r) => '<option value="' + esc(v) + '">' + esc(r) + '</option>';
-  sel.innerHTML = opt('', 'Fora da sprint') +
+  sel.innerHTML = opt('', '📋 Fora da sprint') +
     (atual && !ops.some(o => o.rotulo === atual)
       ? opt(atual, SPRINTPO.rotuloCurto(atual) + (fechada ? ' · fechada' : ' · anterior')) : '') +
     ops.map(o => opt(o.rotulo, SPRINTPO.rotuloCurto(o.rotulo) + ' · ' + dm(o.de) + '–' +
@@ -4786,14 +4784,14 @@ function openModal(id, prefillDev, prefillDate) {
     const pai = m && m.mesclado_em ? state.melhorias.find(x => x.id === m.mesclado_em) : null;
     if (pai) {
       mescEl.style.display = 'block';
-      mescEl.innerHTML = '<div style="background:var(--red-bg);border:1px solid rgba(var(--dg-rgb),.4);border-radius:6px;' +
-        'padding:8px 12px;font-size:12px;color:var(--red-tx)"><i class="axi axi-link"></i> <strong>Mesclada em ' +
+      mescEl.innerHTML = '<div style="background:#3A1414;border:1px solid #8C1010;border-radius:6px;' +
+        'padding:8px 12px;font-size:12px;color:#F9A0A0">🔗 <strong>Mesclada em ' +
         esc(pai.codigo || '') + ' · ' + esc(pai.titulo) + '</strong><br>' +
         'Fora do planejamento: o trabalho está na demanda principal.</div>';
     } else if (filhas.length) {
       mescEl.style.display = 'block';
-      mescEl.innerHTML = '<div style="background:var(--teal-bg);border:1px solid rgba(var(--tl-rgb),.4);border-radius:6px;' +
-        'padding:8px 12px;font-size:12px;color:var(--teal-tx)"><i class="axi axi-link"></i> <strong>Absorveu ' + filhas.length +
+      mescEl.innerHTML = '<div style="background:#063D30;border:1px solid #12806A;border-radius:6px;' +
+        'padding:8px 12px;font-size:12px;color:#7EECD8">🔗 <strong>Absorveu ' + filhas.length +
         ' pedido' + (filhas.length > 1 ? 's' : '') + ':</strong><br>' +
         filhas.map(f => esc((f.codigo ? f.codigo + ' · ' : '') + (f.titulo || '')) +
           (f.solicitante ? ' <span style="opacity:.75">(' + esc(f.solicitante) + ')</span>' : '')).join('<br>') +
@@ -4806,8 +4804,8 @@ function openModal(id, prefillDev, prefillDate) {
   let depHtml = '';
   if (m?.parent_id) {
     const par = state.melhorias.find(x => x.id === m.parent_id);
-    depHtml += `<div style="background:var(--purple-bg);border:1px solid rgba(var(--pu-rgb),.33);border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:12px;">
-      <i class="axi axi-link"></i> <strong>Dependência de:</strong> ${par ? esc(par.titulo) : '(removido)'}
+    depHtml += `<div style="background:#341A6E33;border:1px solid #9B6FE855;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:12px;">
+      🔗 <strong>Dependência de:</strong> ${par ? esc(par.titulo) : '(removido)'}
     </div>`;
   }
   const childDeps = m ? VINCULO.filhosDe(state.melhorias, m.id) : [];
@@ -4818,13 +4816,13 @@ function openModal(id, prefillDev, prefillDate) {
     depHtml += `<div style="background:var(--bg3,#1E1E1C);border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:8px;">
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;">
         <span style="font-weight:600;color:var(--text2,#A8A49A);">Dependências:</span>
-        ${pesoTxt ? `<span style="color:var(--text3,#6E6A62);"><i class="axi axi-calc"></i> ${esc(pesoTxt)}</span>` : ''}
+        ${pesoTxt ? `<span style="color:var(--text3,#6E6A62);">🧮 ${esc(pesoTxt)}</span>` : ''}
       </div>
       ${childDeps.map(d => {
         const done = d.status_planejamento === 'concluido';
         const trava = VINCULO.bloqueia(d);
         return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;" title="${trava?'Dependência — trava o avanço':'Vinculada — não trava'}">
-          <span>${done ? '<i class="axi axi-check" style="color:var(--green)"></i>' : '<i class="axi axi-' + (trava ? 'hourglass' : 'link') + '"></i>'}</span>
+          <span>${done?'✅':(trava?'⏳':'🔗')}</span>
           <span style="flex:1">${esc(d.titulo)}</span>
           <span style="color:var(--text3,#6E6A62)">${esc(d.dev||'—')}</span>
           <span style="color:var(--text3,#6E6A62)">${d.entrega||''}</span>
@@ -4958,7 +4956,7 @@ function gPausaRender(m) {
   if (estaPausado(m)) {
     const d = diasPausadoAgora(m);
     box.innerHTML = '<div class="g-pausa-box">' +
-      '<i class="axi axi-pause"></i> <strong>Pausada há ' + d + (d===1?' dia':' dias') + '</strong>' +
+      '⏸ <strong>Pausada há ' + d + (d===1?' dia':' dias') + '</strong>' +
       ' · desde ' + esc(fmtDate(m.pausado_em)) +
       '<br><strong>Motivo:</strong> ' + esc(m.pausa_motivo || '—') +
       // A data anda com os dias parados, e fica a vista: esconder a entrega
@@ -4968,14 +4966,14 @@ function gPausaRender(m) {
           ' <span style="color:var(--text3)">(combinado ' + formatDateBR(m.entrega) +
           ', esticado nos ' + d + (d === 1 ? ' dia' : ' dias') + ' de pausa)</span>'
         : '<br>Sem prazo combinado.') +
-      '<div style="margin-top:9px"><button type="button" class="btn btn-success btn-sm" ' +
-      'onclick="gPausaRetomar()">▶ Retomar</button></div></div>';
+      '<div style="margin-top:9px"><button type="button" class="btn btn-sm" ' +
+      'style="background:var(--green);color:#fff;border:none" onclick="gPausaRetomar()">▶ Retomar</button></div></div>';
   } else {
     box.innerHTML = '<div class="g-pausa-box">' +
       'Travada por algo fora do time — resposta de terceiro, licença, decisão de ' +
       'outra área? Pause: a data fim fica oculta e volta empurrada pelos dias parados.' +
       '<div style="margin-top:9px"><button type="button" class="btn btn-secondary btn-sm" ' +
-      'onclick="gPausaIniciar()"><i class="axi axi-pause"></i> Pausar demanda</button></div></div>';
+      'onclick="gPausaIniciar()">⏸ Pausar demanda</button></div></div>';
   }
 }
 
@@ -4992,7 +4990,7 @@ async function gPausaIniciar() {
   if (!motivo.trim()) { toast('O motivo da pausa é obrigatório.', 'err'); return; }
   aplicarPausa(m, motivo, (_gEu && (_gEu.nome || _gEu.login)) || 'planejamento');
   gPausaRender(m); renderAll(); await saveToGitHub();
-  toast('Demanda pausada.', 'ok');
+  toast('⏸ Demanda pausada.', 'ok');
 }
 
 async function gPausaRetomar() {
@@ -5271,7 +5269,7 @@ async function saveTask() {
     }
     if (SPRINTPO.travaDeAlocacao(obj, existing.status_planejamento || (editingId ? '' : 'backlog'),
                                  sp, hojeSp).trava) {
-      toast('Escolha a sprint: depois da Planning ela é obrigatória.', 'err');
+      toast('🏃 Escolha a sprint: depois da Planning ela é obrigatória.', 'err');
       document.getElementById('e-sprint-po').focus();
       return;
     }
@@ -5368,7 +5366,7 @@ function renderAusenciasLista() {
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
         <span style="width:8px;height:8px;border-radius:50%;background:${t.cor};flex-shrink:0"></span>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;color:var(--text)">${esc(a.dev)} — <i class="axi axi-${t.ico}"></i> ${t.label}</div>
+          <div style="font-size:13px;color:var(--text)">${esc(a.dev)} — ${t.label}</div>
           <div style="font-size:11px;color:var(--text3)">${formatDateBR(a.inicio)} a ${formatDateBR(a.fim)}${a.obs ? ' · ' + esc(a.obs) : ''}</div>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="removeAusencia('${esc(a.id)}')">Remover</button>
@@ -5928,8 +5926,8 @@ function renderAnexosGantt(m) {
   box.innerHTML = _gAnexos.map((a, i) => {
     const kb = a.tamanho ? ` <span style="color:var(--text3)">(${(a.tamanho/1024).toFixed(0)} KB)</span>` : '';
     return `<div style="display:flex;align-items:center;gap:8px;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:5px 9px">
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><i class="axi axi-clip"></i> ${esc(a.nome)}${kb}</span>
-      <a href="#" style="color:var(--blue-tx);text-decoration:none" onclick="gPreviewAnexo(${i});return false;">ver</a>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 ${esc(a.nome)}${kb}</span>
+      <a href="#" style="color:#9BC8F8;text-decoration:none" onclick="gPreviewAnexo(${i});return false;">ver</a>
       <button type="button" style="color:var(--red);background:none;border:none;cursor:pointer;font-size:14px" onclick="gRemoveAnexo(${i})" title="Remover">✕</button>
     </div>`;
   }).join('');
@@ -6152,7 +6150,7 @@ function renderLimbo() {
   box.innerHTML =
     '<button type="button" class="g-limbo-topo" onclick="gLimboAlterna()" ' +
     'aria-expanded="' + (_limboAberta ? 'true' : 'false') + '">' +
-    '<span class="g-limbo-seta">▶</span><i class="axi axi-flag"></i> ' + perdidas.length +
+    '<span class="g-limbo-seta">▶</span>⚑ ' + perdidas.length +
     (perdidas.length === 1 ? ' demanda com data fora do quadro'
                            : ' demandas com data fora do quadro') +
     '<small style="margin-left:auto">' + (_limboAberta ? 'recolher' : 'ver a lista') +
@@ -6193,7 +6191,7 @@ function renderPausadas() {
   box.classList.toggle('aberta', _pausadasAberta);
   box.innerHTML = '<button type="button" class="g-pausadas-topo" onclick="gPausadasAlterna()" ' +
     'aria-expanded="' + (_pausadasAberta ? 'true' : 'false') + '">' +
-    '<span class="g-pausadas-seta">▶</span><i class="axi axi-pause"></i> ' + total +
+    '<span class="g-pausadas-seta">▶</span>⏸ ' + total +
     (total === 1 ? ' demanda pausada' : ' demandas pausadas') +
     (fora ? '<small>· ' + fora + ' sem barra neste mês, a entrega ficou congelada onde parou</small>' : '') +
     '<small style="margin-left:auto">' + (_pausadasAberta ? 'recolher' : 'ver a lista') + '</small>' +
@@ -6273,7 +6271,7 @@ function rkNum(n) {
 const RK_TITULO = '<span class="rk-tit" title="Conta o que foi CONCLUÍDO dentro do mês, ' +
   'pela data de conclusão. Os outros números da faixa contam o que estava agendado ' +
   'para o mês, pela data de entrega prevista — por isso podem não bater.">' +
-  '<i class="axi axi-trophy"></i> Ranking do mês <span style="opacity:.6;font-weight:400">· entregue no mês</span></span>';
+  '🏆 Ranking do mês <span style="opacity:.6;font-weight:400">· entregue no mês</span></span>';
 
 // O parametro sao as ENTREGUES no mes (por data de conclusao), e nao as
 // "concluidas do mes" por data de entrega — que era como este bloco pensava
@@ -6289,9 +6287,9 @@ function renderRankingMes(entregues) {
               : 'nenhuma conclusão neste mês ainda.') + '</span>';
     return;
   }
-  // A medalha e o mesmo icone nos tres lugares: quem diz o lugar e a cor do
-  // chip (ouro, prata, bronze, em tema.css), que o icone herda pelo texto.
-  const MED = ['<i class="axi axi-medal"></i>', '<i class="axi axi-medal"></i>', '<i class="axi axi-medal"></i>'];
+  // Emoji literal, nao escape: `\U` (maiusculo) nao existe em JavaScript — o
+  // backslash e descartado e a medalha virava o texto "U0001F947" na tela.
+  const MED = ['🥇', '🥈', '🥉'];
   const chips = rank.slice(0, 3).map((r, i) =>
     '<button type="button" class="prod-medalha p' + (i + 1) + '" ' +
     'onclick="rkFiltraDev(' + JSON.stringify(r.nome).replace(/"/g, '&quot;') + ')" ' +
@@ -6312,7 +6310,7 @@ function renderRankingMes(entregues) {
   const aviso = semDev
     ? '<span class="rk-mais" title="' + semDev + ' demanda(s) concluída(s) neste mês sem ' +
       'responsável preenchido: elas contam no card ao lado, mas não têm a quem atribuir.">' +
-      '<i class="axi axi-alert"></i> ' + semDev + '</span>'
+      '⚠ ' + semDev + '</span>'
     : '';
   // De onde vem o ponto. Sem isto o pódio parece medir valor entregue quando pode
   // estar medindo tempo gasto — e quem olha não tem como saber.
@@ -6404,7 +6402,7 @@ function renderResumoMes() {
 function alternarApresentacao() {
   const on = document.body.classList.toggle('apresentando');
   const b = document.getElementById('btn-apresentar');
-  if (b) b.innerHTML = '<i class="axi axi-present"></i> ' + (on ? 'Sair da apresentação' : 'Apresentar');
+  if (b) b.textContent = on ? '📽 Sair da apresentação' : '📽 Apresentar';
   try { localStorage.setItem('rm_apresentando', on ? '1' : ''); } catch (_) {}
 }
 try { if (localStorage.getItem('rm_apresentando')) {

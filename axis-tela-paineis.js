@@ -1326,7 +1326,10 @@
         '<span class="row" style="justify-content:space-between"><span style="font-size:13.5px;font-weight:700"><span class="code" style="margin-right:8px">' + esc(S.rotuloCurto(x.s.rotulo)) + '</span>' +
         H.dm(x.s.de) + ' a ' + H.dm(x.s.ate) + '</span><span class="mono" style="font-size:12px;color:var(--tx2)">' + (p.total ? p.pontosValidados + ' / ' + p.pontosTotal : '—') + '</span></span>' +
         '<span class="bar"><span style="width:' + pctP + '%;background:var(--ok)"></span></span>' +
-        '<span class="note">' + (p.total ? p.validados + ' de ' + p.total + ' validados · ' + p.pct + '% por item' + (p.aguardando ? ' · ' + p.aguardando + ' esperando validação' : '') + (p.saiu ? ' · ' + p.saiu + ' saíram sem entregar' : '') : 'nada repassado') +
+        // Em validacao conta como entrega (fdf14e2): no regime de entrega o cumprimento soma as duas.
+        '<span class="note">' + (p.total ? (p.entregues != null
+            ? p.entregues + ' de ' + p.total + ' entregues · ' + p.pct + '% (' + p.validados + ' fechados + ' + p.aguardando + ' em validação)'
+            : p.validados + ' de ' + p.total + ' validados · ' + p.pct + '% por item' + (p.aguardando ? ' · ' + p.aguardando + ' esperando validação' : '')) + (p.saiu ? ' · ' + p.saiu + ' saíram sem entregar' : '') : 'nada repassado') +
         ' · ' + SIT[S.situacaoDaSprint(D, x.s.rotulo)] + '</span></button>';
     }).join('');
     if (_sprSel) {

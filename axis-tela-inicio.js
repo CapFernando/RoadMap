@@ -278,7 +278,9 @@
         pts.pct = pts.total ? Math.round(pts.feitos / pts.total * 100) : null;
       } else {
         var pl = S.placarDaSprint(ctx.D, sprint, H.colunaDe);
-        pts = { total: pl.pontosTotal, feitos: pl.pontosValidados, pct: pl.pctPontos, itens: pl.total };
+        // Em validacao conta como entrega (fdf14e2): o percentual do placar ja soma as duas.
+        pts = { total: pl.pontosTotal, feitos: pl.pontosEntregues != null ? pl.pontosEntregues : pl.pontosValidados, pct: pl.pctPontos, itens: pl.total,
+                entregues: pl.pontosEntregues != null };
       }
     }
     var podeVer = papel !== 'consulta';
@@ -289,7 +291,7 @@
       kpi('Em validação', emVal.length, emVal.length ? comPO + ' com o PO · ' + (emVal.length - comPO) + ' na área' : 'nada esperando validação',
         { href: papel === 'admin' ? '#backlog/validacao' : '' }) +
       kpi('Na sprint', pts.total + ' <small>pts</small>',
-        pts.total ? pts.feitos + ' validados' + (pts.pct != null ? ' · ' + pts.pct + '%' : '')
+        pts.total ? pts.feitos + (pts.entregues ? ' entregues' : ' validados') + (pts.pct != null ? ' · ' + pts.pct + '%' : '')
                   : (pts.itens ? H.plural(pts.itens, 'item', 'itens') + ' sem pontos do Poker' : (dev ? 'nada seu na sprint' : 'sprint sem itens')),
         { notaCor: pts.feitos ? 'var(--ok-t)' : '', href: podeVer ? '#sprints' : '' }) +
       kpi('Atrasadas', atr.length, atr.length ? codigos(atr) : 'tudo no prazo',

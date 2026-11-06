@@ -7,10 +7,12 @@
        noarchive impede copia em cache. Isso reduz descoberta, NAO e controle
        de acesso: quem tem a URL continua lendo tudo. -->
   <meta name="robots" content="noindex, nofollow, noarchive" />
-  <title>Projetos por tema — AXIS</title>
-  <link rel="icon" type="image/svg+xml" href="axis/marca/axis-icone.svg">
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <title>Projetos por Tema — RoadMap</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
+<!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
+<script src="axis.js?v=1eb606be26"></script>
+<script src="axis-interface.js?v=f1a5f139ee"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -21,7 +23,7 @@
       --red:#E84444; --purple:#9B6FE8; --teal:#2BBFA0;
       --radius:12px;
     }
-    body { background:var(--bg); color:var(--text); font-family:var(--font-ui); font-size:15px; line-height:1.6; min-height:100vh; }
+    body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:15px; line-height:1.6; min-height:100vh; }
 
     /* ── HEADER ── */
     header {
@@ -32,10 +34,10 @@
     .header-left { display:flex; align-items:center; gap:14px; }
     .header-left h1 { font-size:20px; font-weight:700; }
     .header-right { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:var(--radius); font-size:14px; font-weight:600; font-family:var(--font-ui); cursor:pointer; border:none; transition:opacity .15s; text-decoration:none; }
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:var(--radius); font-size:14px; font-weight:600; font-family:'Inter',sans-serif; cursor:pointer; border:none; transition:opacity .15s; text-decoration:none; }
     .btn-secondary { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
     .btn-secondary:hover { opacity:.8; }
-    .btn-primary { background:var(--blue); color:var(--on-ac); }
+    .btn-primary { background:var(--blue); color:#fff; }
     .btn-primary:hover { opacity:.85; }
 
     /* ── FILTERS ── */
@@ -57,7 +59,7 @@
     /* ── TEMA CARD ── */
     .tema-card {
       background:var(--bg2); border:1px solid var(--border); border-radius:16px; overflow:hidden;
-      box-shadow:0 4px 24px var(--shadow);
+      box-shadow:0 4px 24px #00000033;
     }
     .tema-header {
       display:flex; align-items:center; justify-content:space-between;
@@ -144,15 +146,11 @@
     /* ── TOAST ── */
     #toast { position:fixed; bottom:24px; right:24px; padding:12px 18px; border-radius:var(--radius); font-size:14px; font-weight:500; opacity:0; pointer-events:none; transition:opacity .3s; z-index:999; }
     #toast.show { opacity:1; }
-    /* O tom de estado e translucido (14%): sem a camada opaca embaixo, o toast
-       ficaria transparente por cima do conteudo. */
-    #toast.ok  { background:linear-gradient(var(--green-bg),var(--green-bg)) var(--bg2); color:var(--green-tx); border:1px solid rgba(var(--ok-rgb),.4); }
-    #toast.err { background:linear-gradient(var(--red-bg),var(--red-bg)) var(--bg2); color:var(--red-tx); border:1px solid rgba(var(--dg-rgb),.4); }
+    #toast.ok  { background:#1a3d1a; color:#7EE0A0; border:1px solid #2d6b2d; }
+    #toast.err { background:#3d1a1a; color:#F9A0A0; border:1px solid #6b2d2d; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=25141b56d3">
-  <link rel="stylesheet" href="axis.css?v=d413ccd898">
-  <script src="tema.js?v=5d9c25fd66"></script>
-<script src="axis.js?v=b9a7c89f9f"></script>
+  <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
+  <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=9e20f6c47f"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 </head>
@@ -160,12 +158,12 @@
 
 <header>
   <div class="header-left">
-    <h1><i class="axi axi-folder"></i> Projetos por Tema</h1>
+    <h1>📁 Projetos por Tema</h1>
     <span id="lbl-updated" style="font-size:12px;color:var(--text3)">—</span>
   </div>
   <div class="header-right">
     <a href="admin.html" class="btn btn-secondary">← Admin</a>
-    <a href="index.html" class="btn btn-secondary" target="_blank"><i class="axi axi-chart"></i> Dashboard</a>
+    <a href="index.html" class="btn btn-secondary" target="_blank">📊 Dashboard</a>
   </div>
 </header>
 
@@ -463,12 +461,12 @@ function renderPage() {
             <div class="proj-bar-row">
               <span class="proj-bar-lbl plan">Planejado</span>
               <div class="proj-bar-track"><div class="proj-bar-fill plan" style="width:${pctPlan}%"></div></div>
-              <span class="proj-bar-val" style="color:var(--blue)">${hPlan}h</span>
+              <span class="proj-bar-val" style="color:#3B8FE8">${hPlan}h</span>
             </div>
             <div class="proj-bar-row">
               <span class="proj-bar-lbl real">Realizado</span>
               <div class="proj-bar-track"><div class="proj-bar-fill real" style="width:${pctReal}%"></div></div>
-              <span class="proj-bar-val" style="color:var(--green)">${hReal}h${!isConcl||m.horas_realizadas===0?'*':''}</span>
+              <span class="proj-bar-val" style="color:#5EA832">${hReal}h${!isConcl||m.horas_realizadas===0?'*':''}</span>
             </div>
           </div>
           <div class="proj-detail-meta">
@@ -510,11 +508,11 @@ function renderPage() {
           <div class="dev-name">${pEsc(dev)}</div>
           <div class="dev-hours-row">
             <div class="dev-hours-item">
-              <span class="dev-hours-val" style="color:var(--blue)">${hPlanRnd}h</span>
+              <span class="dev-hours-val" style="color:#3B8FE8">${hPlanRnd}h</span>
               <span class="dev-hours-lbl">Planejadas</span>
             </div>
             ${hReal>0?`<div class="dev-hours-item">
-              <span class="dev-hours-val" style="color:var(--green)">${hReal}h</span>
+              <span class="dev-hours-val" style="color:#5EA832">${hReal}h</span>
               <span class="dev-hours-lbl">Realizadas</span>
             </div>`:''}
           </div>
@@ -551,11 +549,11 @@ function renderPage() {
       </div>
       <div class="tema-body" id="tema-body-${tema.id}" style="display:grid">
         <div class="panel">
-          <div class="panel-title"><i class="axi axi-trophy"></i> Top 5 — horas de desenvolvimento</div>
+          <div class="panel-title">🏆 Top 5 — horas de desenvolvimento</div>
           ${top5.length ? projHTML : '<p style="color:var(--text3);font-size:14px">Sem demandas no período</p>'}
         </div>
         <div class="panel">
-          <div class="panel-title"><i class="axi axi-users"></i> Principais atuantes</div>
+          <div class="panel-title">👥 Principais atuantes</div>
           ${devArr.length ? `<div class="dev-list">${devsHTML}</div>` : '<p style="color:var(--text3);font-size:14px">Sem dados</p>'}
         </div>
       </div>
