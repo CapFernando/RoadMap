@@ -401,6 +401,8 @@
   var MENU = [
     { grupo: 'Trabalho', itens: [
       { id: 'inicio',   rotulo: 'Início',         ico: 'home',     papeis: ADC },
+      // O painel do dev (dev.html) virou esta aba do Inicio; o item no menu e a porta dela.
+      { id: 'meu',      rotulo: 'Meu trabalho',   ico: 'user',     papeis: AD, rota: 'inicio/meu' },
       { id: 'quadro',   rotulo: 'Quadro',         ico: 'board',    papeis: AD },
       { id: 'backlog',  rotulo: 'Backlog',        ico: 'menu',     papeis: AD, badge: 'backlog' },
       { id: 'sprints',  rotulo: 'Sprints',        ico: 'refresh',  papeis: AD },
@@ -435,7 +437,7 @@
     var nome = e.nome || e.login || 'Minha conta';
     var rotPapel = { admin: 'PM/PO · Admin', analista: 'Analista de requisitos', dev: 'Dev', consulta: 'Consulta' }[APP.papel] || '';
     var item = function (it) {
-      var href = it.href || ('#' + it.id);
+      var href = it.href || ('#' + (it.rota || it.id));
       var b = it.badge ? contagemBadge(it.badge) : 0;
       return '<a href="' + href + '" class="sb-it' + (it.id === ativo ? ' on' : '') + '"' + (it.id === ativo ? ' aria-current="page"' : '') + '>' +
         ico(it.ico) + '<span class="sb-t">' + esc(it.rotulo) + '</span>' +
@@ -475,8 +477,10 @@
       var pend = raiz.SPRINTPO && raiz.SPRINTPO.pendentesDeFechamento ? (raiz.SPRINTPO.pendentesDeFechamento(APP.D, hoje(), (APP.D || {}).feriados || [], colunaDe) || []) : [];
       if (pend.length) lista.push({ ico: 'refresh', cor: 'var(--wn-t)', txt: '<b>' + plural(pend.length, 'sprint terminou', 'sprints terminaram') + '</b> e não ' + (pend.length === 1 ? 'foi fechada' : 'foram fechadas'), href: '#sprints/encerrar' });
     }
-    if (APP.papel === 'dev') {
-      var minhas = vs.filter(minha);
+    // O pessoal vale para quem tem demanda no nome, o PM/PO que tambem
+    // desenvolve inclusive — e nao so para o perfil dev.
+    var minhas = vs.filter(minha);
+    if (APP.papel === 'dev' || (APP.papel !== 'consulta' && minhas.length)) {
       var meuAtr = minhas.filter(function (m) { return etapaDe(m) === 'atrasado'; });
       if (meuAtr.length) lista.push({ ico: 'alert', cor: 'var(--dg-t)', txt: '<b>' + plural(meuAtr.length, 'demanda sua', 'demandas suas') + '</b> com prazo vencido', href: '#inicio/meu' });
       // Mesma regra do Inicio: relogio parado (validacao, concluida) nao vence.
@@ -621,6 +625,7 @@
     else if (abas.length) { var s = r.param.split('/'); r.aba = s[0] || abas[0].id; r.param = s.slice(1).join('/'); if (!abas.some(function (a) { return a.id === r.aba; })) r.aba = abas[0].id; }
     APP.rota = r;
     var ativoMenu = FORA_DO_MENU[r.tela] != null ? FORA_DO_MENU[r.tela] : r.tela;
+    if (r.tela === 'inicio' && r.aba === 'meu') ativoMenu = 'meu';
     var nN = notificacoes();
     var abasHtml = '';
     if (t && t.abasDe) abas = (t.abasDe(r) || abas).filter(function (a) { return !a.papeis || a.papeis.indexOf(APP.papel) >= 0; });

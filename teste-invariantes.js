@@ -27596,6 +27596,48 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     }));
   }
 
+  /* QUEM COORDENA E DESENVOLVE VE AS DUAS COISAS. A aba `meu` do Inicio virava
+     "O que pede voce" para o admin e o painel do dev sumia para quem e PM/PO
+     com demanda no nome. Agora sao duas abas; aqui a definicao da tela e
+     executada com um nucleo falso, por perfil. */
+  sec('Inicio: "O que pede voce" (admin) e "Meu trabalho" (todos que trabalham) sao abas separadas');
+  {
+    let def = null;
+    const FAKE = { tela: (d) => { def = d; }, APP: { papel: 'admin' }, notificacoes: () => [], H: { esc: (x) => x } };
+    new Function('window', lerTela('axis-tela-inicio.js'))({ AXIS_APP: FAKE });
+    const abasDe = (papel) => { FAKE.APP.papel = papel; return def.abasDe({}).map((a) => a.id + ':' + a.rotulo).join(','); };
+    const adm = abasDe('admin'), ana = abasDe('analista'), dev = abasDe('dev'), con = abasDe('consulta');
+    ok(/pede:O que pede você/.test(adm) && /meu:Meu trabalho/.test(adm), 'admin tem as duas: O que pede voce e Meu trabalho', adm);
+    ok(/meu:Meu trabalho/.test(ana) && !/pede/.test(ana) && /meu:Meu trabalho/.test(dev) && !/pede/.test(dev),
+       'analista e dev tem Meu trabalho, sem a fila do PM/PO', ana + ' | ' + dev);
+    ok(!/meu|pede/.test(con), 'consulta nao tem nenhuma das duas', con);
+    ok(def.papeis.indexOf('analista') >= 0, 'o analista entra no Inicio');
+    // Qual visao cada aba desenha: a do PM/PO so na `pede`.
+    const fonte = lerTela('axis-tela-inicio.js');
+    const desp = new Function('meuTrabalhoPO', 'meuTrabalhoDev', corpo(fonte, 'function meuTrabalho(ctx) {') + '\nreturn meuTrabalho;')(() => 'PO', () => 'DEV');
+    ok(desp({ aba: 'pede', papel: 'admin' }) === 'PO' && desp({ aba: 'meu', papel: 'admin' }) === 'DEV' && desp({ aba: 'meu', papel: 'dev' }) === 'DEV',
+       'a aba meu desenha o painel do dev tambem para o admin; a pede, a fila do PM/PO');
+  }
+
+  /* "ATRASADAS" CONTA SO O QUE AINDA CORRE. `PRAZO.diasDeAtraso` devolve o
+     atraso congelado de quem ja foi entregue; o Inicio contava esse tambem e
+     mostrava 71 concluidas como atrasadas para um dev. Executado com o
+     prazo.js de verdade (relogioParou). */
+  sec('Inicio e Paineis: concluida ou em validacao entregue com atraso nao e "atrasada"');
+  {
+    const PZ = require('./prazo.js');
+    const fn = corpo(lerTela('axis-tela-inicio.js'), 'function atrasada(m) {');
+    const col = { a: 'em_andamento', b: 'concluido', c: 'validacao', d: 'planejado', e: 'validacao_area' };
+    const atr = { a: 3, b: 5, c: 2, d: 0, e: 4 };
+    const H = { atrasoDe: (m) => atr[m.id], colunaDe: (m) => col[m.id] };
+    const atrasada = new Function('H', 'window', fn + '\nreturn atrasada;')(H, { PRAZO: PZ });
+    const sim = ['a', 'b', 'c', 'd', 'e'].filter((id) => atrasada({ id }));
+    ok(sim.join() === 'a', 'so a que corre e passou do prazo e atrasada (concluida, validacao e area ficam de fora)', sim.join());
+    const PAI = lerTela('axis-tela-paineis.js');
+    ok((PAI.match(/relogioParou\(H\.colunaDe\(m\)\)/g) || []).length >= 2,
+       'os dois "prazo vencido em aberto" dos Paineis tambem perguntam se o relogio corre');
+  }
+
   /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir
      de forma sincrona — a do `conflito` executa uma funcao `async` —, e sem
      esta espera o resumo sairia antes delas e um `ok` que falhasse depois nao

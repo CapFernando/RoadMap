@@ -161,7 +161,15 @@
     if (window.PRAZO && window.PRAZO.relogioParou(c)) return false;
     return H.prazoDe(m) === H.hoje();
   }
-  function atrasada(m) { var a = H.atrasoDe(m); return !!(a && a > 0); }
+  /* ATRASADA E A QUE AINDA CORRE E PASSOU DO PRAZO. `PRAZO.diasDeAtraso` tambem
+     devolve o atraso CONGELADO de quem ja saiu da mao do dev (validacao,
+     concluida: "entregou atrasado"); contar esse aqui pos 71 concluidas no
+     "Atrasadas" de um dev e 333 no do PM/PO. Relogio parado nao atrasa — a
+     mesma leitura do `prazoTxt` do nucleo. */
+  function atrasada(m) {
+    var a = H.atrasoDe(m);
+    return !!(a && a > 0) && !(window.PRAZO && window.PRAZO.relogioParou && window.PRAZO.relogioParou(H.colunaDe(m)));
+  }
   function devolvida(m) {
     return !!(window.DEVOLUCAO && window.DEVOLUCAO.houve(m)) && ABERTAS_DO_DEV.indexOf(H.colunaDe(m)) >= 0;
   }
@@ -374,16 +382,19 @@
       if (val.length) linha('check', 'var(--wn-t)', '<b>' + H.plural(val.length, 'entrega', 'entregas') + '</b> para validar', val, '#backlog/validacao');
       var hom = vs.filter(cobraHom);
       if (hom.length) linha('users', 'var(--pu-t)', '<b>' + H.plural(hom.length, 'homologação', 'homologações') + '</b> a cobrar da área', hom,
-        hom.length === 1 ? H.hrefItem(hom[0]) : '#inicio/meu', 'Na Validação da área há ' + window.HOMOLOGACAO.DIAS_ATE_COBRAR + ' dias ou mais, sem registro de quem homologou');
+        hom.length === 1 ? H.hrefItem(hom[0]) : '#inicio/pede', 'Na Validação da área há ' + window.HOMOLOGACAO.DIAS_ATE_COBRAR + ' dias ou mais, sem registro de quem homologou');
       if (poker.length) linha('cards', 'var(--in-t)', '<b>' + H.plural(poker.length, 'item', 'itens') + '</b> para estimar no Poker', poker, '#poker', 'Abre o Planning Poker');
       var pend = S && S.pendentesDeFechamento ? S.pendentesDeFechamento(ctx.D, hoje, feriados(ctx), H.colunaDe) : [];
       if (pend.length) L.push({ ico: 'refresh', cor: 'var(--wn-t)', txt: '<b>' + H.plural(pend.length, 'sprint', 'sprints') + '</b> para fechar',
         meta: pend.slice(0, 2).map(function (p) { return H.esc(S.rotuloCurto(p.rotulo)); }).join(' · '), href: '#sprints/encerrar' });
-    } else if (papel === 'dev') {
+    }
+    // O PESSOAL vale para quem tem demanda no nome, admin e analista inclusive:
+    // quem coordena e tambem desenvolve ve as duas listas (antes era uma ou outra).
+    if (papel === 'dev' || (papel !== 'consulta' && minhas.length)) {
       var dv = minhas.filter(devolvida);
       if (dv.length) linha('undo', 'var(--wn-t)', '<b>' + H.plural(dv.length, 'devolvida', 'devolvidas') + '</b> para ajuste', dv,
         dv.length === 1 ? H.hrefItem(dv[0]) : '#inicio/meu', 'O PM/PO devolveu com motivo: abra a demanda para ler');
-      if (poker.length) linha('cards', 'var(--in-t)', '<b>' + H.plural(poker.length, 'item', 'itens') + '</b> para estimar no Poker', poker, '#poker', 'Abre o Planning Poker');
+      if (poker.length && papel !== 'admin') linha('cards', 'var(--in-t)', '<b>' + H.plural(poker.length, 'item', 'itens') + '</b> para estimar no Poker', poker, '#poker', 'Abre o Planning Poker');
       var AC = window.AXIS_ACOES;
       var fila = AC && AC.mostraNoPainel ? vs.filter(function (m) {
         var c = H.colunaDe(m);
@@ -396,7 +407,8 @@
       if (sp.length) linha('alert', 'var(--wn-t)', '<b>' + H.plural(sp.length, 'demanda sua', 'demandas suas') + '</b> sem pontos', sp, '#inicio/meu', 'Comprometidas (de Planejado em diante) sem pontuação do Poker');
       var hm = minhas.filter(cobraHom);
       if (hm.length) linha('users', 'var(--pu-t)', '<b>' + H.plural(hm.length, 'sua', 'suas') + '</b> parada' + (hm.length > 1 ? 's' : '') + ' na área', hm, '#inicio/meu', 'Na Validação da área há 5 dias ou mais: a homologação é de quem pediu');
-    } else {
+    }
+    if (papel === 'consulta') {
       // Consulta: le o time, sem acao — o mesmo dado, sem link para agir.
       var at = vs.filter(atrasada), pa = vs.filter(function (m) { return H.pausada(m) && H.colunaDe(m) !== 'concluido'; }), ho = vs.filter(cobraHom);
       if (at.length) linha('alert', 'var(--dg-t)', '<b>' + H.plural(at.length, 'demanda', 'demandas') + '</b> com prazo vencido', at, '');
@@ -476,7 +488,7 @@
   }
 
   function meuTrabalho(ctx) {
-    return ctx.papel === 'admin' ? meuTrabalhoPO(ctx) : meuTrabalhoDev(ctx);
+    return ctx.aba === 'pede' ? meuTrabalhoPO(ctx) : meuTrabalhoDev(ctx);
   }
 
   function meuTrabalhoDev(ctx) {
@@ -851,7 +863,7 @@
   // ═════════════════════════════════════════════════════════════════════
   function render(el, ctx) {
     poeCss();
-    if (ctx.aba === 'meu') return meuTrabalho(ctx);
+    if (ctx.aba === 'meu' || ctx.aba === 'pede') return meuTrabalho(ctx);
     if (ctx.aba === 'cronograma') return cronograma(ctx);
     if (ctx.aba === 'notificacoes') return notificacoesAba(ctx);
     return visaoGeral(ctx);
@@ -892,9 +904,13 @@
     if (sel) sel.onchange = function () { EST.cronDev = sel.value; EST.cronLimite = 40; redesenha(el, ctx); };
   }
 
-  var AD = ['admin', 'dev'];
+  var AD = ['admin', 'analista', 'dev'];
+  /* "O QUE PEDE VOCE" E "MEU TRABALHO" SAO DUAS ABAS, e nao uma que muda com o
+     perfil: o PM/PO que tambem desenvolve precisa da fila de coordenacao E das
+     demandas no nome dele (o painel do dev). */
   var ABAS = [
     { id: 'geral', rotulo: 'Visão geral' },
+    { id: 'pede', rotulo: 'O que pede você', papeis: ['admin'] },
     { id: 'meu', rotulo: 'Meu trabalho', papeis: AD },
     { id: 'cronograma', rotulo: 'Meu cronograma', papeis: AD },
     { id: 'notificacoes', rotulo: 'Notificações', papeis: AD }
@@ -903,7 +919,7 @@
   A.tela({
     id: 'inicio',
     rotulo: 'Início',
-    papeis: ['admin', 'dev', 'consulta'],
+    papeis: ['admin', 'analista', 'dev', 'consulta'],
     abas: ABAS,
     // O rotulo das abas muda com o perfil (o PM/PO nao tem "meu cronograma",
     // tem o do time) e a de notificacoes leva o numero do sino.
@@ -912,14 +928,13 @@
       var n = p === 'consulta' ? 0 : A.notificacoes().length;
       return ABAS.filter(function (a) { return !a.papeis || a.papeis.indexOf(p) >= 0; }).map(function (a) {
         var c = { id: a.id, rotulo: a.rotulo };
-        if (p === 'admin' && a.id === 'meu') c.rotulo = 'O que pede você';
         if (p === 'admin' && a.id === 'cronograma') c.rotulo = 'Cronograma do time';
         if (a.id === 'notificacoes' && n) c.n = n;
         return c;
       });
     },
     titulo: function (r) {
-      return { meu: 'Meu trabalho', cronograma: 'Cronograma', notificacoes: 'Notificações' }[r.aba] || 'Início';
+      return { pede: 'O que pede você', meu: 'Meu trabalho', cronograma: 'Cronograma', notificacoes: 'Notificações' }[r.aba] || 'Início';
     },
     render: render,
     depois: depois

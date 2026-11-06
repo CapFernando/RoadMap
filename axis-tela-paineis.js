@@ -1021,7 +1021,9 @@
     var permite = function (id) { var t = raiz.AXIS_APP.APP.telas[id]; return !!t && (!t.papeis || t.papeis.indexOf(ctx.papel) >= 0); };
     var abertas = vs.filter(function (m) { return ['concluido', 'negada'].indexOf(H.colunaDe(m)) < 0; });
     var itens = [];
-    var venc = abertas.filter(function (m) { var a = H.atrasoDe(m); return a && a > 0; });
+    // Vencida e a que ainda corre: em validacao o atraso ja e o congelado da entrega.
+    var correVencida = function (m) { var a = H.atrasoDe(m); return a && a > 0 && !(raiz.PRAZO && raiz.PRAZO.relogioParou(H.colunaDe(m))); };
+    var venc = abertas.filter(correVencida);
     if (venc.length) itens.push({ t: 'Prazo vencido', d: 'em aberto e passadas do prazo combinado', n: venc.length, cor: 'dg', href: permite('backlog') ? '#backlog/vencido' : '' });
     var val = vs.filter(function (m) { return H.colunaDe(m) === 'validacao'; });
     if (val.length) itens.push({ t: 'Validação do PM/PO pendente', d: 'entregues pelo dev, esperando aprovação', n: val.length, cor: 'wn', href: permite('backlog') ? '#backlog/validacao' : '' });
@@ -1133,7 +1135,8 @@
         nomes[n] = nomes[n] || {};
         nomes[n].and = (nomes[n].and || 0) + (H.colunaDe(m) === 'em_andamento' ? 1 : 0);
         var a = H.atrasoDe(m);
-        nomes[n].atr = (nomes[n].atr || 0) + (a && a > 0 ? 1 : 0);
+        var corre = !(raiz.PRAZO && raiz.PRAZO.relogioParou(H.colunaDe(m)));
+        nomes[n].atr = (nomes[n].atr || 0) + (a && a > 0 && corre ? 1 : 0);
       });
     });
     var devs = Object.keys(nomes).map(function (n) { return Object.assign({ nome: n }, nomes[n]); })
