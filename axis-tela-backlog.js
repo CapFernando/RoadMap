@@ -31,7 +31,8 @@
   // Fica no modulo, e nao na URL: trocar de aba e voltar mantem o recorte que
   // a pessoa montou. A URL guarda so o que se compartilha (a aba e o item).
   // `sprint`: null (todas) ou lista — o filtro de varias escolhas do admin (4d7c38f), em AXIS_SPRINTS.
-  var F = { chip: 'todos', q: '', agrupar: 'projeto', tipo: '', tema: '', dev: '', sprint: null, mais: {} };
+  // `prazo` e `prod`: os filtros Prazo e Producao da barra de Melhorias do admin.
+  var F = { chip: 'todos', q: '', agrupar: 'projeto', tipo: '', tema: '', dev: '', sprint: null, prazo: '', prod: '', mais: {} };
   var V = { ordem: 'antigas' };
   var A = { recorte: 'todas', dev: '', mais: 0 };
   var POR_GRUPO = 25;      // linhas por grupo antes do "mostrar mais"
@@ -79,6 +80,13 @@
       '.axa .bk-ln .et{display:flex;flex-wrap:wrap;gap:4px}',
       '.axa .bk-ln .pz{font-size:12px;text-align:right;font-weight:600}',
       '.axa .bk-ln .av{width:26px;height:26px;border-radius:13px;font-size:10px}',
+      // A cor da sprint do PO na linha (`card-comsprint`, admin.html).
+      '.axa .bk-ln.comsp{box-shadow:inset 4px 0 0 var(--sp-cor)}',
+      '.axa .bk-ln.minha.comsp{box-shadow:inset 3px 0 0 var(--ac),inset 7px 0 0 var(--sp-cor)}',
+      // As marcas da linha (no ar, vinculos, soma) e a previa da descricao (`renderMelhorias`, admin.html).
+      '.axa .bk-ln .bk-mk{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}',
+      '.axa .bk-ln .bk-mk .chip{height:20px;padding:0 7px;font-size:11px;gap:4px}',
+      '.axa .bk-ln .bk-ds{font-size:12px;line-height:17px;color:var(--tx3);margin-top:3px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}',
       '.axa .bk-mais{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 16px;font-size:12.5px;color:var(--tx3)}',
       '.axa .bk-vl{padding:11px 13px;border-radius:12px;display:flex;flex-direction:column;gap:4px;background:var(--sf2);border:1px solid var(--bd);text-decoration:none;color:var(--tx)}',
       '.axa .bk-vl:hover{border-color:var(--bd4);color:var(--tx)}',
@@ -96,7 +104,9 @@
         // A lista vira cartoes (.tc do nucleo); dentro do grupo, sem cartao dentro de cartao.
         '.axa .bk-tab{min-width:0}.axa .bk-fil input.in{flex:1 1 150px}.axa .bk-gh{flex-wrap:wrap}.axa .bk-gb{margin-left:0;flex:1 1 80px}' +
         '.axa .bk-grp .tc-ln{margin:0;border-radius:0;border-width:0 0 1px;border-color:var(--bd3);background:transparent}.axa .bk-grp .tc-ln:last-child{border-bottom:0}' +
-        '.axa .bk-ln .tt{white-space:normal}.axa .bk-ln .cm{white-space:normal}}'
+        '.axa .bk-ln .tt{white-space:normal}.axa .bk-ln .cm{white-space:normal}.axa .bk-ln .bk-mk .chip{font-size:12px}' +
+        // Toque de 44 px nos chips das etapas e texto de 12 px na linha de quem esta com a demanda.
+        '.axa .bk-ln .bk-ds{-webkit-line-clamp:2}.axa .bk-chip{min-height:44px}.axa .bk-ln .cm,.axa .bk-ln .cm *,.axa .bk-gp{font-size:12px}}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -132,9 +142,10 @@
   var CHIP_POR_ID = {};
   CHIPS.forEach(function (c) { CHIP_POR_ID[c.id] = c; });
 
-  /** A busca: texto no titulo, dev, solicitante e codigo (com e sem hifen) —
-   *  a mesma lista do `matchBusca` do admin — e, por cima, o codigo pela regra
-   *  do `BUSCA_DEMANDA` ("179", "#179" e o numero da issue do GitHub). */
+  /** A busca: texto no titulo, na descricao, no dev, no solicitante e no
+   *  codigo (com e sem hifen) — a mesma lista do `matchBusca` do admin — e,
+   *  por cima, o codigo pela regra do `BUSCA_DEMANDA` ("179", "#179" e o
+   *  numero da issue do GitHub). */
   function filtroBusca(vs, termo) {
     var t = norm(String(termo || '').trim());
     if (!t) return null;
@@ -143,7 +154,7 @@
     return function (m) {
       if (m === por) return true;
       var cod = String(m.codigo || '');
-      return norm([m.titulo, m.dev, m.solicitante, cod, cod.replace(/-/g, '')].join(' ')).indexOf(t) >= 0;
+      return norm([m.titulo, m.descricao, m.dev, m.solicitante, cod, cod.replace(/-/g, '')].filter(Boolean).join(' ')).indexOf(t) >= 0;
     };
   }
 
@@ -164,6 +175,19 @@
     return W.catalogoCasa ? W.catalogoCasa(m.tema_id, f, temas(D)) : String(m.tema_id) === String(f);
   }
 
+  /* PRAZO E PRODUCAO — as regras do Quadro (`AXIS_QUADRO.casaPrazo` e
+     `casaProducao`), copias de `matchPrazo` e `matchProducao` do admin. */
+  var PRAZOS = [['', 'Todos os prazos'], ['vencidas', 'Vencidas'], ['semana', 'Vencem na semana'], ['mes', 'Vencem no mês'], ['sem_data', 'Sem data']];
+  var PRODUCAO = [['', 'Toda a produção'], ['falta_subir', 'Concluídas fora do ar'], ['no_ar', 'No ar']];
+  function casaPrazo(m, f) {
+    var Q = W.AXIS_QUADRO;
+    return !f || !Q || Q.casaPrazo(m, f, H.hoje(), H.colunaDe(m));
+  }
+  function casaProducao(m, f) {
+    var Q = W.AXIS_QUADRO;
+    return !f || !Q || Q.casaProducao(m, f, H.colunaDe(m), H.pausada(m));
+  }
+
   /** Tudo menos o chip: e sobre esta lista que os chips contam, para o numero
    *  do chip ser o numero que aparece ao clicar nele. */
   function baseFiltrada(D) {
@@ -171,18 +195,22 @@
     var b = filtroBusca(vs, F.q);
     return vs.filter(function (m) {
       return (!b || b(m)) && casaDev(m, F.dev) && casaTipo(m, F.tipo) && casaTema(m, F.tema, D) &&
-        (!F.sprint || !W.AXIS_SPRINTS || W.AXIS_SPRINTS.casa(m, F.sprint));
+        (!F.sprint || !W.AXIS_SPRINTS || W.AXIS_SPRINTS.casa(m, F.sprint)) && casaPrazo(m, F.prazo) && casaProducao(m, F.prod);
     });
   }
 
   /* CONCLUIDA E NEGADA FICAM OCULTAS POR PADRAO, salvo quando a pessoa pede:
-     o chip delas, ou uma busca. E a regra do `renderMelhorias` do admin
-     (HIDDEN_BY_DEFAULT) — buscar um codigo e nao achar porque ele ja foi
-     entregue derrota o proposito da busca. */
+     o chip delas, uma busca, ou um filtro de sprint, prazo ou producao. E a
+     regra do `renderMelhorias` do admin (HIDDEN_BY_DEFAULT) — buscar um
+     codigo e nao achar porque ele ja foi entregue derrota o proposito da
+     busca, e "Concluidas fora do ar" pede justamente concluidas. */
+  function mostraFechadas() {
+    return F.chip === 'concluido' || F.chip === 'negada' || !!String(F.q).trim() || !!F.sprint || !!F.prazo || !!F.prod;
+  }
   function listaDoChip(base) {
     var c = CHIP_POR_ID[F.chip] || CHIPS[0];
-    var mostraFechadas = F.chip === 'concluido' || F.chip === 'negada' || !!String(F.q).trim();
-    return base.filter(function (m) { return c.casa(m) && (mostraFechadas || aberta(m)); });
+    var fechadas = mostraFechadas();
+    return base.filter(function (m) { return c.casa(m) && (fechadas || aberta(m)); });
   }
 
   // ── Celulas da linha ──────────────────────────────────────────────────
@@ -192,7 +220,11 @@
     var c = H.colunaDe(m);
     var e = H.ETAPA_POR_ID[c] || { rotulo: c || '—', cor: 'bk' };
     var h = H.chip(H.esc(e.rotulo), e.cor);
-    if (pausadaAberta(m)) h += H.chip(H.ico('pause') + ' Pausada', 'mg');
+    // "Pausada · Nd" (`renderMelhorias`, admin.html: `diasPausadoAgora`).
+    if (pausadaAberta(m)) {
+      var dp = W.PRAZO ? W.PRAZO.diasPausados(m, H.hoje()) : 0;
+      h += H.chip(H.ico('pause') + ' Pausada' + (dp ? ' · ' + dp + 'd' : ''), 'mg', m.pausa_motivo || '');
+    }
     return h;
   }
 
@@ -226,7 +258,10 @@
   function pontosCel(m) {
     var p = m.poker_pontos;
     var n = Number(p);
-    return (p === '' || p == null || !isFinite(n)) ? '<span class="mo" style="color:var(--tx4)">—</span>' : '<span class="mo">' + H.esc(String(n)) + '</span>';
+    if (p === '' || p == null || !isFinite(n)) return '<span class="mo" style="color:var(--tx4)">—</span>';
+    // A media do Poker no title (o "🃏 N" do admin diz "Planning Poker — media X").
+    var md = m.poker_media != null && m.poker_media !== '' ? String(m.poker_media).replace('.', ',') : '';
+    return '<span class="mo" title="' + (md ? 'Planning Poker — média ' + H.esc(md) : 'Pontos por estimativa, sem votação no Poker') + '">' + H.esc(String(n)) + '</span>';
   }
 
   function devCel(m) {
@@ -241,17 +276,43 @@
     return t ? '<span style="font-size:12px;color:var(--tx2)">' + H.esc(t.rotulo) + '</span>' : '<span style="font-size:12px;color:var(--tx4)">—</span>';
   }
 
+  /* AS MARCAS DA LINHA (`renderMelhorias`, admin.html): "no ar" com a versao,
+     a principal ("Dep. de AX-n"), as dependencias abertas e a soma da arvore
+     (vinculo.js). A pausa com os dias vai no chip da etapa; a media do Poker,
+     nos pontos. */
+  function marcasLinha(m) {
+    var c = [];
+    if (m.em_producao) c.push(H.chip('▲ no ar' + (m.versao ? ' ' + H.esc(m.versao) : ''), 'ok',
+      'Em produção' + (m.versao ? ' na versão ' + m.versao : '') + (m.producao_em ? ' desde ' + H.dma(String(m.producao_em).slice(0, 10)) : '')));
+    var VI = W.VINCULO, lista = (AX.APP.D || {}).melhorias || [];
+    if (VI) {
+      var pai = m.parent_id ? lista.find(function (x) { return x && x.id === m.parent_id; }) : null;
+      if (pai) c.push(H.chip(H.ico('link') + ' Dep. de ' + H.esc(pai.codigo || ''), 'pu', (pai.codigo ? pai.codigo + ' · ' : '') + (pai.titulo || '')));
+      var n = VI.abertos(lista, m.id).length;
+      if (n) c.push(H.chip(H.ico('hourglass') + ' ' + n + ' dep. aberta' + (n > 1 ? 's' : ''), 'dg'));
+      var fr = VI.frase(lista, m);
+      if (fr) c.push(H.chip(H.ico('calc') + ' ' + H.esc(fr), 'bk', 'Soma dos pontos desta demanda e de tudo que depende dela. É leitura, não é campo.'));
+    }
+    return c.join('');
+  }
+
   function linha(m, eDev) {
     var pz = prazoCel(m);
     var cam = H.caminho(m.tema_id);
+    var mk = marcasLinha(m);
+    var ds = String(m.descricao || '').trim();
+    var spEst = W.SPRINTPO && W.SPRINTPO.estiloSprint ? W.SPRINTPO.estiloSprint(m) : '';
     // Celulas com `data-label`: no celular a linha vira cartao (tabela-cartao do nucleo).
-    return '<a class="bk-ln tc-ln' + (eDev && H.minha(m) ? ' minha' : '') + '" href="' + H.hrefItem(m) + '">' +
+    return '<a class="bk-ln tc-ln' + (eDev && H.minha(m) ? ' minha' : '') + (spEst ? ' comsp' : '') + '" href="' + H.hrefItem(m) + '"' + (spEst ? ' style="' + H.esc(spEst) + '"' : '') + '>' +
       '<span class="ci" data-tc="topo">' + H.esc(m.codigo || '—') + '</span>' +
       '<span style="display:flex;flex-direction:column;min-width:0" data-tc="titulo"><span class="tt">' + H.esc(m.titulo || '(sem título)') + '</span>' +
       // Com quem esta e a entrega ao usuario: a linha da lista de Melhorias do admin (372b92f).
       '<span class="cm">' + (cam ? H.esc(cam) : 'Sem sistema') + (W.AXIS_SPRINTS ? ' · ' + W.AXIS_SPRINTS.comQuem(m) : '') + '</span>' +
       // Impacto e urgencia ao lado do titulo, como na lista de Melhorias do admin.
-      (H.chipsReq(m) ? '<span class="row" style="gap:4px;flex-wrap:wrap;margin-top:3px">' + H.chipsReq(m) + '</span>' : '') + '</span>' +
+      (H.chipsReq(m) ? '<span class="row" style="gap:4px;flex-wrap:wrap;margin-top:3px">' + H.chipsReq(m) + '</span>' : '') +
+      (mk ? '<span class="bk-mk">' + mk + '</span>' : '') +
+      // A previa da descricao: os 120 primeiros caracteres, como na lista do admin.
+      (ds ? '<span class="bk-ds">' + H.esc(ds.slice(0, 120)) + (ds.length > 120 ? '…' : '') + '</span>' : '') + '</span>' +
       H.celula(tipoCel(m), 'Tipo') +
       '<span class="et" data-label="Etapa">' + chipColuna(m) + '</span>' +
       H.celula(sprintCel(m), 'Sprint') + H.celula(pontosCel(m), 'Pontos') + H.celula(devCel(m), 'Dev') +
@@ -399,7 +460,7 @@
   function htmlCorpo(D, eDev) {
     var base = baseFiltrada(D);
     var lista = listaDoChip(base);
-    var oculto = !(F.chip === 'concluido' || F.chip === 'negada' || String(F.q).trim());
+    var oculto = !mostraFechadas();
     var nota = '<span class="note">Mostrando <b style="color:var(--tx2)">' + H.num(lista.length) + '</b> de ' + H.num(H.visiveis().length) + ' itens' +
       (oculto ? ' · concluídos e negados ficam ocultos: use o chip ou busque pelo código.' : '.') + '</span>';
     if (!lista.length) {
@@ -425,9 +486,18 @@
       lista.map(function (n) { return op(n, n); }).join('');
   }
 
+  /** As opcoes de um filtro com "(n)": n e sobre os itens visiveis. */
+  function opcoesContadas(ops, atual, casa) {
+    var vs = H.visiveis();
+    return ops.map(function (o) {
+      var n = o[0] ? vs.filter(function (m) { return casa(m, o[0]); }).length : vs.length;
+      return '<option value="' + o[0] + '"' + (atual === o[0] ? ' selected' : '') + '>' + H.esc(o[1]) + ' (' + H.num(n) + ')</option>';
+    }).join('');
+  }
+
   /** Quantos seletores estao fora do padrao (o numero do "Filtros (n)"). */
   function nFiltros() {
-    return (F.agrupar !== 'projeto' ? 1 : 0) + (F.sprint ? 1 : 0) + (F.tipo ? 1 : 0) + (F.tema ? 1 : 0) + (F.dev ? 1 : 0);
+    return (F.agrupar !== 'projeto' ? 1 : 0) + (F.sprint ? 1 : 0) + (F.tipo ? 1 : 0) + (F.tema ? 1 : 0) + (F.dev ? 1 : 0) + (F.prazo ? 1 : 0) + (F.prod ? 1 : 0);
   }
 
   function renderLista(ctx) {
@@ -446,7 +516,7 @@
       '<div id="bk-chips" style="display:flex;flex-wrap:wrap;gap:8px">' + c.chips + '</div>' +
       '<div class="bk-fil">' +
       '<label for="bk-q" style="position:absolute;left:-9999px">Buscar no backlog</label>' +
-      '<input class="in" id="bk-q" type="search" autocomplete="off" placeholder="AX-179, título, dev, solicitante" value="' + H.esc(F.q) + '">' +
+      '<input class="in" id="bk-q" type="search" autocomplete="off" placeholder="AX-179, título, descrição, dev, solicitante" value="' + H.esc(F.q) + '">' +
       // No celular os seletores recolhem no botao "Filtros (n)" (H.filtros); a busca fica a mao.
       H.filtros('<select class="in" id="bk-agr" aria-label="Agrupar">' +
       sel('projeto', 'Agrupar por projeto', F.agrupar) + sel('sistema', 'Agrupar por sistema', F.agrupar) + sel('tema', 'Agrupar por tema', F.agrupar) +
@@ -457,7 +527,10 @@
       '<select class="in" id="bk-tipo" aria-label="Tipo">' + sel('', 'Todos os tipos', F.tipo) + sel('evolucao', 'Evolução', F.tipo) +
       sel('sustentacao', 'Sustentação', F.tipo) + sel(SEM_TIPO, 'Sem tipo', F.tipo) + '</select>' +
       '<select class="in" id="bk-tema" aria-label="Sistema">' + temasOp + '</select>' +
-      '<select class="in" id="bk-dev" aria-label="Dev">' + opcoesDev(D, eDev) + '</select>', nFiltros(), { id: 'backlog' }) +
+      '<select class="in" id="bk-dev" aria-label="Dev">' + opcoesDev(D, eDev) + '</select>' +
+      // Prazo e Producao (`opcoesPrazo` e `opcoesProducao`, admin.html), com a contagem de cada opcao.
+      '<select class="in" id="bk-prazo" aria-label="Prazo">' + opcoesContadas(PRAZOS, F.prazo, casaPrazo) + '</select>' +
+      '<select class="in" id="bk-prod" aria-label="Produção">' + opcoesContadas(PRODUCAO, F.prod, casaProducao) + '</select>', nFiltros(), { id: 'backlog' }) +
       '</div><div id="bk-corpo" style="display:flex;flex-direction:column;gap:12px">' + c.corpo + '</div>';
   }
 
@@ -476,7 +549,7 @@
       clearTimeout(t);
       t = setTimeout(function () { F.q = q.value; repinta(true); }, 140);
     });
-    [['#bk-agr', 'agrupar'], ['#bk-tipo', 'tipo'], ['#bk-tema', 'tema'], ['#bk-dev', 'dev']].forEach(function (p) {
+    [['#bk-agr', 'agrupar'], ['#bk-tipo', 'tipo'], ['#bk-tema', 'tema'], ['#bk-dev', 'dev'], ['#bk-prazo', 'prazo'], ['#bk-prod', 'prod']].forEach(function (p) {
       var s = el.querySelector(p[0]);
       if (s) s.addEventListener('change', function () { F[p[1]] = s.value; repinta(true); });
     });
@@ -488,7 +561,7 @@
       var todos = e.target.closest('[data-bk-todos]');
       if (todos) { F.mais[todos.getAttribute('data-bk-todos')] = 1e9; repinta(false); return; }
       if (e.target.closest('[data-bk-limpar]')) {
-        F.chip = 'todos'; F.q = ''; F.tipo = ''; F.tema = ''; F.dev = ''; F.sprint = null;
+        F.chip = 'todos'; F.q = ''; F.tipo = ''; F.tema = ''; F.dev = ''; F.sprint = null; F.prazo = ''; F.prod = '';
         AX.desenhar();
       }
     });

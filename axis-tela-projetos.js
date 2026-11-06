@@ -142,6 +142,14 @@
     '.axa .tl-lb{padding:8px 10px !important}',
     '.axa .pja-cols{grid-template-columns:minmax(0,1fr)}',
     '.axa .pja-top .dir{margin-left:0}',
+    /* Toque de 44 px e letra de 12 px. O nome do projeto e o titulo do item
+       crescem a area por padding com margem negativa (o desenho fica); as
+       linhas de marco e de demanda ganham altura. */
+    '.axa a.pj-nm,.axa a.pj-it-t{padding:13px 0;margin:-13px 0}',
+    '.axa .pj-mc{gap:0}.axa .pj-mc a,.axa .pj-mc span.it{min-height:44px;align-items:center}',
+    '.axa .pja-ln{min-height:44px;box-sizing:border-box}',
+    '.axa .pja-col .hd,.axa .pja-col .cb,.axa .pja-ln .t b,.axa .pja-ln .d,.axa .pj-st,.axa .tl-txt,.axa .tl-hoje-l{font-size:12px}',
+    '.axa .pj-itens .pj-it-t{white-space:normal}',
     '}'
   ].join('\n');
   function garanteCss() {
@@ -933,18 +941,18 @@
     }).join('');
     var corpo = !ms.length ? H.vazio('inbox', 'Nenhum item ligado a este projeto', edita ? 'Busque uma demanda acima para adicionar, ou use o campo Projeto no formulário da demanda.' : 'O vínculo é feito no formulário da demanda, no campo Projeto.')
       : !lista.length ? '<span class="note">Nenhum item neste filtro.</span>'
-      : '<table class="tbl"><thead><tr><th>ITEM</th><th>TÍTULO</th><th>ETAPA</th><th>DEV</th><th class="num">PTS</th><th>PRAZO</th>' + (edita ? '<th></th>' : '') + '</tr></thead><tbody>' +
+      : '<table class="tbl tc pj-itens"><thead><tr><th>ITEM</th><th>TÍTULO</th><th>ETAPA</th><th>DEV</th><th class="num">PTS</th><th>PRAZO</th>' + (edita ? '<th></th>' : '') + '</tr></thead><tbody>' +
         pg.map(function (m) {
           var pz = prazoCelula(m), devs = H.devsDe(m), pts = H.pontosDe(m);
           return '<tr class="click' + (dev && H.minha(m) ? ' minha' : '') + '" data-href="' + esc(H.hrefItem(m)) + '" tabindex="0">' +
-            '<td style="white-space:nowrap">' + H.cod(m) + '</td>' +
-            '<td style="max-width:460px"><a href="' + H.hrefItem(m) + '" class="ell" style="display:block;color:var(--tx);font-weight:700;text-decoration:none" title="' + esc(m.titulo) + '">' + esc(m.titulo || '(sem título)') + '</a>' +
+            '<td style="white-space:nowrap" data-tc="topo">' + H.cod(m) + '</td>' +
+            '<td style="max-width:460px" data-tc="titulo"><a href="' + H.hrefItem(m) + '" class="ell pj-it-t" style="display:block;color:var(--tx);font-weight:700;text-decoration:none" title="' + esc(m.titulo) + '">' + esc(m.titulo || '(sem título)') + '</a>' +
             '<span class="ell" style="display:block;font-size:11.5px;color:var(--tx3)">' + esc(H.caminho(m.tema_id) || 'sem sistema') + '</span></td>' +
-            '<td>' + H.chipEtapa(m) + '</td>' +
-            '<td><span class="row" style="gap:6px">' + (devs.length ? devs.slice(0, 2).map(function (d) { return H.av(d, 22); }).join('') + '<span class="ell" style="max-width:120px;font-size:12.5px">' + esc(devs[0]) + (devs.length > 1 ? ' +' + (devs.length - 1) : '') + '</span>' : '<span style="color:var(--tx4)">—</span>') + '</span></td>' +
-            '<td class="num">' + (pts ? pts : '<span style="color:var(--tx4)">—</span>') + '</td>' +
-            '<td style="white-space:nowrap;color:' + pz.cor + '">' + esc(pz.txt) + '</td>' +
-            (edita ? '<td><button type="button" class="btns" data-pj-tirar="' + esc(m.id) + '" title="Tira esta demanda do projeto">Tirar</button></td>' : '') + '</tr>';
+            '<td data-tc="topo-fim">' + H.chipEtapa(m) + '</td>' +
+            '<td data-label="Dev"><span class="row" style="gap:6px">' + (devs.length ? devs.slice(0, 2).map(function (d) { return H.av(d, 22); }).join('') + '<span class="ell" style="max-width:120px;font-size:12.5px">' + esc(devs[0]) + (devs.length > 1 ? ' +' + (devs.length - 1) : '') + '</span>' : '<span style="color:var(--tx4)">—</span>') + '</span></td>' +
+            '<td class="num" data-label="Pts">' + (pts ? pts : '<span style="color:var(--tx4)">—</span>') + '</td>' +
+            '<td style="white-space:nowrap;color:' + pz.cor + '" data-label="Prazo">' + esc(pz.txt) + '</td>' +
+            (edita ? '<td data-tc="acao"><button type="button" class="btns" data-pj-tirar="' + esc(m.id) + '" title="Tira esta demanda do projeto">Tirar</button></td>' : '') + '</tr>';
         }).join('') + '</tbody></table>';
     var pager = lista.length > POR_PAG
       ? '<div class="pj-pager"><span>' + (FD.pag * POR_PAG + 1) + '–' + Math.min(lista.length, (FD.pag + 1) * POR_PAG) + ' de ' + lista.length + '</span>' +

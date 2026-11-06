@@ -30,7 +30,10 @@
      fica de fora: e o painel aberto, sem conta. */
   var ROTA_NOVA = {
     'admin.html': 'inicio', 'dev.html': 'inicio/meu', 'gantt.html': 'planejamento',
-    'poker.html': 'poker', 'follow.html': 'acompanhamentos', 'projetos.html': 'projetos',
+    'poker.html': 'poker', 'follow.html': 'acompanhamentos',
+    // projetos.html e a carteira de HORAS POR TEMA, e nao os projetos EP-: no
+    // app, o mais proximo e a visao gerencial dos Paineis.
+    'projetos.html': 'paineis/visao',
     'importar.html': 'importar', 'mensageria.html': 'api'
   };
 

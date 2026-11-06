@@ -380,3 +380,10 @@
   .axa .ovl .chip, .axa .ovl .lab, .axa .ovl .kbd { font-size: 12px !important; }
   .axa .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
+
+/* ── Celular: o logo do topo e o link de texto solto chegam a 44 px de
+   toque (o desenho fica: a area cresce por padding com margem negativa). ── */
+@container app (max-width: 760px) {
+  .axa .tb-logo { min-width: 44px; min-height: 44px; align-items: center; justify-content: center; }
+  .axa .main a[href]:not([class]):not([style]) { padding-top: 14px; padding-bottom: 14px; margin-top: -14px; margin-bottom: -14px; }
+}

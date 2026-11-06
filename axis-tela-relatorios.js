@@ -740,13 +740,17 @@
     var r = g.relComoAndou(D, j, ''), t = g.relTemasDe(D, '', j);
     var h = g.cabecalho('Relatórios',
       'Os relatórios que o RoadMap já gera, com os números de ' + esc(g.rotuloMes(alvo)) + '. Todos saem daqui: a ata, o placar, os PPTs e a base do mês em CSV.');
-    h += '<div class="gx-g gx-as"><aside class="gx-col-f"><section class="pn" style="gap:4px"><span class="lab" style="padding:0 0 6px">MODELOS</span>' +
+    // No celular a lista de modelos vira um seletor no alto do conteudo
+    // (`rl-modsel`): dez botoes empilhados empurravam o relatorio para baixo.
+    h += '<div class="gx-g gx-as"><aside class="gx-col-f rl-aside"><section class="pn rl-mods" style="gap:4px"><span class="lab" style="padding:0 0 6px">MODELOS</span>' +
       MODELOS.map(function (m) {
         return '<button type="button" class="gx-mod' + (m.id === _modelo ? ' on' : '') + '" data-modelo="' + m.id + '"><span>' + esc(m.rot) + '</span>' +
           '<span class="note" style="font-size:11px">' + (m.ppt || m.id === 'deck-assunto' ? 'PPT' : m.id === 'csv' ? 'CSV' : m.id === 'comite' || m.id === 'sprint' ? 'texto' : m.id === 'deck-mes' ? 'PPT' : 'tela') + '</span></button>';
       }).join('') + '</section>' +
       '<section class="pn" style="gap:8px"><span class="lab">AINDA NÃO EXISTE</span><span class="note">Modelo salvo com filtros próprios e envio agendado por e-mail ou Teams não estão no RoadMap. Hoje cada relatório é gerado na hora, na tela de origem.</span></section></aside>' +
       '<div class="gx-col-f">' +
+        '<label class="rl-modsel"><span class="lab">MODELO</span><select class="in" data-rl-modelo="1" aria-label="Modelo de relatório">' +
+          MODELOS.map(function (m) { return '<option value="' + m.id + '"' + (m.id === _modelo ? ' selected' : '') + '>' + esc(m.rot) + '</option>'; }).join('') + '</select></label>' +
         '<div class="gx-g gx-k4">' +
           g.k('Entregas no mês', H.num(r.entregas), 'saíram da mão do dev') +
           g.k('Pontos entregues', H.num(r.agora.entregue) + ' pt', 'pela entrega do dev', 'var(--ok-t)') +
@@ -984,10 +988,10 @@
       g.k('Saíram sem entregar', H.num(p.saiu), 'contam no total', p.saiu ? 'var(--dg-t)' : '') + '</div>' +
       '<span class="note">' + esc(p.rotulo + ' · ' + p.sub) + (p.temDupla ? ' · demanda de dupla conta para os dois' : '') + '</span>';
     // Na regra nova o % do ranking e de fechadas + em validacao (rankingDaSprint, c11b681).
-    h += p.ranking.length ? '<div class="gx-tw"><table class="tbl"><thead><tr><th>DEV</th><th class="num">VALIDADOS</th><th class="num">PONTOS</th>' +
+    h += p.ranking.length ? '<div class="gx-tw"><table class="tbl tc"><thead><tr><th>DEV</th><th class="num">VALIDADOS</th><th class="num">PONTOS</th>' +
       (nova ? '<th class="num" title="(Fechadas + em validação) ÷ itens da pessoa na sprint">% ENTREGUE</th>' : '<th class="num">%</th>') + '</tr></thead><tbody>' +
       p.ranking.map(function (d) {
-        return '<tr><td style="color:var(--tx)">' + esc(d.nome) + '</td><td class="num mono">' + d.validados + ' / ' + d.total + '</td><td class="num mono">' + d.pontos + '</td><td class="num">' + g.chipPct(d.pct) + '</td></tr>';
+        return '<tr><td style="color:var(--tx)" data-tc="topo">' + esc(d.nome) + '</td><td class="num mono" data-label="Validados">' + d.validados + ' / ' + d.total + '</td><td class="num mono" data-label="Pontos">' + d.pontos + '</td><td class="num" data-tc="topo-fim">' + g.chipPct(d.pct) + '</td></tr>';
       }).join('') + '</tbody></table></div>' : '';
     h += '<span class="lab">EM RISCO DE NÃO ENTREGAR · ' + p.risco.length + '</span>' + (p.risco.length ? p.risco.slice(0, 12).map(function (x) {
       return '<div class="gx-al"><span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:13px;font-weight:700"><span class="code" style="margin-right:6px">' + esc(x.codigo) + '</span>' + esc(x.titulo) + '</span>' +
@@ -1097,17 +1101,21 @@
       '<span id="rl-sub"></span>',
       '<button type="button" class="btnp" data-csv="1">' + H.ico('download') + ' Exportar CSV</button>',
       '<span class="note"><a href="#relatorios/salvos">Relatórios</a> › Entregues</span>');
-    h += '<section class="pn" style="padding:14px 16px"><div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">' +
+    // No celular periodo, sistema, dev e atalhos recolhem em "Filtros (n)"
+    // (H.filtros); a busca fica a mao.
+    var L0 = g.limites(g.mesCorrente());
+    var nFil = (_f.raiz ? 1 : 0) + (_f.dev ? 1 : 0) + (p.de !== L0.de || p.ate !== L0.ate ? 1 : 0);
+    h += '<section class="pn rl-fil" style="padding:14px 16px"><div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">' + H.filtros(
       campo('De', '<input class="in" type="date" data-f="de" value="' + esc(p.de) + '" style="height:36px">') +
       campo('Até', '<input class="in" type="date" data-f="ate" value="' + esc(p.ate) + '" style="height:36px">') +
       campo('Sistema', '<select class="in" data-f="raiz" style="height:36px;max-width:240px"><option value="">Todos os sistemas</option>' +
         sist.map(function (s) { return '<option value="' + esc(s) + '"' + (s === _f.raiz ? ' selected' : '') + '>' + esc(s) + ' (' + cont[s] + ')</option>'; }).join('') + '</select>') +
       campo('Dev', '<select class="in" data-f="dev" style="height:36px;max-width:200px"><option value="">Todos</option>' +
         Object.keys(devs).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); }).map(function (n) { return '<option' + (n === _f.dev ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>') +
-      campo('Buscar', '<input class="in" data-f="q" placeholder="AX-, título ou texto" value="' + esc(_f.q) + '" style="height:36px;width:220px">') +
-      '<span class="row" style="gap:6px">' + [['mes', 'Este mês'], ['ant', 'Mês passado'], ['90', '90 dias']].map(function (x) {
+      '<span class="row rl-atalhos" style="gap:6px">' + [['mes', 'Este mês'], ['ant', 'Mês passado'], ['90', '90 dias']].map(function (x) {
         return '<button type="button" class="btns" data-atalho="' + x[0] + '">' + x[1] + '</button>';
-      }).join('') + '</span></div></section>';
+      }).join('') + '</span>', nFil, { id: 'rl-entregues', titulo: 'Filtros' }) +
+      campo('Buscar', '<input class="in" data-f="q" placeholder="AX-, título ou texto" value="' + esc(_f.q) + '" style="height:36px;width:220px">') + '</div></section>';
     h += '<div id="rl-res" style="display:flex;flex-direction:column;gap:16px">' + entreguesRes(ctx) + '</div>';
     return h;
   }
@@ -1142,13 +1150,13 @@
     if (grupos.length > 1 || _f.raiz) {
       h += '<section class="pn"><div class="row" style="justify-content:space-between;flex-wrap:wrap"><h2 class="h2">Por sistema</h2><span class="note">' +
         (_f.raiz ? '<button type="button" class="link" data-raiz="">mostrar todos os sistemas</button>' : 'clique na linha para filtrar') + '</span></div>' +
-        '<div class="gx-tw"><table class="tbl"><thead><tr><th>SISTEMA</th><th class="num">ENTREGUES</th><th class="num">PONTOS</th><th style="width:30%">COMPOSIÇÃO</th><th class="num">NO PRAZO</th></tr></thead><tbody>' +
+        '<div class="gx-tw"><table class="tbl tc"><thead><tr><th>SISTEMA</th><th class="num">ENTREGUES</th><th class="num">PONTOS</th><th style="width:30%">COMPOSIÇÃO</th><th class="num">NO PRAZO</th></tr></thead><tbody>' +
         grupos.map(function (a) {
           var w = function (v) { return (v / a.n * 100).toFixed(1) + '%'; };
-          return '<tr class="click" data-raiz="' + esc(a.nome) + '"><td style="color:var(--tx)">' + esc(a.nome) + '</td><td class="num mono">' + a.n + '</td><td class="num mono">' + a.pts + '</td>' +
-            '<td><div class="bar" title="' + a.evo + ' evolução · ' + a.sust + ' sustentação · ' + a.sem + ' sem tipo"><span style="width:' + w(a.evo) + ';background:var(--ac)"></span>' +
+          return '<tr class="click" data-raiz="' + esc(a.nome) + '"><td style="color:var(--tx)" data-tc="topo">' + esc(a.nome) + '</td><td class="num mono" data-label="Entregues">' + a.n + '</td><td class="num mono" data-label="Pontos">' + a.pts + '</td>' +
+            '<td data-label="Composição" data-tc="largo"><div class="bar" title="' + a.evo + ' evolução · ' + a.sust + ' sustentação · ' + a.sem + ' sem tipo"><span style="width:' + w(a.evo) + ';background:var(--ac)"></span>' +
             '<span style="width:' + w(a.sust) + ';background:var(--in)"></span><span style="width:' + w(a.sem) + ';background:var(--tx4)"></span></div></td>' +
-            '<td class="num">' + (a.med ? g.chipPct(Math.round(a.ok / a.med * 100)) : '<span class="note">—</span>') + '</td></tr>';
+            '<td class="num" data-tc="topo-fim">' + (a.med ? g.chipPct(Math.round(a.ok / a.med * 100)) : '<span class="note">—</span>') + '</td></tr>';
         }).join('') + '</tbody></table></div>' +
         '<div class="gx-leg">' + g.leg('var(--ac)', 'evolução') + g.leg('var(--in)', 'sustentação') + g.leg('var(--tx4)', 'sem tipo') + '</div></section>';
     }
@@ -1157,15 +1165,15 @@
     _f.pag = pg.pag;
     h += '<section class="pn"><div class="row" style="justify-content:space-between;flex-wrap:wrap"><h2 class="h2">Demandas</h2>' +
       '<span class="note">pela data em que o dev entregou; em validação ainda espera o PM/PO</span></div>' +
-      (l.length ? '<div class="gx-tw"><table class="tbl"><thead><tr><th>ITEM</th><th>SISTEMA</th><th>DEV</th><th>ENTREGUE</th><th>PRAZO</th><th class="num">PONTOS</th><th>ETAPA</th></tr></thead><tbody>' +
+      (l.length ? '<div class="gx-tw"><table class="tbl tc gx-tc3"><thead><tr><th>ITEM</th><th>SISTEMA</th><th>DEV</th><th>ENTREGUE</th><th>PRAZO</th><th class="num">PONTOS</th><th>ETAPA</th></tr></thead><tbody>' +
         pg.itens.map(function (m) {
           var j = jul.get(m.id), res = String(m.resumo_entrega || '').trim();
-          return '<tr><td style="color:var(--tx);max-width:420px"><span class="row" style="gap:8px">' + g.codLink(m) + '<span class="ell" title="' + esc(m.titulo) + '">' + esc(m.titulo) + '</span></span>' +
+          return '<tr><td style="color:var(--tx);max-width:420px" data-tc="titulo"><span class="row" style="gap:8px">' + g.codLink(m) + '<span class="ell" title="' + esc(m.titulo) + '">' + esc(m.titulo) + '</span></span>' +
             (res ? '<span class="note ell" style="display:block;font-size:12px;margin-top:2px" title="' + esc(res) + '">' + esc(res) + '</span>' : '') + '</td>' +
-            '<td class="ell" style="max-width:180px">' + esc(H.caminho(m.tema_id) || '—') + '</td><td>' + esc(m.dev || '—') + '</td>' +
-            '<td class="mono">' + (H.dm(r.saida(m)) || '—') + '</td>' +
-            '<td class="mono" style="color:' + j.cor + '"' + (j.pz ? ' title="prazo ' + H.dma(j.pz) + '"' : '') + '>' + esc(j.txt) + '</td>' +
-            '<td class="num mono">' + (H.pontosDe(m) || '—') + '</td><td>' + H.chipEtapa(m) + '</td></tr>';
+            '<td class="ell" style="max-width:180px" data-label="Sistema" data-tc="largo">' + esc(H.caminho(m.tema_id) || '—') + '</td><td data-tc="topo-fim">' + esc(m.dev || '—') + '</td>' +
+            '<td class="mono" data-label="Entregue">' + (H.dm(r.saida(m)) || '—') + '</td>' +
+            '<td class="mono" data-label="Prazo" style="color:' + j.cor + '"' + (j.pz ? ' title="prazo ' + H.dma(j.pz) + '"' : '') + '>' + esc(j.txt) + '</td>' +
+            '<td class="num mono" data-label="Pontos">' + (H.pontosDe(m) || '—') + '</td><td data-tc="topo">' + H.chipEtapa(m) + '</td></tr>';
         }).join('') + '</tbody></table></div>' + g.navPag(pg, l.length, 'pag-ent')
         : H.vazio('check', 'Nenhuma entrega com esses filtros', 'Troque o período, o sistema ou o dev.')) + '</section>';
     return h;
@@ -1259,13 +1267,13 @@
           : H.vazio('clock', 'Nenhuma conclusão com prazo nos últimos doze meses')) + '</section>' +
       onde(D, j) + '</div>';
 
-    h += '<section class="pn"><h2 class="h2">Mês a mês</h2><div class="gx-tw"><table class="tbl"><thead><tr><th>MÊS</th><th class="num">ENTREGAS</th><th class="num">PLANEJADO</th>' +
+    h += '<section class="pn"><h2 class="h2">Mês a mês</h2><div class="gx-tw"><table class="tbl tc gx-tc3"><thead><tr><th>MÊS</th><th class="num">ENTREGAS</th><th class="num">PLANEJADO</th>' +
       '<th class="num">ENTREGUE</th><th class="num">LEITURA</th><th class="num">NO PRAZO</th><th class="num">ATRASO MÉDIO</th></tr></thead><tbody>' +
       serie.slice().reverse().map(function (s) {
-        return '<tr' + (s.alvo === alvo ? ' style="background:rgba(var(--ac-rgb),.06)"' : '') + '><td style="color:var(--tx)"><a href="#relatorios/time/' + s.alvo + '" style="color:inherit;text-decoration:none">' + esc(g.rotuloMes(s.alvo)) + '</a></td>' +
-          '<td class="num mono">' + s.ent + '</td><td class="num mono">' + s.plan + ' pt</td><td class="num mono">' + s.feito + ' pt</td>' +
-          '<td class="num mono">' + esc(C.rotulo(s.plan, s.feito)) + '</td><td class="num">' + (s.medidas ? g.chipPct(s.pct) + ' <span class="note">' + s.medidas + '</span>' : '<span class="note">—</span>') + '</td>' +
-          '<td class="num mono">' + (s.atraso == null ? '—' : s.atraso + 'd · ' + s.nAtraso) + '</td></tr>';
+        return '<tr' + (s.alvo === alvo ? ' style="background:rgba(var(--ac-rgb),.06)"' : '') + '><td style="color:var(--tx)" data-tc="titulo"><a class="rl-mes" href="#relatorios/time/' + s.alvo + '" style="color:inherit;text-decoration:none">' + esc(g.rotuloMes(s.alvo)) + '</a></td>' +
+          '<td class="num mono" data-label="Entregas">' + s.ent + '</td><td class="num mono" data-label="Planejado">' + s.plan + ' pt</td><td class="num mono" data-label="Entregue">' + s.feito + ' pt</td>' +
+          '<td class="num mono" data-label="Leitura">' + esc(C.rotulo(s.plan, s.feito)) + '</td><td class="num" data-label="No prazo">' + (s.medidas ? g.chipPct(s.pct) + ' <span class="note">' + s.medidas + '</span>' : '<span class="note">—</span>') + '</td>' +
+          '<td class="num mono" data-label="Atraso médio">' + (s.atraso == null ? '—' : s.atraso + 'd · ' + s.nAtraso) + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
       '<span class="note">Entregas e pontos pela data em que o dev entregou (capacidade.js). Prazo pela data de conclusão, medido até a entrega do dev; atraso médio só entre as atrasadas, como no Gerencial.</span></section>';
     return h;
@@ -1297,7 +1305,13 @@
     var st = document.createElement('style');
     st.id = 'css-tela-relatorios';
     st.textContent = '.axa .rl-pre{margin:0;padding:14px;border-radius:12px;background:var(--side);border:1px solid var(--bd);font-family:var(--font-mono,monospace);font-size:11.5px;line-height:18px;color:var(--tx2);white-space:pre-wrap;word-break:break-word;overflow:auto;max-height:380px}' +
-      '.axa .fc-ck input{accent-color:var(--ac)}';
+      '.axa .fc-ck input{accent-color:var(--ac)}.axa .rl-modsel{display:none}' +
+      // Os atalhos de periodo moram dentro de H.filtros; no computador ficam depois da busca, como sempre.
+      '.axa .rl-atalhos{order:1}' +
+      '@container app (max-width: 760px){.axa .rl-pre{font-size:12px}.axa .rl-mods{display:none}.axa .rl-aside{order:2}' +
+      '.axa .rl-modsel{display:flex;flex-direction:column;gap:6px}.axa .rl-modsel .in{width:100%}' +
+      '.axa .rl-mes{display:inline-flex;align-items:center;min-height:44px;margin:-12px 0}' +
+      '.axa .rl-fil > .row > label{flex:1 1 160px}.axa .rl-fil .in{width:100% !important;max-width:none !important}}';
     document.head.appendChild(st);
   }
 
@@ -1349,6 +1363,14 @@
           return;
         }
         if (e.target.closest('[data-raiz-time]')) { _raizTime = e.target.value; raiz.AXIS_APP.desenhar(); return; }
+        var ms = e.target.closest('[data-rl-modelo]');
+        if (ms) {
+          _modelo = ms.value;
+          Array.prototype.forEach.call(el.querySelectorAll('[data-modelo]'), function (x) { x.classList.toggle('on', x.getAttribute('data-modelo') === _modelo); });
+          var bm = el.querySelector('#rl-modelo');
+          if (bm) bm.innerHTML = modelo(ctx);
+          return;
+        }
         // Os seletores da ata, do placar, do deck de assunto e do CSV: o
         // painel do modelo se redesenha com o periodo novo.
         var rf = e.target.closest('[data-rf]');
@@ -1365,6 +1387,7 @@
         if (m) {
           _modelo = m.getAttribute('data-modelo');
           Array.prototype.forEach.call(el.querySelectorAll('[data-modelo]'), function (x) { x.classList.toggle('on', x === m); });
+          var sm = el.querySelector('[data-rl-modelo]'); if (sm) sm.value = _modelo;
           var box = el.querySelector('#rl-modelo');
           if (box) box.innerHTML = modelo(ctx);
           return;

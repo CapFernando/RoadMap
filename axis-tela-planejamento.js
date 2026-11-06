@@ -73,6 +73,16 @@
    sprint da janela, sem pontuar, veio de antes e rolou de sprint. Os CHIPS DE
    ETAPA com a contagem (renderIndicators) filtram o quadro e a fila.
 
+   A FAIXA DAS PAUSADAS (renderPausadas) lista todas, inclusive as sem data,
+   com os dias parados, o dev, o motivo e "fora deste periodo"; recolhe e
+   lembra. Com o chip Pausada e o quadro vazio, a tela explica e leva a faixa
+   ou ao periodo onde elas tem barra (gMensagemVazio). O "fora do quadro" vale
+   em qualquer periodo ja comecado, com o caso generico do "nao coube". A
+   BARRA traz as marcas do card do gantt: dependencia, dependencia aberta,
+   selos, sistema e a borda de quem nasceu pela API ou no Painel Dev.
+   APRESENTAR (alternarApresentacao) tira filtros e fila, deixa os chips e a
+   capacidade, aumenta o texto e lembra ao recarregar.
+
    NO CELULAR (app ate 760 px) a regua nao serve: a tela vira AGENDA, por
    pessoa ou por dia, com um cartao por demanda (datas, etapa, prazo e
    "Mover"); o toque abre a gaveta. A fila fica recolhida em cima, e
@@ -142,10 +152,12 @@
   var F = { tipo: '', tema: '', dev: '', frente: '', prio: '', sprintPo: '', projeto: '', etapa: '', q: '' };
   var EST = {
     zoom: +lerLS('axis_plan_zoom') || 2,
-    apresentar: false,
+    // Lembrado ao recarregar (`rm_apresentando`, gantt.html): a reuniao recarrega a tela e nao perde o modo.
+    apresentar: lerLS('axis_plan_apres') === '1',
     pend: {},          // id -> patch em gravacao: a barra fica onde caiu ate o servidor responder
     capSel: '',
     limbo: lerLS('axis_plan_limbo') === '1',
+    pausadas: lerLS('axis_plan_pausadas') === '1',   // a faixa das pausadas aberta (lembrada, como no gantt)
     rolagem: 0,
     el: null,
     M: null,           // o que o ultimo desenho calculou (janela, linhas, barras)
@@ -180,6 +192,10 @@
       '.axa .pl-fil .ct{font-size:12px;color:var(--tx3);margin-left:4px}',
       '.axa .pl-lay{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px;align-items:start}',
       '.axa .pl-lay.so{grid-template-columns:minmax(0,1fr)}',
+      // Apresentacao (`body.apresentando`, gantt.html): o texto cresce, que a sala le de longe.
+      '.axa .pl-lay.so .pl-br{font-size:13.5px}',
+      '.axa .pl-lay.so .pl-lb .nm{font-size:15px}',
+      '.axa .pl-lay.so .pl-hs b,.axa .pl-lay.so .pl-hs span{font-size:13.5px}',
       '.axa .pl-gt{overflow-x:auto;border-radius:16px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd);--lw:224px}',
       '.axa .pl-in{min-width:calc(var(--lw) + var(--nc) * var(--dmin));position:relative}',
       '.axa .pl-gr{display:grid;grid-template-columns:var(--lw) repeat(var(--nc),minmax(0,1fr))}',
@@ -312,6 +328,22 @@
       '.axa .pl-lim .it{display:grid;grid-template-columns:78px minmax(0,1fr) minmax(0,1.2fr);gap:10px;align-items:center;padding:8px 10px;border-radius:9px;background:var(--sf2);font-size:12.5px;text-decoration:none;color:var(--tx)}',
       '.axa .pl-lim .it:hover{color:var(--tx);box-shadow:inset 0 0 0 1px var(--bd4)}',
       '.axa .pl-lim .it .por{color:var(--tx3);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      // A faixa das pausadas (`#g-pausadas`, gantt.html): a mesma bandeja do "fora do quadro", na cor da pausa.
+      '.axa .pl-lim.pl-pau{border-color:rgba(var(--mg-rgb,var(--pu-rgb)),.35);background:rgba(var(--mg-rgb,var(--pu-rgb)),.06)}',
+      '.axa .pl-pau > button{color:var(--mg-t,var(--pu-t))}',
+      '.axa .pl-pau .it{grid-template-columns:78px minmax(0,1fr) auto minmax(0,1fr)}',
+      '.axa .pl-pau .dd{font-family:var(--font-mono);font-size:12px;color:var(--tx2);white-space:nowrap}',
+      '.axa .pl-pau > button .tx{flex:1;min-width:0}',
+      '.axa .pl-pau > button .note{font-weight:500}',
+      '.axa .pl-pau > button small{white-space:nowrap}',
+      '.axa .pl-pau .fj{color:var(--wn-t);font-weight:700}',
+      '.axa .pl-pau.realce{box-shadow:0 0 0 3px rgba(var(--ac-rgb),.6)}',
+      '.axa .pl-vz-p{display:flex;flex-direction:column;gap:8px;padding:18px 20px;font-size:13px;line-height:20px;color:var(--tx2)}',
+      '.axa .pl-vz-p .row{flex-wrap:wrap;gap:8px}',
+      // As marcas da barra (gantt.html): dependencia, dependencia aberta, selo, sistema e a origem (API ou Painel Dev).
+      '.axa .pl-br .s{font-weight:500;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;min-width:0}',
+      '.axa .pl-br.api{box-shadow:inset 0 0 0 2px rgba(var(--wn-rgb),.55)}',
+      '.axa .pl-br.painel{box-shadow:inset 0 0 0 2px rgba(var(--in-rgb),.55)}',
       '.axa .pl-cap{border-radius:16px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd)}',
       '.axa .pl-cap > summary{padding:14px 18px;cursor:pointer;font-size:14px;font-weight:700;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}',
       '.axa .pl-cap > summary .note{font-weight:600}',
@@ -376,6 +408,9 @@
       '.axa .pl-lim > button{min-height:44px}',
       '.axa .pl-lim > button small{font-size:12px}',
       '.axa .pl-lim .it{min-height:44px;font-size:13px}',
+      '.axa .pl-pau .it{grid-template-columns:auto minmax(0,1fr) auto}',
+      '.axa .pl-pau .it .por{grid-column:1 / -1;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}',
+      '.axa .pl-vz-p{font-size:13px;padding:14px}',
       '.axa .pl-lim .it .por{font-size:12px}',
       '.axa .pl-cap > summary{min-height:44px}',
       '.axa .pl-cap .note,.axa .pl-cap th{font-size:12px}',
@@ -873,6 +908,12 @@
     if (M.J.ini > M.hoje) return [];
     var HERDAM = (raiz.PRAZO && raiz.PRAZO.ETAPAS_QUE_HERDAM) || [];
     var out = [];
+    /* O CASO GENERICO (`_gNoQuadro`, gantt.html): sem filtro, a demanda com
+       data dentro do periodo que nao virou barra tambem cai na rede — uma causa
+       nao prevista acima nao some em silencio. */
+    var desenhada = {};
+    (M.barras || []).forEach(function (x) { desenhada[x.m.id] = true; });
+    var semFiltro = !nFiltros() && !String(F.q || '').trim();
     H.visiveis().forEach(function (m) {
       var gr = etapaGravada(m);
       if (gr === 'concluido' || gr === 'negada' || m.status === 'negada') return;
@@ -885,10 +926,73 @@
         porQue = 'sem responsável';
       } else if (b < M.J.ini && HERDAM.indexOf(gr) < 0) {
         porQue = 'prazo ' + H.dm(b) + ' e "' + ((H.ETAPA_POR_ID[gr] || {}).rotulo || gr) + '" não reaparece depois do prazo';
+      } else if (semFiltro && !desenhada[m.id] && !(b < M.J.ini) && !(a > M.J.fim)) {
+        porQue = 'não coube no período em exibição';
       }
       if (porQue) out.push({ m: m, porQue: porQue, quando: b });
     });
     return out.sort(function (x, y) { return x.quando.localeCompare(y.quando); });
+  }
+
+  // ── As pausadas (renderPausadas do gantt.html) ─────────────────────────
+  /* TODAS AS PAUSADAS, e nao so as do periodo: a pausa congela a entrega onde
+     parou, e a demanda sem data (nunca planejada) nao tem barra em periodo
+     nenhum — sem a faixa ela some do Planejamento. A ordem e de quem parou
+     primeiro; `naJanela` diz quem tem barra no periodo a vista: a data cai
+     nele (a regra do gantt) ou a barra foi desenhada — a herdada pausada
+     aparece com o prazo antes do periodo, e o gantt a chamava de "sem barra"
+     mesmo desenhada. `desenhadas` = { id: true }. */
+  function pausadasDaJanela(lista, J, hoje, pausada, desenhadas) {
+    var ps = (lista || []).filter(function (m) { return m && pausada(m); });
+    var naJ = function (m) {
+      if (desenhadas && desenhadas[m.id]) return true;
+      var a = iso(m.inicio) || iso(m.entrega), b = iso(m.entrega) || iso(m.inicio);
+      return !!a && !!b && !(b < J.ini || a > J.fim);
+    };
+    var itens = ps.slice().sort(function (x, y) { return String(x.pausado_em || '').localeCompare(String(y.pausado_em || '')); })
+      .map(function (m) { return { m: m, dias: raiz.PRAZO ? raiz.PRAZO.diasPausados(m, hoje) : 0, naJanela: naJ(m) }; });
+    return { itens: itens, fora: itens.filter(function (x) { return !x.naJanela; }).length };
+  }
+  function desenhadasDe(M) {
+    var d = {};
+    (M.barras || []).forEach(function (x) { d[x.m.id] = true; });
+    return d;
+  }
+  function htmlPausadas(D, M) {
+    var P = pausadasDaJanela(H.visiveis(), M.J, M.hoje, H.pausada, desenhadasDe(M));
+    if (!P.itens.length) return '';
+    var n = P.itens.length;
+    return '<section class="pl-lim pl-pau" id="pl-pau"><button type="button" data-pl="pausadas" aria-expanded="' + EST.pausadas + '">' + ico('pause') +
+      '<span class="tx">' + H.plural(n, 'demanda pausada', 'demandas pausadas') +
+      (P.fora ? '<span class="note"> · ' + P.fora + ' sem barra neste período, a entrega ficou congelada onde parou</span>' : '') + '</span>' +
+      '<small>' + (EST.pausadas ? 'recolher' : 'ver a lista') + '</small></button>' +
+      (EST.pausadas ? '<div class="ls">' + P.itens.map(function (x) {
+        var m = x.m;
+        return '<a class="it" href="' + H.hrefItem(m) + '" data-id="' + esc(m.id) + '"><span class="code">' + esc(m.codigo || '—') + '</span>' +
+          '<span class="ell">' + esc(m.titulo || '(sem título)') + '</span><span class="dd">' + H.plural(x.dias, 'dia', 'dias') + '</span>' +
+          '<span class="por">' + (m.dev ? esc(m.dev) : 'sem responsável') + (x.naJanela ? '' : ' · <span class="fj">fora deste período</span>') +
+          (m.pausa_motivo ? ' · <span title="' + esc(m.pausa_motivo) + '">' + esc(m.pausa_motivo) + '</span>' : '') + '</span></a>';
+      }).join('') + '</div>' : '') + '</section>';
+  }
+  /* O QUADRO VAZIO COM O FILTRO PAUSADA (`gMensagemVazio`, gantt.html): diz
+     por que (a pausa congela a data; as nunca planejadas nao tem data) e leva
+     a faixa ou aos periodos onde elas tem barra. */
+  function vazioPausadas(D, M) {
+    var P = pausadasDaJanela(H.visiveis(), M.J, M.hoje, H.pausada, desenhadasDe(M));
+    var ps = P.itens.map(function (x) { return x.m; });
+    if (!ps.length) return '<div class="pl-vz-p"><b>Nenhuma demanda pausada.</b></div>';
+    var semData = ps.filter(function (m) { return !iso(m.inicio) && !iso(m.entrega); }).length;
+    var rots = {};
+    ps.forEach(function (m) { var d = iso(m.entrega) || iso(m.inicio); if (d) { var r = SP().rotuloDeData(d, fer(D)); if (r) rots[r] = true; } });
+    var lista = Object.keys(rots).sort(function (a, b) { return a.slice(6, 10) + a.slice(3, 5) + a.slice(1, 2) < b.slice(6, 10) + b.slice(3, 5) + b.slice(1, 2) ? -1 : 1; });
+    return '<div class="pl-vz-p"><span><b>' + H.plural(ps.length, 'demanda pausada', 'demandas pausadas') + '</b>, e nenhuma tem barra entre ' +
+      esc(H.dm(M.J.ini)) + ' e ' + esc(H.dm(M.J.fim)) + '.</span>' +
+      '<span>Pausar congela a data de entrega: a demanda fica no período em que parou, e a linha do tempo desenha por data.' +
+      (semData ? ' ' + semData + (semData === 1 ? ' delas nunca foi planejada, então não tem data nenhuma.' : ' delas nunca foram planejadas, então não têm data nenhuma.') : '') + '</span>' +
+      '<span class="row">Todas estão na <button type="button" class="btns" data-pl="pausadas-ir">faixa das pausadas</button>, no topo desta tela — clique numa para abrir a demanda.</span>' +
+      (lista.length ? '<span class="row">Ou vá para o período onde elas estão: ' + lista.map(function (r) {
+        return '<a class="btns" href="#planejamento/' + esc(r) + '">Sprint ' + esc(sprintCurto(r)) + '</a>';
+      }).join('') + '</span>' : '') + '</div>';
   }
 
   // ── Desenho ─────────────────────────────────────────────────────────
@@ -956,8 +1060,20 @@
       (semPts ? '\nSem pontos do Planning Poker.' : '') +
       (ed && !arr ? '\nData comprometida: quem muda é o PM/PO.' : '') +
       (arr ? '\nArraste para mover; puxe as pontas para mudar início e prazo.' : '');
+    /* AS MARCAS DO CARD DO GANTT: a dependencia (`is_dependency`), a
+       dependencia aberta (`VINCULO.abertos`), os selos (`SELO`), o sistema e
+       a borda de quem nasceu direto pela API ou no Painel Dev
+       (`ABERTURA.foiDireto`). */
+    var AB = raiz.ABERTURA, direto = AB && AB.foiDireto ? AB.foiDireto(m) : false;
+    var viaApi = direto && AB.viaEndpoint(m), viaPainel = direto && AB.viaPainelDev(m);
+    var depAb = raiz.VINCULO ? raiz.VINCULO.abertos((AX.APP.D || {}).melhorias || [], m.id).length : 0;
+    var sl = raiz.SELO ? raiz.SELO.de(m) : null, cm = raiz.SELO && raiz.SELO.comite ? raiz.SELO.comite(m) : null;
+    var sis = m.tema_id ? H.caminho(m.tema_id) : '';
+    tit += (sis ? '\nSistema: ' + sis : '') + (m.is_dependency ? '\nDependência de outra demanda.' : '') + (depAb ? '\nTem dependência aberta.' : '') +
+      (sl ? '\n' + raiz.SELO.titulo(sl) : '') + (cm ? '\n' + raiz.SELO.tituloComite(cm) : '') +
+      (viaApi ? '\nNasceu pela API, sem passar pelo planejamento.' : viaPainel ? '\nAberta no Painel Dev, sem passar pelo planejamento.' : '');
     var cls = 'pl-br k-' + corDe(m) + (paus ? ' pa' : '') + (x.her ? ' he' : '') + (x.grupo ? ' gr' : '') + (arr ? ' ed' : '') + (EST.pend[m.id] ? ' sv' : '') +
-      (js === 0 ? ' jpri' : js > 0 ? ' jsel' : '');
+      (viaApi ? ' api' : viaPainel ? ' painel' : '') + (js === 0 ? ' jpri' : js > 0 ? ' jsel' : '');
     var sprintsFora = x.her && raiz.PRAZO ? raiz.PRAZO.sprintsEstouradas(m, etapaGravada(m), M.hoje) : 0;
     return '<a class="' + cls + '" href="' + H.hrefItem(m) + '" draggable="false" data-id="' + esc(m.id) + '" data-ln="' + esc(l.nome) + '"' +
       ' data-s="' + x.s + '" data-e="' + x.e + '"' + (x.cs ? ' data-cs="1"' : '') + (arr ? ' data-arr="1"' : '') + (ed ? ' data-ed="1"' : '') +
@@ -969,7 +1085,12 @@
       (x.her ? '<span class="x">⇥ ' + esc(H.dm(x.b)) + (sprintsFora ? ' +' + sprintsFora + 's' : '') + '</span>' : '') +
       (x.derivada ? '<span class="x">↔</span>' : '') +
       (semPts ? '<span class="x" style="opacity:.75">' + ico('cards') + '</span>' : '') +
+      (m.is_dependency ? '<span class="x">' + ico('link') + '</span>' : '') +
+      (depAb ? '<span class="x">' + ico('hourglass') + '</span>' : '') +
+      (sl ? '<span class="x" style="color:var(--ok-t)">' + ico('check') + '</span>' : '') +
+      (cm ? '<span class="x" style="color:var(--ok-t)">' + ico('shield') + '</span>' : '') +
       '<span class="t">' + esc(m.titulo || '') + '</span>' +
+      (sis ? '<span class="s">' + esc(raiz.catalogoFolha ? raiz.catalogoFolha(sis) : sis) + '</span>' : '') +
       (arr && !x.ce ? '<i class="pl-h pl-hf" aria-hidden="true"></i>' : '') + '</a>';
   }
 
@@ -1082,6 +1203,7 @@
           : '<span>' + DS[dow(dd.d)] + ' ' + dd.d.slice(8, 10) + '</span>' + (dd.fe ? '<small>feriado</small>' : '')) + '</span>';
     }).join('') + '</div>';
 
+    if (!M.linhas.length && F.etapa === '__pausada__') return '<div class="pl-in" style="' + vars + '">' + cab + vazioPausadas(D, M) + '</div>';
     if (!M.linhas.length) {
       return '<div class="pl-in" style="' + vars + '">' + cab + H.vazio('calendar', nFiltros() ? 'Nada neste recorte' : 'Ninguém com demanda neste período',
         nFiltros() ? 'Troque ou limpe os filtros.' : 'Arraste um item da fila para a linha de alguém, ou mostre todos os devs.',
@@ -1340,7 +1462,7 @@
       (ehAdmin() ? '<button type="button" class="btn" data-pl="fer">' + ico('flag') + ' Feriados</button>' : '') +
       (ed && !EST.apresentar ? '<button type="button" class="btn' + (EST.juntar ? ' on" style="border-color:rgba(var(--ac-rgb),.55)' : '') + '" data-pl="juntar" aria-pressed="' + !!EST.juntar + '"' +
         ' title="Marque a principal e as que ficam dentro dela">' + ico('link') + ' Juntar demandas</button>' : '') +
-      '<button type="button" class="btn' + (EST.apresentar ? ' on" style="border-color:rgba(var(--ac-rgb),.55)' : '') + '" data-pl="apres" aria-pressed="' + EST.apresentar + '" title="Esconde filtros, fila e capacidade para projetar na reunião">' + ico('present') + ' ' + (EST.apresentar ? 'Sair da apresentação' : 'Apresentar') + '</button>';
+      '<button type="button" class="btn' + (EST.apresentar ? ' on" style="border-color:rgba(var(--ac-rgb),.55)' : '') + '" data-pl="apres" aria-pressed="' + EST.apresentar + '" title="Esconde filtros e fila, aumenta o texto e lembra ao recarregar, para projetar na reunião">' + ico('present') + ' ' + (EST.apresentar ? 'Sair da apresentação' : 'Apresentar') + '</button>';
     var sub = cel
       ? 'Toque num cartão para abrir a demanda: lá se move a etapa e se trocam as datas e o dev.'
       : ed ? 'Arraste um item pontuado da fila para a linha do dev, no dia de início. Arraste a barra para mover (o prazo anda os mesmos dias corridos) e puxe as pontas para mudar início e prazo. Clique na barra para abrir a demanda; num dia vazio da linha, para criar uma já com o dev e a data.'
@@ -1355,8 +1477,12 @@
       // No celular os quatro botoes vao para o menu "…" (uma gaveta).
       (cel ? '<button type="button" class="btn pl-mais" data-pl="menu" aria-label="Ausências, feriados, juntar e apresentar" title="Mais ações">⋯</button>' : acoes) +
       '</div></header>';
-    if (!EST.apresentar) h += htmlChips(D, M) + htmlFiltros(D, M);
-    if (!EST.apresentar && noHoje) h += htmlLimbo(D, M);
+    // Na apresentacao ficam os chips (a contagem por etapa) e a capacidade; saem filtros e fila (`alternarApresentacao`).
+    h += htmlChips(D, M);
+    if (!EST.apresentar) h += htmlFiltros(D, M);
+    if (!EST.apresentar) h += htmlPausadas(D, M);
+    // A rede contra o limbo vale em qualquer periodo que ja comecou, e nao so no de hoje (`renderLimbo`, gantt.html).
+    if (!EST.apresentar && M.J.ini <= M.hoje) h += htmlLimbo(D, M);
     if (EST.juntar) h += htmlJuntar();
     var fl = EST.apresentar ? null : htmlFilaLista(D);
     if (cel) {
@@ -1365,7 +1491,7 @@
       h += '<div class="pl-lay' + (EST.apresentar ? ' so' : '') + '"><div class="pl-gt' + (EST.juntar ? ' juntando' : '') + '" id="pl-gt" style="overflow-x: auto">' + htmlQuadro(D, M) + '</div>' +
         (fl ? htmlFila(fl, false) : '') + '</div>';
     }
-    if (!EST.apresentar) h += htmlCapacidade(D, M);
+    h += htmlCapacidade(D, M);
     return h;
   }
 
@@ -1985,7 +2111,7 @@
       if (a === 'aus') abrirAusencias();
       else if (a === 'fer') abrirFeriados();
       else if (a === 'juntar') { EST.juntar = EST.juntar ? null : { sel: [] }; repinta(); }
-      else if (a === 'apres') { EST.apresentar = !EST.apresentar; repinta(); }
+      else if (a === 'apres') { EST.apresentar = !EST.apresentar; poeLS('axis_plan_apres', EST.apresentar ? '1' : ''); repinta(); }
     });
   }
 
@@ -2046,10 +2172,17 @@
         if (a === 'menu') abrirMenu();
         else if (a === 'aus') abrirAusencias();
         else if (a === 'fer') abrirFeriados();
-        else if (a === 'apres') { EST.apresentar = !EST.apresentar; repinta(); }
+        else if (a === 'apres') { EST.apresentar = !EST.apresentar; poeLS('axis_plan_apres', EST.apresentar ? '1' : ''); repinta(); }
         else if (a === 'limpar') { Object.keys(F).forEach(function (k) { if (k !== 'q') F[k] = ''; }); repinta(); }
         else if (a === 'todos') { F.dev = '__todos__'; repinta(); }
         else if (a === 'limbo') { EST.limbo = !EST.limbo; poeLS('axis_plan_limbo', EST.limbo ? '1' : ''); repinta(); }
+        else if (a === 'pausadas') { EST.pausadas = !EST.pausadas; poeLS('axis_plan_pausadas', EST.pausadas ? '1' : ''); repinta(); }
+        else if (a === 'pausadas-ir') {
+          // Abre antes de rolar (`gIrParaFaixaPausadas`): chegar numa caixa fechada nao mostra nada.
+          if (!EST.pausadas) { EST.pausadas = true; poeLS('axis_plan_pausadas', '1'); repinta(); }
+          var fx = document.getElementById('pl-pau');
+          if (fx) { fx.scrollIntoView({ behavior: 'smooth', block: 'center' }); fx.classList.add('realce'); setTimeout(function () { fx.classList.remove('realce'); }, 2400); }
+        }
         else if (a === 'juntar' || a === 'juntar-sai') { EST.juntar = a === 'juntar' && !EST.juntar ? { sel: [] } : null; repinta(); }
         else if (a === 'juntar-ok') juntarAgora().catch(function (ex) { console.error(ex); H.toast('Não foi possível juntar: ' + (ex.message || ex), 'erro'); });
         return;

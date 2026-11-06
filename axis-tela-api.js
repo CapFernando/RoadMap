@@ -65,7 +65,18 @@
       '.axa .ap-temas{display:flex;flex-wrap:wrap;gap:6px;max-height:260px;overflow:auto}',
       '.axa .ap-temas span{font-size:12px;padding:4px 8px;border-radius:8px;background:var(--sf2);border:1px solid var(--bd)}',
       '.axa .ap-temas b{font-family:var(--font-mono);font-weight:600;color:var(--ac-t);margin-right:4px}',
-      '@container app (max-width: 960px){.axa .ap-grid{grid-template-columns:minmax(0,1fr) !important}}'
+      '@container app (max-width: 960px){.axa .ap-grid{grid-template-columns:minmax(0,1fr) !important}}',
+      /* Celular: o detalhe da acao escolhida vem antes da lista de acoes (ao
+         trocar de acao a tela volta ao topo, onde o detalhe esta); toque de
+         44 px e letra de 12 px. */
+      '@container app (max-width: 760px){',
+      '.axa .ap-grid > .ap-col:last-child{order:-1}',
+      '.axa .ap-ac{min-height:44px;box-sizing:border-box}',
+      '.axa .ap-lk{padding:14px 10px;margin:-14px -10px}',
+      '.axa .ap-pre,.axa .ap-tab code,.axa .ap-txt code{font-size:12px}',
+      '.axa .ap-tab tr{gap:6px 12px}.axa .ap-tab td:first-child,.axa .ap-tab td:last-child{width:auto}',
+      '.axa .ap-tab.tc td[data-tc="largo"]{display:block !important;line-height:20px}',
+      '}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -210,12 +221,12 @@
       '<span class="ap-txt">' + a.o_que + '</span>' +
       '<div class="row" style="gap:8px;flex-wrap:wrap"><span class="lab">QUEM PODE</span><span class="note">' + esc(a.quem) + '</span></div>' +
       '<span class="lab">CAMPOS</span>' +
-      '<table class="tbl ap-tab"><thead><tr><th>CAMPO</th><th>REGRA</th><th>O QUE É</th></tr></thead><tbody>' +
-      '<tr><td><code>action</code></td><td>obrigatório</td><td><code>"' + esc(a.id) + '"</code></td></tr>' +
-      (a.id === 'login' ? '' : '<tr><td><code>token</code></td><td>obrigatório</td><td>o da ação <code>login</code></td></tr>') +
+      '<table class="tbl tc ap-tab"><thead><tr><th>CAMPO</th><th>REGRA</th><th>O QUE É</th></tr></thead><tbody>' +
+      '<tr><td data-tc="topo"><code>action</code></td><td data-tc="topo-fim">obrigatório</td><td data-tc="largo"><code>"' + esc(a.id) + '"</code></td></tr>' +
+      (a.id === 'login' ? '' : '<tr><td data-tc="topo"><code>token</code></td><td data-tc="topo-fim">obrigatório</td><td data-tc="largo">o da ação <code>login</code></td></tr>') +
       a.campos.map(function (c) {
-        return '<tr><td>' + c[0].split(', ').map(function (n) { return '<code>' + esc(n) + '</code>'; }).join(', ') + '</td>' +
-          '<td style="white-space:nowrap;color:' + (/^obrigat/.test(c[1]) ? 'var(--tx)' : 'var(--tx3)') + '">' + esc(c[1]) + '</td><td>' + c[2] + '</td></tr>';
+        return '<tr><td data-tc="topo">' + c[0].split(', ').map(function (n) { return '<code>' + esc(n) + '</code>'; }).join(', ') + '</td>' +
+          '<td data-tc="topo-fim" style="white-space:nowrap;color:' + (/^obrigat/.test(c[1]) ? 'var(--tx)' : 'var(--tx3)') + '">' + esc(c[1]) + '</td><td data-tc="largo">' + c[2] + '</td></tr>';
       }).join('') + '</tbody></table>' +
       '<span class="lab">EXEMPLO</span>' + copiavel(curl(a), 'exemplo de ' + a.id) +
       '<span class="note">Resposta: <span class="mono" style="word-break:break-all">' + esc(a.resposta) + '</span></span></section>';
@@ -226,7 +237,7 @@
     }
     h += '<section class="pn" style="gap:12px"><div class="row" style="justify-content:space-between;flex-wrap:wrap"><span class="lab">TESTAR AQUI</span>' +
       '<span class="note">vai com o token da sua sessão; não precisa de <span class="mono">action</span> nem <span class="mono">token</span></span></div>' +
-      '<label class="sr" for="ap-corpo" style="position:absolute;left:-9999px">Corpo da chamada</label>' +
+      '<label class="sr" for="ap-corpo" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">Corpo da chamada</label>' +
       '<textarea class="in ap-corpo" id="ap-corpo" spellcheck="false">' + esc(corpo) + '</textarea>' +
       (a.grava ? '<div class="lock">' + H.ico('alert') + '<span>Esta ação <b>grava na base</b>, como se o sistema tivesse chamado. A tela pede confirmação antes.</span></div>' : '') +
       '<div class="row" style="justify-content:flex-end;gap:8px"><button type="button" class="btn" data-ap="restaurar">Voltar ao exemplo</button>' +
@@ -257,7 +268,7 @@
       '<section class="pn"><h2 class="h2">Endereço</h2>' +
       '<div class="ap-url"><span class="in" title="' + esc(A.WORKER) + '">' + esc(A.WORKER) + '</span>' +
       '<button type="button" class="btns" data-ap="copiar-url">' + H.ico('clipboard') + ' Copiar</button></div>' +
-      '<span class="note">Toda chamada é um <span class="mono">POST</span> com corpo JSON e o campo <span class="mono">action</span>. Primeiro <a href="#api/login">login</a> com a conta do sistema; o <span class="mono">token</span> que volta vale 12 horas e vai em todas as outras.</span></section>' +
+      '<span class="note">Toda chamada é um <span class="mono">POST</span> com corpo JSON e o campo <span class="mono">action</span>. Primeiro <a class="ap-lk" href="#api/login">login</a> com a conta do sistema; o <span class="mono">token</span> que volta vale 12 horas e vai em todas as outras.</span></section>' +
       '<section class="pn"><h2 class="h2">Ações</h2>' +
       grupos.map(function (g) {
         return '<span class="lab" style="margin-top:4px">' + esc(g) + '</span>' +

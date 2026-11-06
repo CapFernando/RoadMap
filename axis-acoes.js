@@ -1015,6 +1015,68 @@
     return { texto: t.slice(0, inicio) + '@' + nome + ' ' + depois, cursor: inicio + nome.length + 2 };
   }
 
+  /* AS SPRINTS OFERECIDAS NO CHIP DO CARD — COPIA de `sprintOpcoes` (admin.html):
+     a atual e as cinco seguintes (`proximasSprints`), sem as fechadas, e
+     "Tirar da sprint" so para quem esta numa. Devolve [{ valor, rotulo, nota,
+     perigo }]; o `valor` e o rotulo inteiro, que e o que se grava. */
+  function sprintOpcoes(m, c) {
+    var SP = mod(c, 'SPRINTPO');
+    if (!SP) return [];
+    var D = c.D || {};
+    var dm = function (iso) { return iso.slice(8, 10) + '/' + iso.slice(5, 7); };
+    var itens = SP.proximasSprints(c.hoje, 5, D.feriados || [], SP.rotulosFechados(D)).map(function (s) {
+      return { valor: s.rotulo, rotulo: SP.rotuloCurto(s.rotulo), nota: dm(s.de) + '–' + dm(s.ate) + (s.agora ? ' · agora' : '') };
+    });
+    if (SP.doPO(m)) itens.push({ valor: '', rotulo: 'Tirar da sprint', nota: 'volta para o backlog', perigo: true });
+    return itens;
+  }
+
+  /* REPASSAR OU TIRAR DA SPRINT PELO CHIP (`sprintEscolher`, admin.html). So
+     o dono da sprint (`c.dono`, o `ehDonoDaSprint` por conta). A regra e a do
+     sprint.js (`repassar`/`retirar`, com as fechadas), rodada numa COPIA: a
+     demanda da tela so muda quando o servidor aceita. E esse o desfazer do
+     admin — la ele muta o `state`, publica e, se a gravacao nao passa, devolve
+     o retrato `antes`; aqui nao ha o que devolver. `a` = { sprint: rotulo, ou
+     '' para tirar }. O patch leva so os cinco campos que o repasse mexe e que
+     mudaram. */
+  var CAMPOS_SPRINT = ['sprint_po', 'sprint_po_em', 'sprint_po_por', 'sprint_po_historico', 'entrega_usuario'];
+  function sprint(m, a, c) {
+    var SP = mod(c, 'SPRINTPO');
+    if (!SP) return falha('sprint.js não carregado');
+    if (!c.dono) return falha('Só o Fernando (PM/PO) repassa demandas para a sprint.');
+    var alvo = txt((a || {}).sprint);
+    var x = copia(m);
+    var opts = { dados: c.D || { melhorias: c.lista || [] } };
+    var r = alvo ? SP.repassar(x, alvo, c.quem, c.hoje, opts) : SP.retirar(x, c.quem, c.hoje, opts);
+    if (!r.ok) return falha(r.erro, 'sprint');
+    var patch = {};
+    CAMPOS_SPRINT.forEach(function (k) { if (JSON.stringify(x[k]) !== JSON.stringify(m[k])) patch[k] = x[k] === undefined ? null : x[k]; });
+    var msg = !alvo ? 'Voltou para o backlog, fora da sprint.'
+      : r.entrouAtrasada ? 'Repassada para ' + alvo + ' — entrou ATRASADA (' + r.pulos + (r.pulos === 1 ? ' pulo' : ' pulos') + ').'
+      : 'Repassada para ' + alvo + '.';
+    return { ok: true, patch: patch, msg: msg, entrouAtrasada: !!r.entrouAtrasada, pulos: r.pulos || 0 };
+  }
+
+  /* QUEM PEDIU, EDITADO NO ITEM (o campo `m-solicitante` do modal do admin,
+     gravado pelo `saveMelhoria`): o nome digitado e o e-mail do colaborador
+     (`COLABORADORES.emailPara`, que guarda o de antes quando o nome e o
+     mesmo). Edita quem edita a demanda: PM/PO e analista, e o dev na dele. Em
+     branco, so o PM/PO apaga (o dev.html mantem o que estava, como o
+     formulario do app). */
+  function solicitante(m, a, c) {
+    if (txt(c.papel) === 'consulta') return falha('Seu perfil é só de leitura.');
+    if (ehDev(c)) {
+      var l = soLeitura(m, c);
+      if (l) return l;
+    }
+    var quemPediu = txt((a || {}).solicitante);
+    if (!quemPediu && txt(c.papel) !== 'admin') return falha('Escreva o nome de quem pediu: é quem homologa a entrega.', 'solicitante');
+    if (quemPediu === txt(m.solicitante)) return falha('É o mesmo solicitante de antes.', 'solicitante');
+    var CO = mod(c, 'COLABORADORES');
+    return { ok: true, patch: { solicitante: quemPediu, solicitante_email: CO ? CO.emailPara(quemPediu, m) : txt(m.solicitante_email) },
+             msg: quemPediu ? 'Solicitante: ' + quemPediu + '.' : 'Solicitante apagado.' };
+  }
+
   var REGRAS_DO_DEV = { pegar: pegar, subtarefas: subtarefas, salvarEntrega: salvarEntrega, referencias: referencias,
                         grill: grill, vincular: vincular, anexar: anexar, tirarAnexo: tirarAnexo, mensagem: mensagem };
 
@@ -1023,14 +1085,15 @@
     casoUso: casoUso, destaque: destaque,
     mover: mover, validar: validar, devolver: devolver, homologar: homologar, replanejar: replanejar,
     pausar: pausar, pedirPausa: pedirPausa, desistirPausa: desistirPausa, aprovarPausa: aprovarPausa,
-    recusarPausa: recusarPausa, retomar: retomar, negar: negar, entregar: entregar
+    recusarPausa: recusarPausa, retomar: retomar, negar: negar, entregar: entregar,
+    sprint: sprint, solicitante: solicitante
   };
   var api = {
     REGRAS: REGRAS, gestoSemDev: gestoSemDev, marcaConclusao: marcaConclusao, destinosDeEntrega: destinosDeEntrega,
     tiraInicioDoBacklog: tiraInicioDoBacklog, assumeAoComecar: assumeAoComecar,
     candidatasMescla: candidatasMescla, mescladasDe: mescladasDe, semADemanda: semADemanda,
     STATUS_ADMIN: STATUS_ADMIN, STATUS_DEV: STATUS_DEV, ETAPAS_DO_DEV: ETAPAS_DO_DEV, rotulo: rotulo,
-    etapasDoSeletor: etapasDoSeletor, horasDaEntrega: horasDaEntrega
+    etapasDoSeletor: etapasDoSeletor, horasDaEntrega: horasDaEntrega, sprintOpcoes: sprintOpcoes
   };
   Object.assign(REGRAS, REGRAS_DO_DEV);
   Object.assign(api, { SUB: SUB, donoDoCard: donoDoCard, mostraNoPainel: mostraNoPainel, doMeuTime: doMeuTime, timeDeOutro: timeDeOutro,
@@ -1038,6 +1101,7 @@
                        devsParaVincular: devsParaVincular, pessoasDaConversa: pessoasDaConversa,
                        sugestoesArroba: sugestoesArroba, escolheArroba: escolheArroba });
   Object.assign(api, { soltarEm: soltarEm, podeSoltar: podeSoltar, arrastavel: arrastavel, COLUNAS_BLOQUEADAS_MSG: COLUNAS_BLOQUEADAS_MSG });
+  Object.assign(api, { soLeitura: soLeitura });
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
   // ══ INTERFACE ═════════════════════════════════════════════════════════
@@ -1735,6 +1799,35 @@
     if (v) return grava(m, r);
   };
   Object.assign(GESTOS, GESTOS_DO_DEV);
+
+  /* A SPRINT PELO CHIP (`sprintEscolher`, admin.html): a lista de
+     `sprintOpcoes` numa caixa, a recusa do sprint.js dentro dela (sprint
+     fechada, a mesma sprint) e o aviso do pulo ("entrou ATRASADA") no fim. */
+  GESTOS.sprint = async function (m) {
+    var c = contexto();
+    if (!c.dono) { H.toast('Só o Fernando (PM/PO) repassa demandas para a sprint.', 'erro'); return; }
+    var ops = sprintOpcoes(m, c);
+    var atual = raiz.SPRINTPO ? raiz.SPRINTPO.doPO(m) : '';
+    var marcada = ops.some(function (o) { return o.valor === atual; }) ? atual : (ops[0] || {}).valor;
+    var v = await caixa({ titulo: atual ? 'Mover para outra sprint' : 'Repassar para a sprint', texto: (m.codigo ? m.codigo + ' — ' : '') + (m.titulo || ''),
+      campos: [{ nome: 'sprint', rotulo: 'Sprint', tipo: 'opcoes', valor: marcada, opcoes: ops.map(function (o) {
+        return { v: o.valor, r: o.rotulo + (o.valor && o.valor === atual ? ' (atual)' : ''), d: o.nota };
+      }) }],
+      ok: atual ? 'Mover' : 'Repassar', valida: validaCom('sprint', m, { naCaixa: { sprint: 1 } }) });
+    if (v) return aplicar('sprint', m, { sprint: v.sprint });
+  };
+
+  /* QUEM PEDIU (`m-solicitante` do modal do admin), com a sugestao dos
+     colaboradores (`COLABORADORES.ligar`, a mesma do formulario). */
+  GESTOS.solicitante = async function (m) {
+    var p = caixa({ titulo: 'Quem pediu ' + cod(m), texto: 'É o solicitante quem homologa a entrega na Validação da área.',
+      campos: [{ nome: 'solicitante', rotulo: 'Solicitante', valor: m.solicitante || '', dica: 'Nome de quem pediu', max: 120 }],
+      ok: 'Salvar', valida: validaCom('solicitante', m, { naCaixa: { solicitante: 1 } }) });
+    var inp = document.getElementById('axc-solicitante');
+    if (inp && raiz.COLABORADORES) raiz.COLABORADORES.ligar(inp, AX.WORKER, function () { return { token: AX.APP.token }; });
+    var v = await p;
+    if (v) return aplicar('solicitante', m, v);
+  };
 
   async function assinaSpike(m, assinar) {
     var corpo;

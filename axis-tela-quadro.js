@@ -30,6 +30,18 @@
    data de entrega do dev (o "🙋" e o "🏁" do admin), os anexos, o selo de
    validacao (`SELO.badges`), a estrela do destaque e, na Validacao PM/PO,
    Aprovar e Devolver (`valDecidirNoCard`), pelos gestos de axis-acoes.js.
+   E ainda: os vinculos (a principal, as filhas que abrem na gaveta, "N dep.
+   abertas", a soma da arvore, "Avanco bloqueado" e "+ Vincular", do
+   `renderDepSection` do dev.html), a faixa e a borda do Grill pendente, as
+   marcas Dados/BI e Sales Ops, o spike com as assinaturas ("2/3"), "sem
+   pontuacao", inicio e estimativa, o projeto que abre o projeto, a cor da
+   sprint do PO e, para o dono da sprint, o chip que repassa, move ou tira da
+   sprint (`sprintEscolher`, o gesto `sprint` de axis-acoes.js).
+
+   NA BARRA, alem do que ja havia: Producao e Dados/BI (`matchProducao` e
+   `matchDados` do admin), o contador de cada coluna que abre o menu Tudo / No
+   ar / Fora do ar / Em pausa (`kbProdMenu`) e o "Sprint em lote" do dono da
+   sprint.
 
    A BUSCA (`matchBusca` do admin) procura no codigo (com e sem hifen), no
    titulo, na descricao, no dev e no solicitante, sem acento; como la, ela
@@ -90,8 +102,10 @@
   /* `sprintPadrao`: o dev abre na sprint atual so na PRIMEIRA montagem; depois
      a escolha dele sobrevive ao redesenho (`_sprintPadraoAplicado`, dev.html). */
   /* `etapa`: a coluna a vista no celular (uma por vez). */
+  /* `prod` e `dados`: os filtros Producao e Dados/BI da barra do admin;
+     `prodCol`: { coluna: 'no_ar' | 'fora_ar' | 'pausado' }, o menu do contador. */
   var F = { frente: '', tipo: '', sistema: '', dev: '', prazo: '', busca: '', meus: null, vencidas: false, sprint: null, sprintPadrao: false,
-            todasConcluidas: false, negadaAberta: false, mais: {}, etapa: '' };
+            todasConcluidas: false, negadaAberta: false, mais: {}, etapa: '', prod: '', dados: '', prodCol: {} };
 
   /* A sprint atual e o padrao do dev: so conta como filtro quando ele escolhe outra. */
   function sprintPadraoDev(ctx) { var a = H.sprintAtual(); return ctx.papel === 'dev' && a ? [a] : null; }
@@ -176,7 +190,7 @@
       '.axa .qd-meta > span{display:inline-flex;align-items:center;gap:4px;min-width:0}',
       '.axa .qd-meta .sem{color:var(--wn-t)}',
       '.axa .qd-meta .dg{color:var(--dg-t);font-weight:700}',
-      '.axa .qd-pe{display:flex;align-items:center;gap:8px;min-width:0}',
+      '.axa .qd-pe{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}',
       '.axa .qd-pts{font-family:var(--font-mono);font-size:11.5px;color:var(--tx2);white-space:nowrap}',
       '.axa .qd-pts.sem{color:var(--tx4)}',
       '.axa .qd-mini{font-size:11px;color:var(--tx3);white-space:nowrap}',
@@ -198,6 +212,33 @@
       '.axa .qd-neg .v{writing-mode:vertical-rl;transform:rotate(180deg);font-size:11.5px;font-weight:800;letter-spacing:.12em}',
       '.axa .qd-neg .n{font-family:var(--font-mono);font-size:11.5px}',
       '.axa .qd-so-cel,.axa .qd-etapas{display:none}',
+      // O Grill pendente (`kcard-grill-on`, dev.html): borda ambar e a faixa no topo do card.
+      '.axa .qd-card.grill{border:2px solid rgba(var(--wn-rgb),.85);padding:11px}',
+      '.axa .qd-grill{font-size:11.5px;font-weight:800;letter-spacing:.02em;padding:5px 8px;border-radius:8px;background:rgba(var(--wn-rgb),.14);color:var(--wn-t)}',
+      // A cor da sprint do PO (`kb-comsprint`, admin.html): a faixa na borda esquerda.
+      '.axa .qd-card.comsp{box-shadow:inset 4px 0 0 var(--sp-cor)}',
+      '.axa .qd-card.meu.comsp{box-shadow:inset 3px 0 0 var(--ac),inset 7px 0 0 var(--sp-cor)}',
+      '.axa .qd-spb{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 5px;border-radius:7px;border:1px dashed var(--sp-cor,var(--bd4));background:transparent;color:var(--tx2);font:inherit;font-family:var(--font-mono);font-size:10.5px;cursor:pointer;white-space:nowrap}',
+      '.axa .qd-spb:hover{border-style:solid;color:var(--tx)}',
+      '.axa .qd-proj{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}',
+      '.axa .qd-proj:hover{color:var(--tx)}',
+      // Os vinculos (`renderDepSection`, dev.html): a principal, as filhas, a soma, a trava e o "+ Vincular".
+      '.axa .qd-vin{display:flex;flex-direction:column;gap:3px;padding-top:6px;border-top:1px dashed var(--bd2);min-width:0}',
+      '.axa .qd-vl{display:flex;align-items:center;gap:6px;min-width:0;padding:3px 4px;border-radius:6px;font-size:11.5px;line-height:16px;color:var(--tx2);cursor:pointer}',
+      '.axa .qd-vl:hover,.axa .qd-vl:focus-visible{background:var(--sf3);color:var(--tx)}',
+      '.axa .qd-vl .cd{font-family:var(--font-mono);color:var(--tx3);flex-shrink:0}',
+      '.axa .qd-vl .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.axa .qd-vl .et{flex-shrink:0;color:var(--tx4)}',
+      '.axa .qd-vl.trava .axi{color:var(--wn-c)}',
+      '.axa .qd-vl.feita{opacity:.6}',
+      '.axa .qd-peso{font-size:11.5px;color:var(--tx3);padding:0 4px}',
+      '.axa .qd-bloq{font-size:11.5px;font-weight:700;padding:5px 8px;border-radius:8px;background:rgba(var(--dg-rgb),.1);color:var(--dg-t)}',
+      '.axa .qd-card .qd-vinc{height:28px;padding:0 10px;font-size:12px;align-self:flex-start}',
+      // O contador da coluna e o menu de producao (`kbContadorHTML`, admin.html).
+      '.axa .qd-cnt{margin-left:auto;height:24px;padding:0 8px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--tx3);font-family:var(--font-mono);font-size:11.5px;cursor:pointer}',
+      '.axa .qd-cnt:hover{border-color:var(--bd2);color:var(--tx)}',
+      '.axa .qd-cnt.on{border-color:rgba(var(--ac-rgb),.55);color:var(--ac-t)}',
+      '.axa .qd-cnt .cr{display:none;font-family:var(--font-ui)}',
       // A demanda por cima do quadro: no computador, painel do lado direito; no celular, a tela inteira.
       '.axa .gv-fundo.qd-gvf{justify-content:flex-end;align-items:stretch}',
       '.axa .gv.qd-gvi{max-width:min(1040px,94vw);max-height:none;height:100%;height:100dvh;border-radius:20px 0 0 20px;border:1px solid var(--bd2);border-right:0;animation:qd-gv-entra .2s ease-out}',
@@ -239,6 +280,15 @@
       '.axa .qd-ch h2,.axa .qd-ch .n,.axa .qd-ch .dotc{display:none}',
       '.axa .qd-acao > *{flex:1 1 auto}',
       '.axa .qd-estrela{min-width:44px;min-height:44px;margin:-12px -10px -12px 0}',
+      '.axa .qd-grill,.axa .qd-bloq,.axa .qd-peso,.axa .qd-vl,.axa .qd-spb,.axa .qd-cnt{font-size:12px !important}',
+      '.axa .qd-vl{min-height:44px;padding:0 6px}',
+      '.axa .qd-card .qd-vinc,.axa .qd-spb,.axa .qd-cnt{min-height:44px;height:auto}',
+      '.axa .qd-cnt{min-width:44px;border-color:var(--bd2)}',
+      '.axa .qd-cnt .cr{display:inline}',
+      '.axa .qd-proj{display:inline-flex;align-items:center;min-height:44px}',
+      // O contador vira o filtro da etapa: o cabecalho da coluna aparece so com ele.
+      '.axa .qd-ch:has(.qd-cnt){display:flex}',
+      '.axa .qd-ch .qd-cnt{display:inline-flex !important;align-items:center;margin-left:0}',
       '}'
     ].join('\n');
     document.head.appendChild(s);
@@ -319,6 +369,78 @@
     return window.DEVOLUCAO ? DEVOLUCAO.faixa(m, 'qd-devol') : '';
   }
 
+  /* O FILTRO PRODUCAO — COPIA de `matchProducao` (admin.html), com a etapa
+     GRAVADA por parametro. `falta_subir` (concluida fora do ar) e `no_ar` sao
+     da barra; `fora_ar` e `pausado` so do menu do contador da coluna, onde a
+     etapa ja esta fixada. `em_producao` ausente conta como fora do ar. */
+  var PRODUCAO = [['', 'Geral'], ['falta_subir', 'Concluídas fora do ar'], ['no_ar', 'No ar']];
+  var PROD_COL = [['', 'Tudo', ''], ['no_ar', 'No ar', '▲'], ['fora_ar', 'Fora do ar', '△'], ['pausado', 'Em pausa', '⏸']];
+  function casaProducao(m, filtro, gravada, pausada) {
+    if (!filtro) return true;
+    var noAr = !!(m && m.em_producao);
+    if (filtro === 'no_ar') return noAr;
+    if (filtro === 'falta_subir') return !noAr && gravada === 'concluido';
+    if (filtro === 'fora_ar') return !noAr;
+    if (filtro === 'pausado') return !!pausada;
+    return true;
+  }
+
+  /* O FILTRO DADOS/BI PELA MARCA — COPIA de `matchDados` (admin.html): a marca
+     da demanda (`dados_bi`, `sales_ops`), e nao a frente de quem faz. "Fora de
+     Dados" e o avesso da marca. */
+  var DADOS = [['', 'Todos'], ['dados', 'Dados/BI'], ['sales', 'Sales Ops'], ['fora', 'Fora de Dados']];
+  function casaDados(m, filtro) {
+    if (!filtro) return true;
+    if (filtro === 'sales') return !!(m && m.sales_ops && !m.dados_bi);
+    return filtro === 'dados' ? !!(m && m.dados_bi) : !(m && m.dados_bi);
+  }
+
+  /* O GRILL PENDENTE PINTA O CARD (`grillFaixa` e `kcard-grill-on`, dev.html):
+     so o pendente, e — como a regra `grill` de axis-acoes.js, mais estrita que
+     o dev.html — nao em concluida ou negada, que o parecer nao reabre. */
+  function grillPendente(m) {
+    return !!(window.GRILL && GRILL.pendente(m)) && ['concluido', 'negada'].indexOf(H.colunaDe(m)) < 0;
+  }
+
+  /* OS VINCULOS DO CARD — o `renderDepSection` do dev.html (a principal, as
+     filhas, a soma da arvore e "Avanco bloqueado") com o "N dep. abertas" do
+     admin. Tudo do vinculo.js: `paiDe`, `filhosDe`, `abertos` (so dependencia
+     aberta trava) e `frase`. Devolve os dados; `htmlVinculos` desenha. */
+  function vinculosDe(m, lista, VI) {
+    if (!VI || !m) return null;
+    var abertas = VI.abertos(lista, m.id).length;
+    return { pai: m.parent_id ? VI.paiDe(lista, m) : null, filhas: VI.filhosDe(lista, m.id), abertas: abertas,
+             frase: VI.frase(lista, m), bloqueado: abertas > 0 };
+  }
+  /* Cada linha abre a demanda na gaveta (`data-qd-ver`, como a `dep-click` do
+     dev.html abre em leitura); "+ Vincular" e o gesto `vincular` (so o dev,
+     fora de Concluido: a regra decide). */
+  function htmlVinculos(m, v, vincular) {
+    var VI = window.VINCULO;
+    var L = [];
+    var linha = function (x, ico, rot, cls, titulo) {
+      return '<span class="qd-vl' + (cls ? ' ' + cls : '') + '" role="button" tabindex="0" data-qd-ver="' + attr(x.id) + '" title="' + attr(titulo) + '">' +
+        H.ico(ico) + '<span class="et">' + rot + '</span><span class="cd">' + H.esc(x.codigo || '') + '</span><span class="t">' + H.esc(x.titulo || '') + '</span></span>';
+    };
+    if (v && v.pai) {
+      var dep = VI && VI.bloqueia(m);
+      L.push(linha(v.pai, 'link', dep ? 'dep. de' : 'parte de', '',
+        (dep ? 'Esta demanda é dependência de ' : 'Esta demanda faz parte de ') + (v.pai.codigo ? v.pai.codigo + ' · ' : '') + (v.pai.titulo || '') + '. Clique para abrir.'));
+    }
+    (v ? v.filhas : []).forEach(function (f) {
+      var trava = !!(VI && VI.bloqueia(f)), feita = !!(VI && VI.concluida(f));
+      L.push(linha(f, feita ? 'check' : trava ? 'hourglass' : 'link', H.esc(((H.ETAPA_POR_ID[H.colunaDe(f)] || {}).rotulo || '').toLowerCase()),
+        (trava && !feita ? 'trava' : '') + (feita ? ' feita' : ''),
+        (trava ? 'Dependência — trava o avanço deste card até ser concluída' : 'Vinculada — pertence a este card, não trava nada') +
+        ' · ' + (f.dev || 'sem dev') + ' · ' + (f.entrega ? H.dm(f.entrega) : 'sem data') + '. Clique para abrir.'));
+    });
+    if (v && v.frase) L.push('<span class="qd-peso" title="Soma dos pontos desta demanda e de tudo que depende dela. É leitura: cada vínculo segue contando o próprio ponto nos relatórios.">' +
+      H.ico('calc') + ' ' + H.esc(v.frase) + '</span>');
+    if (v && v.bloqueado) L.push('<span class="qd-bloq">' + H.ico('lock') + ' Avanço bloqueado — aguardando dependência</span>');
+    if (vincular) L.push(vincular);
+    return L.length ? '<span class="qd-vin">' + L.join('') + '</span>' : '';
+  }
+
   /* APROVAR E DEVOLVER NO CARD (`valDecidirNoCard`, admin.html): so na
      Validacao PM/PO e so para o PM/PO, como o Item. */
   function decideNoCard(m, col, papel) {
@@ -340,6 +462,8 @@
     }
     if (F.sprint && window.AXIS_SPRINTS && !AXIS_SPRINTS.casa(m, F.sprint)) return false;
     if (F.prazo && !casaPrazo(m, F.prazo, H.hoje(), H.colunaDe(m))) return false;
+    if (F.dados && !casaDados(m, F.dados)) return false;
+    if (F.prod && !casaProducao(m, F.prod, H.colunaDe(m), H.pausada(m))) return false;
     if (F.meus) { if (!mostraDoDev(m)) return false; }
     else if (F.dev === '__sem__') { if (H.devsDe(m).length) return false; }
     else if (F.dev && !(window.DEVNOME ? DEVNOME.eDe(m, F.dev) : H.devsDe(m).indexOf(F.dev) >= 0)) return false;
@@ -432,12 +556,29 @@
     }
     if (m.em_producao && (col === 'validacao' || col === 'validacao_area' || col === 'concluido')) c.push(H.chip('no ar', 'ok'));
     if (window.SPRINTPO && SPRINTPO.ehPrioritariaDaSprint(m)) c.push(H.chip(H.ico('zap') + ' prioritária', 'ac'));
-    if (m.spike) c.push(H.chip(H.ico('search') + ' Spike', 'in'));
+    /* O SPIKE DIZ QUANTAS ASSINATURAS TEM (`renderKanban`, admin.html): sem a
+       lista de quem aprova, nao inventa numero. */
+    if (m.spike) {
+      var PV = window.PREVOO, quemAssina = (AX.APP.D || {}).spike_aprovadores;
+      var minSp = (PV && PV.ASSINATURAS_SPIKE) || 3;
+      if (!PV || !Array.isArray(quemAssina)) c.push(H.chip(H.ico('search') + ' Spike …', 'in', 'Spike — conferindo as aprovações…'));
+      else {
+        var nSp = PV.assinaturasValidas(m, quemAssina).length;
+        c.push(H.chip(H.ico('search') + ' Spike ' + nSp + '/' + minSp, nSp >= minSp ? 'ok' : 'in', 'Spike: ' + nSp + ' de ' + minSp + ' aprovações'));
+      }
+    }
     if (m.debito_tecnico) c.push(H.chip('Débito técnico', 'pu'));
+    // A marca do time (`renderKanban`, admin.html), a mesma do Item.
+    if (m.dados_bi) c.push(H.chip(H.ico('chart') + ' Dados/BI', 'in', 'Demanda do time de Dados/BI'));
+    else if (m.sales_ops) c.push(H.chip(H.ico('trend') + ' Sales Ops', 'in', 'Demanda de Sales Ops — sprint contabilizada à parte'));
+    // Comprometida sem pontos do Poker (`semPontuacao`, dev.html; a regra e a do capacidade.js).
+    if (window.CAPACIDADE && CAPACIDADE.semPontuacao(m)) c.push(H.chip(H.ico('cards') + ' sem pontuação', 'wn', 'Sem pontos do Planning Poker: a data foi combinada sem estimativa de tamanho.'));
+    // "N dep. abertas" (`renderMelhorias`, admin.html): so dependencia aberta conta.
+    var nDep = window.VINCULO ? VINCULO.abertos((AX.APP.D || {}).melhorias || [], m.id).length : 0;
+    if (nDep) c.push(H.chip(H.ico('hourglass') + ' ' + nDep + ' dep. aberta' + (nDep > 1 ? 's' : ''), 'dg', 'Dependências abertas: este card não avança enquanto elas não forem concluídas.'));
     // Impacto, urgencia e o caso de uso da etapa seguem a demanda (`requisitos.js`, como no Kanban do admin).
     var rq = H.chipsReq(m) + H.chipCasoUso(m);
     if (rq) c.push(rq);
-    if (window.GRILL && GRILL.pendente(m) && ['concluido', 'negada'].indexOf(H.colunaDe(m)) < 0) c.push(H.chip(H.ico('flame') + ' Grill', 'wn', 'O PM/PO pediu o parecer do time antes do planejamento.'));
     if (window.SUBTAREFA) {
       var p = SUBTAREFA.progresso(SUBTAREFA.lista(m));
       if (p.total) c.push(H.chip(H.ico('check') + ' ' + p.feitas + '/' + p.total, p.feitas === p.total ? 'ok' : 'bk', p.feitas + ' de ' + p.total + ' subtarefas'));
@@ -492,9 +633,23 @@
     var mover = arrasta && AC.GESTOS && AC.GESTOS.moverPara && AC.etapasDoSeletor && AC.etapasDoSeletor(m, cx).length
       ? AC.botao('moverPara', m, 'Mover', 'btns qd-mover', { ico: 'board', titulo: 'Mover ' + (m.codigo || '') + ' para outra etapa' }) : '';
     var acao = pega + decide;
-    return '<a class="qd-card' + (late ? ' late' : '') + (meu ? ' meu' : '') + (naFila ? ' fila' : '') + '" href="' + H.hrefItem(m) + '"' +
-      ' data-qd-id="' + attr(m.id) + '" draggable="' + arrasta + '"' +
+    var grill = grillPendente(m);
+    // A cor da sprint do PO no card (`estiloSprint`, admin.html: `kb-comsprint`).
+    var spEst = window.SPRINTPO && SPRINTPO.estiloSprint ? SPRINTPO.estiloSprint(m) : '';
+    /* A SPRINT PELO CHIP (`sprintEscolher`, admin.html): para o dono da sprint o
+       chip e o botao "Sprint…" (repassar, mover ou tirar); para os outros, so
+       o rotulo. */
+    var dono = !!(AC && AC.GESTOS && AC.GESTOS.sprint && H.donoDaSprint && H.donoDaSprint());
+    var spCel = dono
+      ? AC.botao('sprint', m, sp ? SPRINTPO.rotuloCurto(sp) : 'Sprint…', 'qd-spb', { titulo: sp ? 'Sprint ' + sp + ' — clique para mover para outra sprint ou tirar da sprint' : 'Fora da sprint — clique para repassar para uma sprint' })
+      : sp ? '<span class="qd-mini mono" title="' + attr(sp) + '">' + H.esc(SPRINTPO.rotuloCurto(sp)) + '</span>' : '';
+    var lista = (AX.APP.D || {}).melhorias || [];
+    var vincular = AC && AC.permite && AC.GESTOS && AC.GESTOS.vincular && AC.permite('vincular', m, {})
+      ? AC.botao('vincular', m, 'Vincular demanda', 'btns qd-vinc', { ico: 'plus', titulo: 'Pendura neste card uma parte (vinculada) ou uma dependência' }) : '';
+    return '<a class="qd-card' + (late ? ' late' : '') + (meu ? ' meu' : '') + (naFila ? ' fila' : '') + (grill ? ' grill' : '') + (spEst ? ' comsp' : '') + '" href="' + H.hrefItem(m) + '"' +
+      ' data-qd-id="' + attr(m.id) + '" draggable="' + arrasta + '"' + (spEst ? ' style="' + attr(spEst) + '"' : '') +
       ' title="' + attr((m.codigo || '') + ' · prioridade ' + prio + (meu ? ' · é seu' : '') + (arrasta ? ' · arraste para mover' : '')) + '">' +
+      (grill ? '<span class="qd-grill" title="O PM/PO pediu seu parecer antes de esta demanda entrar no planejamento. Abra e responda.">' + H.ico('flame') + ' Grill — dê seu parecer</span>' : '') +
       (marca ? '<span class="qd-dono">' + marca + '</span>' : '') +
       '<span class="qd-top"><span class="qd-cod">' + H.esc(m.codigo || '—') + '</span>' + estrela +
       (tipo ? H.chip(H.esc(tipo.rotulo), 'bk') : '') + '</span>' +
@@ -505,14 +660,19 @@
       '<span class="qd-meta">' +
       (sol ? '<span title="Solicitante: quem pediu e homologa">' + H.ico('user') + ' ' + H.esc(sol) + '</span>'
            : '<span class="sem" title="Sem solicitante: a demanda não passa da Validação da área sem ele">' + H.ico('user') + ' sem solicitante</span>') +
+      // Inicio e estimativa (o "📅" e o "⏱" do card do dev.html), em volta da entrega.
+      (H.ehISO(String(m.inicio || '').slice(0, 10)) ? '<span title="Início: ' + attr(H.dma(String(m.inicio).slice(0, 10))) + '">' + H.ico('calendar') + ' ' + H.dm(String(m.inicio).slice(0, 10)) + '</span>' : '') +
       (dt ? '<span' + (late ? ' class="dg"' : '') + ' title="Entrega do dev: ' + attr(H.dma(dt.iso)) + '">' + H.ico('flag') + ' ' + dt.txt + '</span>' : '') +
+      (String(m.estimativa || '').trim() ? '<span title="Estimativa">' + H.ico('clock') + ' ' + H.esc(String(m.estimativa).trim()) + '</span>' : '') +
       '</span>' +
+      htmlVinculos(m, vinculosDe(m, lista, window.VINCULO), vincular) +
       '<span class="qd-pe">' +
       (pts ? '<span class="qd-pts" title="' + (votado ? 'Planning Poker · média ' + attr(m.poker_media) : 'Pontos por estimativa, sem votação no Poker') + '">' + pts + ' pts</span>'
            : '<span class="qd-pts sem" title="Sem pontos do Poker">— pts</span>') +
       (nAnx ? '<span class="qd-mini" title="' + H.plural(nAnx, 'anexo', 'anexos') + '">' + H.ico('clip') + ' ' + nAnx + '</span>' : '') +
-      (proj ? '<span class="qd-mini" title="' + attr(proj.nome || '') + '">' + H.esc(proj.codigo || '') + '</span>' : '') +
-      (sp ? '<span class="qd-mini mono" title="' + attr(sp) + '">' + H.esc(SPRINTPO.rotuloCurto(sp)) + '</span>' : '') +
+      // O chip do projeto abre o projeto (`pjAbrirDoCard`, admin.html e dev.html).
+      (proj ? '<span class="qd-mini qd-proj" role="link" tabindex="0" data-qd-proj="' + attr(proj.codigo || proj.id) + '" title="' + attr((proj.nome || '') + ' — clique para abrir o projeto') + '">' + H.ico('folder') + ' ' + H.esc(proj.codigo || '') + '</span>' : '') +
+      spCel +
       '<span class="qd-avs">' + (devs.length ? devs.slice(0, 3).map(function (n) { return H.av(n); }).join('') : H.av('')) + '</span>' + mover +
       '</span>' + (acao ? '<span class="qd-acao">' + acao + '</span>' : '') + '</a>';
   }
@@ -531,7 +691,8 @@
     return '<section class="qd-col' + (itens.length ? '' : ' vazia') + '" data-col="' + k + '" data-solta="' + k + '" data-rot="' + attr(rot) + '"' +
       (o.junto ? ' data-junto="' + attr(o.junto.join(',')) + '"' : '') + ' aria-label="' + attr(rot) + '">' +
       '<div class="qd-ch"><span class="dotc" style="background:' + e.dot + '"></span>' +
-      '<h2>' + H.esc(rot.toUpperCase()) + '</h2><span class="n" title="' + itens.length + ' nesta coluna · ordem: prioridade, depois a data prometida">' + itens.length + '</span>' +
+      '<h2>' + H.esc(rot.toUpperCase()) + '</h2>' + (o.prod != null ? contador(k, rot, itens.length, o.total == null ? itens.length : o.total, o.prod)
+        : '<span class="n" title="' + itens.length + ' nesta coluna · ordem: prioridade, depois a data prometida">' + itens.length + '</span>') +
       // A folha de decisao da etapa (aprovacao-ppt.js): o clique e de axis-tela-relatorios.js.
       (k === 'levantar_req' && window.AXIS_PPT ? '<button type="button" class="btns" data-axis-ppt="aprovacao" style="height:24px;padding:0 8px;margin-left:4px"' +
         ' title="Imprimir - Em aprovação de requisitos (PPT de todas as demandas da etapa)" aria-label="Imprimir - Em aprovação de requisitos">' + H.ico('printer') + '</button>' : '') +
@@ -542,6 +703,19 @@
         (o.todos ? 'e mais ' + resto : 'Mostrar mais ' + Math.min(resto, POR_PAGINA) + ' de ' + resto) + '</button>' : '') +
       (o.extra || '') +
       '</section>';
+  }
+
+  /* O CONTADOR DA COLUNA E UM BOTAO (`kbContadorHTML`, admin.html): abre o
+     menu Tudo / No ar / Fora do ar / Em pausa (`menuProducao`). Filtrado, diz
+     "5/18" com a marca; o title diz o filtro e quantas de quantas. */
+  function contador(k, rot, exibidas, total, f) {
+    var op = PROD_COL.filter(function (x) { return x[0] === (f || ''); })[0] || PROD_COL[0];
+    var tit = f ? (op[2] ? op[2] + ' ' : '') + op[1] + ' · mostrando ' + exibidas + ' de ' + total + ' em ' + rot + '. Clique para trocar o filtro.'
+      : 'Filtrar ' + rot + ': ' + PROD_COL.map(function (x) { return x[1]; }).join(', ') + '.';
+    return '<button type="button" class="qd-cnt' + (f ? ' on' : '') + '" data-qd-prod="' + k + '" aria-haspopup="dialog" aria-label="' + attr(tit) + '" title="' + attr(tit) + '">' +
+      // No celular a coluna ja tem nome e numero na aba: o botao diz o que filtra.
+      '<span class="cr">' + H.esc(f ? op[1] : 'Produção: tudo') + ' · </span>' +
+      H.esc((op[2] ? op[2] + ' ' : '') + (f ? exibidas + '/' + total : String(total))) + '</button>';
   }
 
   /* AS ABAS DAS ETAPAS NO CELULAR: uma por coluna, com a contagem. `cols` =
@@ -644,8 +818,16 @@
     noQuadro.forEach(function (m) {
       var k = H.colunaDe(m);
       if (!porCol[k]) return;
-      if (!F.todasConcluidas && !F.busca && !doPeriodo(m)) { escondidas++; return; }
+      // A busca e o filtro Producao vencem o periodo das concluidas (`renderKanban`, admin.html).
+      if (!F.todasConcluidas && !F.busca && !doPeriodo(m) && !F.prod) { escondidas++; return; }
       porCol[k].push(m);
+    });
+    /* O MENU DO CONTADOR RECORTA A COLUNA DEPOIS DO RESTO: o total antes do
+       recorte vai junto, para o contador dizer "5/18". */
+    var totalCol = {};
+    Object.keys(porCol).forEach(function (k) {
+      totalCol[k] = porCol[k].length;
+      if (F.prodCol[k]) porCol[k] = porCol[k].filter(function (m) { return casaProducao(m, F.prodCol[k], H.colunaDe(m), H.pausada(m)); });
     });
     var prometida = window.ENTREGAUSU && ENTREGAUSU.data;
     Object.keys(porCol).forEach(function (k) {
@@ -677,8 +859,9 @@
     // ── Alertas e filtros ──
     // Para o dev o padrao e a sprint atual: "Todas" ou outra sprint contam como filtro.
     var sprintAtivo = sprintPadraoDev(ctx) ? !sprintEhPadrao(ctx) : !!F.sprint;
+    // Cada coluna filtrada pelo contador conta um (o "Limpar (n)" do admin conta `_kbProdCol`).
     var ativos = (sprintAtivo ? 1 : 0) + (F.meus && times ? 1 : 0) + (F.tipo ? 1 : 0) + (F.sistema ? 1 : 0) + (!F.meus && F.dev ? 1 : 0) + (F.prazo ? 1 : 0) +
-      (F.vencidas ? 1 : 0) + (F.frente ? 1 : 0) + (F.busca ? 1 : 0);
+      (F.vencidas ? 1 : 0) + (F.frente ? 1 : 0) + (F.busca ? 1 : 0) + (F.prod ? 1 : 0) + (F.dados ? 1 : 0) + Object.keys(F.prodCol).length;
     h += '<div class="qd-barra"><div class="qd-alertas">';
     if (vencidas.length) {
       h += '<button type="button" class="qd-alerta dg' + (F.vencidas ? ' on' : '') + '" data-acao-qd="vencidas" aria-pressed="' + F.vencidas + '"' +
@@ -736,7 +919,23 @@
     if (!F.meus) h += '<span class="qd-par"><label class="qd-fl" for="qd-dev">Dev</label><select id="qd-dev" class="in qd-sel" data-filtro="dev">' + opcoesDev(todos, D) + '</select></span>';
     h += '<span class="qd-par"><label class="qd-fl" for="qd-prazo">Prazo</label><select id="qd-prazo" class="in qd-sel" data-filtro="prazo">' +
       PRAZOS.map(function (p) { return opcao(p[0], p[1], F.prazo); }).join('') + '</select></span>';
+    /* PRODUCAO E DADOS/BI (`renderKbToolbar`, admin.html), com a contagem de
+       cada opcao sobre a base inteira, como `opcoesProducao` e `opcoesDados`. */
+    var base = (D.melhorias || []).filter(function (m) { return m && !m.mesclado_em; });
+    var nDe = function (fn) { return base.filter(fn).length; };
+    h += '<span class="qd-par"><label class="qd-fl" for="qd-prod">Produção</label><select id="qd-prod" class="in qd-sel" data-filtro="prod">' +
+      PRODUCAO.map(function (p) {
+        return opcao(p[0], p[1] + ' (' + (p[0] ? nDe(function (m) { return casaProducao(m, p[0], H.colunaDe(m), H.pausada(m)); }) : (D.melhorias || []).length) + ')', F.prod);
+      }).join('') + '</select></span>' +
+      '<span class="qd-par"><label class="qd-fl" for="qd-dados">Dados/BI</label><select id="qd-dados" class="in qd-sel" data-filtro="dados" title="Pela marca da demanda: do time de Dados/BI, de Sales Ops ou fora de Dados">' +
+      DADOS.map(function (p) {
+        return opcao(p[0], p[1] + ' (' + (p[0] ? nDe(function (m) { return casaDados(m, p[0]); }) : (D.melhorias || []).length) + ')', F.dados);
+      }).join('') + '</select></span>';
     if (ativos) h += '<button type="button" class="btns" data-acao-qd="limpar">Limpar (' + ativos + ')</button>';
+    /* O REPASSE EM LOTE (`sprintLoteAbrir`, admin.html: o botao fica na barra do
+       Kanban, de onde se ve o que falta alocar). So o dono da sprint. O lote
+       e o de Sprints (axis-tela-sprints.js), aberto no Planning da sprint atual. */
+    if (H.donoDaSprint && H.donoDaSprint()) h += '<button type="button" class="btns" data-acao-qd="lote" title="Repassar várias demandas para uma sprint de uma vez">' + H.ico('refresh') + ' Sprint em lote</button>';
     // O numero do botao conta so o que esta dentro da gaveta: o alerta e a busca ficam a vista.
     h = antesFl + H.filtros(h, ativos - (F.vencidas ? 1 : 0) - (F.busca ? 1 : 0), { id: 'quadro' });
     h += '</div></div>';
@@ -766,9 +965,9 @@
           extra = '<button type="button" class="qd-mais" data-acao-qd="periodo" title="Concluídas e negadas: por padrão só as deste mês, como no admin">' +
             (F.todasConcluidas ? 'Só as deste mês' : '+ ' + escondidas + ' de outros meses') + '</button>';
         }
-        h += coluna(k, porCol[k], { lim: F.mais[k] || POR_PAGINA, extra: extra });
+        h += coluna(k, porCol[k], { lim: F.mais[k] || POR_PAGINA, extra: extra, prod: F.prodCol[k] || '', total: totalCol[k] });
       });
-      if (F.negadaAberta) h += coluna('negada', porCol.negada, { lim: F.mais.negada || POR_PAGINA });
+      if (F.negadaAberta) h += coluna('negada', porCol.negada, { lim: F.mais.negada || POR_PAGINA, prod: F.prodCol.negada || '', total: totalCol.negada });
       else h += '<button type="button" class="qd-neg" data-acao-qd="negada" data-solta="negada" data-rot="Negada" title="Mostrar as negadas"><span class="dotc" style="background:var(--dg)"></span>' +
         '<span class="v">NEGADA</span><span class="n">' + porCol.negada.length + '</span></button>';
       h += '</div></div>';
@@ -870,7 +1069,14 @@
     if (OCUPADO) return;
     OCUPADO = true;
     try {
-      if (r.via === 'mover') await AC.aplicar('mover', m, { destino: r.destino });
+      if (r.via === 'mover') {
+        var out = await AC.aplicar('mover', m, { destino: r.destino });
+        /* A RECUSA ABRE ONDE SE CONSERTA (`kbDrop`, admin.html): o campo do
+           formulario o `recusa` de axis-acoes.js ja abre (responsavel, sprint,
+           horas, solicitante); a homologacao e as assinaturas do spike sao da
+           entrega, no Item. */
+        if (out && out.ok === false && (out.campo === 'homologacao' || (m.spike && r.destino === 'concluido' && !out.campo))) abrirItem(m);
+      }
       else if (r.via === 'entregar') await AC.GESTOS.entregar(m, { getAttribute: function () { return r.destino; } });
       else if (r.via === 'negar') await AC.GESTOS.negar(m);
     } catch (e) {
@@ -924,6 +1130,17 @@
     }, 150);
   });
 
+  /* O QUE SE ABRE DE DENTRO DO CARD: a linha de vinculo (`ligaCliqueVinculo`,
+     dev.html) abre a outra demanda na gaveta; o chip do projeto
+     (`pjAbrirDoCard`) leva ao projeto. Devolve true quando tratou. */
+  function abreDoCard(alvo, el) {
+    var v = alvo && alvo.closest && alvo.closest('[data-qd-ver]');
+    if (v && el.contains(v)) { var m = porId(v.getAttribute('data-qd-ver')); if (m) abrirItem(m); return true; }
+    var p = alvo && alvo.closest && alvo.closest('[data-qd-proj]');
+    if (p && el.contains(p)) { location.hash = '#projeto/' + p.getAttribute('data-qd-proj'); return true; }
+    return false;
+  }
+
   var ARR = null;
   /** Liga os gestos comuns do Quadro e do Meu trabalho, uma vez por vista.
    *  `o` = { estado (guarda a etapa do celular), abre(k) (coluna que ainda
@@ -936,6 +1153,8 @@
     el.addEventListener('click', function (e) {
       var tab = e.target.closest('[data-qd-etapa]');
       if (tab && el.contains(tab)) { irEtapa(el, G.est, tab.getAttribute('data-qd-etapa'), G.abre); return; }
+      // A linha de vinculo abre a outra demanda; o chip do projeto abre o projeto. O card nao abre junto.
+      if (abreDoCard(e.target, el)) { e.preventDefault(); return; }
       var cd = e.target.closest('a.qd-card[data-qd-id]');
       if (!cd || !el.contains(cd) || e.target.closest('button, input, select, [data-axa-acao]')) return;
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
@@ -994,6 +1213,9 @@
       soltar(porId(id), alvo.getAttribute('data-solta'), juntoDe(alvo));
     });
     el.addEventListener('dragend', function () { ARR = null; limpa(); });
+    el.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter' || e.key === ' ') && abreDoCard(e.target, el)) e.preventDefault();
+    });
     // ── As etapas do celular acompanham o deslize ──
     var quadro = 0;
     el.addEventListener('scroll', function (e) {
@@ -1015,6 +1237,36 @@
     window.scrollTo(0, y);
   }
 
+  /* O MENU DO CONTADOR (`kbProdMenu` + `kbProdEscolhe`, admin.html): a
+     escolha recorta so aquela coluna; "Tudo" apaga a chave. Numa caixa do app,
+     que no celular ocupa a tela. O foco volta ao contador. */
+  async function menuProducao(el, ctx, k, rot) {
+    var AC = window.AXIS_ACOES;
+    if (!AC || !AC.caixa) return;
+    var e = H.ETAPA_POR_ID[k] || { rotulo: k };
+    var v = await AC.caixa({ titulo: 'Filtrar ' + e.rotulo, texto: rot,
+      campos: [{ nome: 'f', tipo: 'opcoes', valor: F.prodCol[k] || '', opcoes: PROD_COL.map(function (x) { return { v: x[0], r: (x[2] ? x[2] + ' ' : '') + x[1] }; }) }],
+      ok: 'Aplicar' });
+    if (!v) return;
+    if (v.f) F.prodCol[k] = v.f; else delete F.prodCol[k];
+    redesenhar(el, ctx);
+    var b = el.querySelector('[data-qd-prod="' + k + '"]');
+    if (b) b.focus();
+  }
+
+  /* SPRINT EM LOTE: o lote mora em Sprints (`abrirLote`, axis-tela-sprints.js),
+     no Planning da sprint atual; a tela vai para la e abre o lote. */
+  function abrirLote() {
+    var r = H.sprintAtual();
+    H.ir('sprints/planning' + (r ? '/' + r : ''));
+    var t0 = Date.now();
+    (function espera() {
+      var b = document.querySelector('#vista [data-sp-ciclo="lote"]');
+      if (b) { b.click(); return; }
+      if (Date.now() - t0 < 4000) setTimeout(espera, 120);
+    })();
+  }
+
   var _buscaT = 0;
   function ligar(el, ctx) {
     ligarQuadro(el, { estado: F, abre: function (k) {
@@ -1023,8 +1275,11 @@
     if (el.__qdLigado) return;
     el.__qdLigado = true;
     el.addEventListener('click', function (e) {
+      var pc = e.target.closest('[data-qd-prod]');
+      if (pc && el.contains(pc)) { e.preventDefault(); menuProducao(el, ctx, pc.getAttribute('data-qd-prod'), pc.getAttribute('aria-label') || ''); return; }
       var b = e.target.closest('[data-frente],[data-acao-qd],[data-mais],[data-ir-col]');
       if (!b || !el.contains(b)) return;
+      if (b.getAttribute('data-acao-qd') === 'lote') { abrirLote(); return; }
       if (b.hasAttribute('data-frente')) { F.frente = b.getAttribute('data-frente'); F.mais = {}; }
       else if (b.hasAttribute('data-mais')) { var k = b.getAttribute('data-mais'); F.mais[k] = (F.mais[k] || POR_PAGINA) + POR_PAGINA; }
       else if (b.hasAttribute('data-ir-col')) {
@@ -1046,7 +1301,7 @@
         else if (a === 'negada') { F.negadaAberta = !F.negadaAberta; if (F.negadaAberta) F.etapa = 'negada'; else if (F.etapa === 'negada') F.etapa = ''; }
         else if (a === 'limpar') {
           // O Limpar do dev volta a sprint atual e ao seu time, que sao o padrao.
-          F.tipo = F.sistema = F.dev = F.frente = F.prazo = F.busca = ''; F.sprint = sprintPadraoDev(ctx); F.vencidas = false; F.mais = {};
+          F.tipo = F.sistema = F.dev = F.frente = F.prazo = F.busca = F.prod = F.dados = ''; F.prodCol = {}; F.sprint = sprintPadraoDev(ctx); F.vencidas = false; F.mais = {};
           if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times('');
         }
       }
@@ -1086,7 +1341,8 @@
   window.AXIS_QUADRO = {
     css: css, card: card, coluna: coluna, abasEtapas: abasEtapas, COLUNAS_DEV: COLUNAS_DEV,
     ligarQuadro: ligarQuadro, sincEtapa: sincEtapa, abrirItem: abrirItem, pintaItem: pintaItem,
-    casaBusca: casaBusca, casaPrazo: casaPrazo, dataNoCard: dataNoCard, faixaDevolucao: faixaDevolucao
+    casaBusca: casaBusca, casaPrazo: casaPrazo, dataNoCard: dataNoCard, faixaDevolucao: faixaDevolucao,
+    casaProducao: casaProducao, casaDados: casaDados, vinculosDe: vinculosDe, htmlVinculos: htmlVinculos, grillPendente: grillPendente
   };
 
   AX.tela({

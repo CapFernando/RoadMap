@@ -239,6 +239,15 @@
       '.axa .sp-cal .ch.sw0{display:none}',
       '.axa .sp-cal .dc{min-height:64px;padding:5px}',
       '.axa .sp-cal .ev{font-size:9.5px;padding:2px 4px}',
+      // Letra de 12 px no minimo no que a tela desenha menor.
+      '.axa .sp-esc .ti span,.axa .sp-esc .ti em,.axa .sp-trl .btns .n,.axa .sp-k .s,.axa .sp-est,.axa .es-gh .n,.axa .sp-li .t small{font-size:12px}',
+      /* Entregas: esteiras e pessoas viram uma faixa que rola de lado (quinze
+         nomes empilhados empurravam a lista para baixo), com botoes de 44 px. */
+      '.axa .es-pes{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;margin:0 -14px;padding:0 14px;gap:8px}',
+      '.axa .es-pes::-webkit-scrollbar{display:none}',
+      '.axa .es-pes .lab{flex-shrink:0}',
+      '.axa .es-pes .es-pn{flex-shrink:0;height:44px;padding:0 14px;border-radius:12px;font-size:12.5px;white-space:nowrap}',
+      '.axa .es-ln .x{min-width:0}.axa .es-ln .x .chip{max-width:100%;flex-shrink:1;height:auto;min-height:22px;padding-top:2px;padding-bottom:2px;white-space:normal;line-height:16px}',
       '}'
     ].join('\n');
     document.head.appendChild(s);

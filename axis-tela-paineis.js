@@ -709,7 +709,7 @@
     return !!t && (!t.papeis || t.papeis.indexOf(raiz.AXIS_APP.APP.papel) >= 0);
   }
   function codLink(m) {
-    return podeItem() ? '<a class="code" href="' + H.hrefItem(m) + '" style="text-decoration:none">' + esc(m.codigo || '—') + '</a>' : H.cod(m);
+    return podeItem() ? '<a class="code gx-cod" href="' + H.hrefItem(m) + '" style="text-decoration:none">' + esc(m.codigo || '—') + '</a>' : H.cod(m);
   }
   /** Paginacao simples: a base real tem centenas de linhas. */
   function paginar(lista, pag, por) {
@@ -773,7 +773,28 @@
       '.axa .gx-k4,.axa .gx-k5,.axa .gx-k6{grid-template-columns:repeat(2,minmax(0,1fr))}',
       '.axa .gx-3,.axa .gx-2,.axa .gx-2a,.axa .gx-2b,.axa .gx-2c,.axa .gx-as,.axa .gx-as3{grid-template-columns:minmax(0,1fr)}',
       '.axa .gx-bl{grid-template-columns:minmax(70px,110px) minmax(0,1fr) auto}.axa .gx-bx{display:none}',
-      '.axa .gx-cols{gap:6px}}'
+      '.axa .gx-cols{gap:6px}',
+      /* Celular: texto de 12 px nos graficos e toque de 44 px no codigo da
+         demanda (a area cresce por padding com margem negativa: o desenho
+         fica). O SVG de linhas encolhe pela viewBox; a letra cresce na mesma
+         proporcao e pode passar da borda do desenho. */
+      '.axa .gx-bv,.axa .gx-cv,.axa .gx-cl,.axa .gx-rc span,.axa .gx-li b,.axa .gx-ck{font-size:12px}',
+      '.axa .gx-svg{overflow:visible}.axa .gx-svg text{font-size:21px}',
+      '.axa .gx-seg{flex-wrap:wrap}.axa .gx-seg .btns{height:auto;min-height:44px}.axa .gx-mod{min-height:44px}',
+      '.axa .gx-cod{white-space:nowrap;flex-shrink:0;padding:14px 6px;margin:-14px -6px}',
+      '.axa .gx-ln{min-height:44px}.axa .gx-al{min-height:44px;box-sizing:border-box}',
+      '.axa .gx-cods{gap:6px !important}.axa .gx-cods .gx-cod{margin:0;padding:12px 10px;border-radius:9px;background:var(--sf3)}',
+      '.axa .gx-tw .tbl.tc{min-width:0}',
+      /* Caixa de marcar das listas (.fc-ck, Fechamento e Relatorios): a caixa
+         ocupa a linha inteira (toque de 44 px), por cima e invisivel; o desenho
+         vem do ::before do rotulo. */
+      '.axa .fc-ck{position:relative;min-height:44px;box-sizing:border-box}',
+      '.axa .fc-ck input{position:absolute !important;inset:0;width:100% !important;height:100% !important;margin:0 !important;opacity:0;cursor:pointer;z-index:1}',
+      '.axa .fc-ck::before{content:"";flex:0 0 18px;width:18px;height:18px;box-sizing:border-box;border-radius:5px;border:1.5px solid var(--bd4);background:var(--sf3)}',
+      '.axa .fc-ck:has(input:checked)::before{border-color:var(--ac);background:var(--ac) url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Cpath d=%27M3.5 8.5l3 3 6-7%27 fill=%27none%27 stroke=%27%2305070C%27 stroke-width=%272.2%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E") center/14px no-repeat}',
+      '.axa .fc-ck:has(input:disabled){opacity:.6}.axa .fc-ck:has(input:focus-visible){outline:2px solid var(--ac);outline-offset:2px}',
+      /* Cartao de tres colunas para a linha com muitos numeros curtos. */
+      '.axa .gx-tc3 tr{grid-template-columns:repeat(3,minmax(0,1fr)) !important;grid-auto-flow:row dense;gap:10px 12px}.axa .gx-tc3 [data-tc="topo-fim"]{grid-column:2 / -1}}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -896,7 +917,7 @@
     var pg = paginar(linhasT, _pagDem, 20);
     h += '<section class="pn" id="gx-dem"><div class="row" style="justify-content:space-between;flex-wrap:wrap"><h2 class="h2">Demandas do mês</h2>' +
       '<span class="note">* hora aproximada pelo rateio: ninguém lançou hora na conclusão</span></div>' +
-      (linhasT.length ? '<div class="gx-tw"><table class="tbl"><thead><tr><th>ITEM</th><th>TEMA</th><th>DEV</th><th>INÍCIO</th><th>PRAZO</th>' +
+      (linhasT.length ? '<div class="gx-tw"><table class="tbl tc gx-tc3"><thead><tr><th>ITEM</th><th>TEMA</th><th>DEV</th><th>INÍCIO</th><th>PRAZO</th>' +
         '<th class="num">H. PLAN.</th><th class="num">H. REAL.</th><th class="num">DESVIO</th><th>ETAPA</th></tr></thead><tbody>' +
         pg.itens.map(function (m) {
           var hp = Math.round(g.hPlan.get(m.id) || 0);
@@ -904,12 +925,12 @@
           var conc = m.status_planejamento === 'concluido' || m.status === 'concluida';
           var desvio = conc ? Math.round(real.h - hp) : null;
           var hr = conc ? (real.medida ? H.num(real.h) + 'h' : Math.round(real.h) + 'h*') : '—';
-          return '<tr><td style="color:var(--tx)"><span class="row" style="gap:8px">' + codLink(m) + '<span class="ell" style="max-width:300px" title="' + esc(m.titulo) + '">' + esc(m.titulo) + '</span></span></td>' +
-            '<td class="ell" style="max-width:180px">' + esc(H.caminho(m.tema_id) || '—') + '</td><td>' + esc(m.dev || '—') + '</td>' +
-            '<td class="mono">' + (H.dm(m.inicio) || '—') + '</td><td class="mono">' + (H.dm(m.entrega) || '—') + '</td>' +
-            '<td class="num mono">' + (hp ? hp + 'h' : '—') + '</td><td class="num mono">' + hr + '</td>' +
-            '<td class="num mono" style="color:' + (desvio > 0 ? 'var(--dg-t)' : desvio < 0 ? 'var(--ok-t)' : 'var(--tx3)') + '">' +
-              (desvio === null ? '—' : (desvio > 0 ? '+' : '') + desvio + 'h') + '</td><td>' + H.chipEtapa(m) + '</td></tr>';
+          return '<tr><td style="color:var(--tx)" data-tc="titulo"><span class="row" style="gap:8px">' + codLink(m) + '<span class="ell" style="max-width:300px" title="' + esc(m.titulo) + '">' + esc(m.titulo) + '</span></span></td>' +
+            '<td class="ell" style="max-width:180px" data-label="Tema" data-tc="largo">' + esc(H.caminho(m.tema_id) || '—') + '</td><td data-tc="topo-fim">' + esc(m.dev || '—') + '</td>' +
+            '<td class="mono" data-label="Início">' + (H.dm(m.inicio) || '—') + '</td><td class="mono" data-label="Prazo">' + (H.dm(m.entrega) || '—') + '</td>' +
+            '<td class="num mono" data-label="H. plan.">' + (hp ? hp + 'h' : '—') + '</td><td class="num mono" data-label="H. real.">' + hr + '</td>' +
+            '<td class="num mono" data-label="Desvio" style="color:' + (desvio > 0 ? 'var(--dg-t)' : desvio < 0 ? 'var(--ok-t)' : 'var(--tx3)') + '">' +
+              (desvio === null ? '—' : (desvio > 0 ? '+' : '') + desvio + 'h') + '</td><td data-tc="topo">' + H.chipEtapa(m) + '</td></tr>';
         }).join('') + '</tbody></table></div>' + navPag(pg, linhasT.length, 'pag-dem')
         : H.vazio('calendar', 'Nenhuma demanda com início em ' + rotuloMes(alvo))) + '</section>';
     return h;
@@ -943,9 +964,9 @@
         k('Comprometidas', H.num(r.comprometidas.length), 'de Planejado em diante') +
         k('Com pontuação', H.num(r.comprometidas.length - r.sem.length), 'base para a data') + '</div>';
     if (!r.sem.length) return h + H.vazio('check', 'Todas as demandas comprometidas estão pontuadas') + '</section>';
-    return h + '<div class="gx-tw"><table class="tbl"><thead><tr><th>RESPONSÁVEL</th><th class="num">SEM PONTOS</th><th>DEMANDAS</th></tr></thead><tbody>' +
+    return h + '<div class="gx-tw"><table class="tbl tc"><thead><tr><th>RESPONSÁVEL</th><th class="num">SEM PONTOS</th><th>DEMANDAS</th></tr></thead><tbody>' +
       r.porDev.slice(0, 12).map(function (x) {
-        return '<tr><td style="color:var(--tx);white-space:nowrap">' + esc(x[0]) + '</td><td class="num mono">' + x[1].length + '</td><td><span class="row" style="gap:6px;flex-wrap:wrap">' +
+        return '<tr><td style="color:var(--tx);white-space:nowrap" data-tc="topo">' + esc(x[0]) + '</td><td class="num mono" data-label="Sem pontos">' + x[1].length + '</td><td data-tc="largo"><span class="row gx-cods" style="gap:6px;flex-wrap:wrap">' +
           x[1].map(function (m) { return codLink(m); }).join('') + '</span></td></tr>';
       }).join('') + '</tbody></table></div>' + (r.porDev.length > 12 ? '<span class="note">e mais ' + (r.porDev.length - 12) + ' responsáveis.</span>' : '') +
       '<span class="note">Sem pontos, o planejado de quem recebeu a demanda aparece menor do que é.</span></section>';
@@ -1160,21 +1181,21 @@
           '<div class="k" style="padding:12px"><span class="kl">Medidas</span><b style="font-size:22px">' + pz.medidas + '</b></div>' +
           '<div class="k" style="padding:12px"><span class="kl">Sem prazo</span><b style="font-size:22px">' + pz.naoMedido.length + '</b></div></div>' +
         (atrL.length ? atrL.slice(0, 6).map(function (m) {
-          return '<div class="row" style="gap:8px;font-size:12.5px">' + codLink(m) + '<span class="ell" style="flex:1">' + esc(m.titulo || '') + '</span>' +
+          return '<div class="row gx-ln" style="gap:8px;font-size:12.5px">' + codLink(m) + '<span class="ell" style="flex:1">' + esc(m.titulo || '') + '</span>' +
             '<span class="mono note">' + H.dm(m.entrega) + ' → ' + H.dm(m.concluido_em) + '</span><b class="mono" style="color:var(--dg-t)">+' + pz.cls.get(m.id).dias + 'd</b></div>';
         }).join('') + (atrL.length > 6 ? '<span class="note">e mais ' + (atrL.length - 6) + '.</span>' : '') : '') +
         '<span class="note">Pela data de conclusão; o prazo é medido até a entrega do dev, e não até a validação do PM/PO.</span></section></div>';
     h += '<section class="pn"><h2 class="h2">Cumprimento do mês por dev</h2>' +
-        (devs.length ? '<div class="gx-tw"><table class="tbl"><thead><tr><th>DEV</th><th class="num">COMPROM.</th><th class="num">ENTRARAM</th><th class="num">ENTREGUES</th>' +
+        (devs.length ? '<div class="gx-tw"><table class="tbl tc gx-tc3"><thead><tr><th>DEV</th><th class="num">COMPROM.</th><th class="num">ENTRARAM</th><th class="num">ENTREGUES</th>' +
           '<th class="num">NÃO SAÍRAM</th><th class="num">NO PRAZO</th><th class="num">%</th><th class="num">EM ANDAMENTO</th><th class="num">ATRASADAS</th></tr></thead><tbody>' +
           devs.map(function (d) {
             var c = d.c, p = d.p;
             var pp = p ? (p.prazo + p.atraso ? p.prazo + ' de ' + (p.prazo + p.atraso) : '—') : dash;
-            return '<tr><td style="color:var(--tx)"><span class="row" style="gap:8px">' + H.av(d.nome, 24) + '<span class="ell">' + esc(d.nome) + '</span></span></td>' +
-              '<td class="num mono">' + (c ? c.comp : dash) + '</td><td class="num mono">' + (c && c.meio ? c.meio : dash) + '</td>' +
-              '<td class="num mono">' + (c ? c.entregue : dash) + '</td><td class="num mono">' + (c && c.transb ? c.transb : dash) + '</td>' +
-              '<td class="num mono">' + pp + '</td><td class="num">' + (c ? chipPct(c.pct) : dash) + '</td>' +
-              '<td class="num mono">' + (d.and || dash) + '</td><td class="num mono" style="color:' + (d.atr ? 'var(--dg-t)' : '') + '">' + (d.atr || dash) + '</td></tr>';
+            return '<tr><td style="color:var(--tx)" data-tc="topo"><span class="row" style="gap:8px">' + H.av(d.nome, 24) + '<span class="ell">' + esc(d.nome) + '</span></span></td>' +
+              '<td class="num mono" data-label="Comprom.">' + (c ? c.comp : dash) + '</td><td class="num mono" data-label="Entraram">' + (c && c.meio ? c.meio : dash) + '</td>' +
+              '<td class="num mono" data-label="Entregues">' + (c ? c.entregue : dash) + '</td><td class="num mono" data-label="Não saíram">' + (c && c.transb ? c.transb : dash) + '</td>' +
+              '<td class="num mono" data-label="No prazo">' + pp + '</td><td class="num" data-tc="topo-fim">' + (c ? chipPct(c.pct) : dash) + '</td>' +
+              '<td class="num mono" data-label="Em andamento">' + (d.and || dash) + '</td><td class="num mono" data-label="Atrasadas" style="color:' + (d.atr ? 'var(--dg-t)' : '') + '">' + (d.atr || dash) + '</td></tr>';
           }).join('') + '</tbody></table></div>' +
           '<span class="note">Comprometidas, entraram, entregues e não saíram vêm da trilha de meses (a aba Mês do admin); % = entregues sobre o que a pessoa teve no mês. No prazo é das concluídas no mês. Em andamento e atrasadas são de hoje. Demanda de dupla conta para os dois.</span>'
           : H.vazio('users', 'Ninguém com compromisso, entrega ou trabalho em aberto neste mês')) + '</section>';
@@ -1267,10 +1288,10 @@
           (segA.length ? '<div class="row" style="gap:18px;align-items:center">' + rosca(segA, H.num(ct.total), 'pontos', 120) + legendaRosca(segA) + '</div>' : H.vazio('chart', 'Sem pontos entregues no mês')) + '</section>' +
         (semData.length ? '<section class="pn" style="border-color:rgba(var(--wn-rgb),.4)"><div class="row" style="justify-content:space-between"><h2 class="h2">Pontuadas sem data</h2>' +
           H.chip(semData.length + ' · ' + semDataPts + ' pts', 'wn') + '</div><span class="note" style="font-size:12px">Sem início nem entrega, não entram na distribuição por semana. Preencha no card para passarem a contar.</span>' +
-          semData.slice(0, 8).map(function (m) { return '<span class="row" style="gap:8px;font-size:12.5px;color:var(--tx2)">' + codLink(m) + '<span class="ell">' + esc(m.titulo || '(sem título)') + '</span><b class="mono" style="margin-left:auto">' + m.poker_pontos + ' pt</b></span>'; }).join('') +
+          semData.slice(0, 8).map(function (m) { return '<span class="row gx-ln" style="gap:8px;font-size:12.5px;color:var(--tx2)">' + codLink(m) + '<span class="ell">' + esc(m.titulo || '(sem título)') + '</span><b class="mono" style="margin-left:auto">' + m.poker_pontos + ' pt</b></span>'; }).join('') +
           (semData.length > 8 ? '<span class="note">e mais ' + (semData.length - 8) + '.</span>' : '') + '</section>' : '') +
         (semDono.length ? '<section class="pn" style="border-color:rgba(var(--wn-rgb),.4)"><h2 class="h2">Pontuadas sem responsável</h2><span class="note" style="font-size:12px">Contam no total do mês, mas não aparecem por dev: não há a quem atribuir.</span>' +
-          semDono.map(function (m) { return '<span class="row" style="gap:8px;font-size:12.5px;color:var(--tx2)">' + codLink(m) + '<span class="ell">' + esc(m.titulo || '') + '</span><b class="mono" style="margin-left:auto">' + m.poker_pontos + ' pt</b></span>'; }).join('') + '</section>' : '') +
+          semDono.map(function (m) { return '<span class="row gx-ln" style="gap:8px;font-size:12.5px;color:var(--tx2)">' + codLink(m) + '<span class="ell">' + esc(m.titulo || '') + '</span><b class="mono" style="margin-left:auto">' + m.poker_pontos + ' pt</b></span>'; }).join('') + '</section>' : '') +
       '</div></div>';
 
     // Pontos por semana (colunas) e as sprints do mes (placar + ranking).
@@ -1337,11 +1358,11 @@
       // Na regra nova o % e a ordem sao de fechadas + em validacao (rankingDaSprint, c11b681).
       var rkNova = rk.some(function (d) { return d.entregues != null; });
       h += '<h2 class="h2" style="margin-top:6px">Ranking da ' + esc(S.rotuloCurto(_sprSel)) + '</h2>' +
-        '<div class="gx-tw"><table class="tbl"><thead><tr><th>DEV</th><th class="num">VALIDADOS</th><th class="num">PONTOS</th>' +
+        '<div class="gx-tw"><table class="tbl tc"><thead><tr><th>DEV</th><th class="num">VALIDADOS</th><th class="num">PONTOS</th>' +
         (rkNova ? '<th class="num" title="(Fechadas + em validação) ÷ itens da pessoa na sprint">% ENTREGUE</th>' : '<th class="num">%</th>') + '</tr></thead><tbody>' +
         rk.map(function (d) {
-          return '<tr><td style="color:var(--tx)"><span class="row" style="gap:8px">' + H.av(d.nome, 24) + esc(d.nome) + '</span></td>' +
-            '<td class="num mono">' + d.validados + ' de ' + d.total + '</td><td class="num mono">' + d.pontos + ' de ' + d.pontosTotal + '</td><td class="num">' + chipPct(d.pct) + '</td></tr>';
+          return '<tr><td style="color:var(--tx)" data-tc="topo"><span class="row" style="gap:8px">' + H.av(d.nome, 24) + esc(d.nome) + '</span></td>' +
+            '<td class="num mono" data-label="Validados">' + d.validados + ' de ' + d.total + '</td><td class="num mono" data-label="Pontos">' + d.pontos + ' de ' + d.pontosTotal + '</td><td class="num" data-tc="topo-fim">' + chipPct(d.pct) + '</td></tr>';
         }).join('') + '</tbody></table></div>' +
         (rk.some(function (d) { return d.dupla; }) ? '<span class="note">Demanda de dupla conta inteira para cada um na coluna de itens; o ponto se divide.</span>' : '');
     }

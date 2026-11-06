@@ -197,6 +197,12 @@
       '.axa .ini-risco::-webkit-scrollbar{display:none}',
       '.axa .ini-rl{min-height:44px}',
       '.axa .ini-risco-esc{flex-wrap:nowrap}',
+      // O que pede voce (`.ini-cols.q4`, so nesta aba): a linha de datas e pontos do cartao com 12 px.
+      '.axa .ini-cols.q4 .ini-card .rd{font-size:12px}',
+      // e os cinco numeros numa faixa que rola de lado, como no Meu trabalho: os cartoes sobem.
+      '.axa .ini-kg.ini-kg-pede{display:flex !important;overflow-x:auto;scrollbar-width:none;gap:8px;align-items:stretch}',
+      '.axa .ini-kg.ini-kg-pede::-webkit-scrollbar{display:none}',
+      '.axa .ini-kg.ini-kg-pede>.k{flex:0 0 150px;padding:10px 12px;gap:2px;box-sizing:border-box}',
       '}'
     ].join('\n');
     document.head.appendChild(st);
@@ -590,6 +596,154 @@
     });
   }
 
+  // ═══ OS FILTROS E A PRODUTIVIDADE DO MEU TRABALHO (dev.html) ═══════════
+  /* `tipo`, `tema`, `ano` e `mes`: os filtros Tipo, Tema e Periodo da barra
+     do painel do dev; `prod`: o periodo da produtividade. Ficam enquanto o
+     app esta aberto, como o resto do estado da tela. */
+  var MEU = { tipo: '', tema: '', ano: '', mes: '', prod: 'semana', pdAberto: false };
+  var TIPOS_MEU = [['', 'Todos'], ['sustentacao', 'Sustentação'], ['evolucao', 'Evolução'], ['__sem__', 'Sem tipo']];
+
+  /** As demandas do dev (`doDev` do dev.html): sem a mesclada, no nome dele. */
+  function doDev(D) {
+    return ((D || {}).melhorias || []).filter(function (m) { return m && !m.mesclado_em && H.minha(m); });
+  }
+  /* O TEMA COM A CONTAGEM POR SUBARVORE — COPIA de `buildTemaSelect`
+     (dev.html): so os temas com demanda do dev (ou o escolhido), e o numero
+     conta os filhos (`catalogoCasa`). O filtro tambem e por subarvore: o
+     dev.html contava assim e filtrava so o proprio no, e "Cadastro (36)"
+     devolvia menos de 36. */
+  function contaTemas(dev, temas, atual) {
+    var conta = {};
+    var visiveis = (temas || []).filter(function (t) {
+      var n = window.catalogoCasa ? dev.filter(function (m) { return window.catalogoCasa(m.tema_id, t.id, temas); }).length : dev.filter(function (m) { return m.tema_id === t.id; }).length;
+      conta[t.id] = n;
+      return n > 0 || atual === t.id;
+    });
+    return { conta: conta, visiveis: visiveis };
+  }
+  /* O PERIODO — COPIA de `getFiltered` (dev.html): a referencia e o inicio, ou
+     a criacao; `ano` e texto e `mes` e 0 a 11. Com periodo escolhido, as
+     concluidas de outros meses voltam (a regra do "Concluido no mes" sai). */
+  function casaPeriodo(m, ano, mes) {
+    if (!ano && (mes === '' || mes == null)) return true;
+    var ref = m.inicio ? new Date(m.inicio + 'T00:00:00') : new Date(m.criado_em);
+    if (ano && ref.getFullYear().toString() !== String(ano)) return false;
+    if (mes !== '' && mes != null && ref.getMonth() !== +mes) return false;
+    return true;
+  }
+  /** Os anos do filtro (`buildAnoFilter`): os de inicio da base, do mais novo. */
+  function anosDaBase(D) {
+    var a = {};
+    ((D || {}).melhorias || []).forEach(function (m) { if (m && m.inicio) a[String(m.inicio).slice(0, 4)] = 1; });
+    return Object.keys(a).sort(function (x, y) { return y - x; });
+  }
+  function casaMeu(m, D) {
+    if (MEU.tipo === '__sem__' ? !!m.tipo : (MEU.tipo && m.tipo !== MEU.tipo)) return false;
+    if (MEU.tema && !(window.catalogoCasa ? window.catalogoCasa(m.tema_id, MEU.tema, (D || {}).temas || []) : m.tema_id === MEU.tema)) return false;
+    return casaPeriodo(m, MEU.ano, MEU.mes);
+  }
+
+  /* O PERIODO DA PRODUTIVIDADE — COPIA de `prodIntervalo` (dev.html), com hoje
+     por parametro: a semana de segunda a domingo, o mes atual, o anterior. */
+  var PROD_PER = [['semana', 'Esta semana'], ['mes', 'Mês atual'], ['mes_ant', 'Mês anterior']];
+  function prodIntervalo(qual, hojeISO) {
+    var p = String(hojeISO).slice(0, 10).split('-');
+    var hoje = new Date(+p[0], +p[1] - 1, +p[2]);
+    var iso = function (d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+    if (qual === 'mes') return { de: iso(new Date(hoje.getFullYear(), hoje.getMonth(), 1)), ate: iso(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)), rot: 'no mês' };
+    if (qual === 'mes_ant') return { de: iso(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1)), ate: iso(new Date(hoje.getFullYear(), hoje.getMonth(), 0)), rot: 'no mês anterior' };
+    var d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    var dw = d.getDay();
+    d.setDate(d.getDate() - (dw === 0 ? 6 : dw - 1));
+    var fim = new Date(d);
+    fim.setDate(fim.getDate() + 6);
+    return { de: iso(d), ate: iso(fim), rot: 'na semana' };
+  }
+  /* O PODIO E A MINHA LINHA — COPIA de `prodAgrega` (dev.html): a conta e a
+     do `CAPACIDADE.porDev`, ordenada por pontos entregues, depois issues,
+     depois nome; e quantas entregas minhas concluidas nao tem data. */
+  function prodAgrega(lista, de, ate, eDeMim) {
+    var CAP = window.CAPACIDADE;
+    var vivas = (lista || []).filter(function (m) { return m && !m.mesclado_em; });
+    var semDataMinhas = 0;
+    vivas.forEach(function (m) { if (H.colunaDe(m) === 'concluido' && !CAP.diaDaEntrega(m) && eDeMim(m)) semDataMinhas++; });
+    var rank = CAP.porDev(vivas, de, ate).map(function (x) {
+      return { nome: x.nome, issues: x.qtdEntregue, pontos: x.entregue, plan: x.plan, semPontuar: x.semPontuar, pct: x.pct };
+    }).sort(function (a, b) { return b.pontos - a.pontos || b.issues - a.issues || String(a.nome).localeCompare(String(b.nome), 'pt-BR'); });
+    return { rank: rank, semDataMinhas: semDataMinhas, totalPts: rank.reduce(function (t, r) { return t + r.pontos; }, 0) };
+  }
+  function prodNum(n) { return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10).replace('.', ','); }
+  /* A FAIXA DA PRODUTIVIDADE (`renderProdutividade`, dev.html): o periodo, a
+     minha linha (issues, planejado, entregue, % e "sem pontuar"), o aviso do
+     que falta e o podio dos tres primeiros; fora do podio, so a minha
+     posicao. */
+  function htmlProdutividade(ctx) {
+    if (!window.CAPACIDADE) return '';
+    var nomes = H.meusNomes();
+    var I = prodIntervalo(MEU.prod, H.hoje());
+    var A = prodAgrega((ctx.D || {}).melhorias, I.de, I.ate, H.minha);
+    var rank = A.rank, temPontos = A.totalPts > 0;
+    var eu = rank.find(function (r) { return nomes.indexOf(r.nome) >= 0; });
+    var pos = eu ? rank.indexOf(eu) + 1 : 0;
+    var meus = eu
+      ? '<span>' + H.ico('check') + ' <b>' + prodNum(eu.issues) + '</b> issue' + (eu.issues !== 1 ? 's' : '') + '</span>' +
+        (temPontos || eu.plan ? '<span title="Planejado: pontos das demandas com prazo neste período. Entregue: pontos que você tirou da mão, contados na data em que entregou — não na da aprovação.">' +
+          H.ico('cards') + ' <b>' + prodNum(eu.plan) + '</b> pt planejados · <b style="color:var(--ok-t)">' + prodNum(eu.pontos) + '</b> entregues' + (eu.pct != null ? ' (' + eu.pct + '%)' : '') + '</span>' : '') +
+        (eu.semPontuar ? '<span class="ini-pd-sem" title="Demandas alocadas a você sem pontuação no Planning Poker: enquanto elas não forem pontuadas, o seu planejado aparece menor do que é.">◐ ' + prodNum(eu.semPontuar) + ' sem pontuar</span>' : '') +
+        '<span class="note">' + I.rot + '</span>'
+      : '<span class="note">Nenhuma entrega ' + I.rot + '.</span>';
+    var partes = [], dicas = [];
+    if (A.semDataMinhas) {
+      partes.push(A.semDataMinhas === 1 ? '1 entrega sua está fora desta conta' : A.semDataMinhas + ' entregas suas estão fora desta conta');
+      dicas.push((A.semDataMinhas === 1 ? 'Uma demanda sua foi concluída' : A.semDataMinhas + ' demandas suas foram concluídas') +
+        ' sem data registrada, então não pertence' + (A.semDataMinhas === 1 ? '' : 'm') + ' a nenhuma semana nem mês. Peça ao PM/PO para informar a data de entrega.');
+    }
+    if (!temPontos && rank.length) {
+      partes.push('nenhuma entrega pontuada');
+      dicas.push('Nenhuma entrega deste período recebeu pontos no Planning Poker, então a ordem do pódio segue a quantidade de issues.');
+    }
+    var podio = !rank.length ? '<span class="note">Sem entregas aprovadas neste período — o pódio aparece quando houver.</span>'
+      : rank.slice(0, 3).map(function (r, i) {
+          return '<span class="ini-pd-md' + (eu === r ? ' eu' : '') + '" title="' + (i + 1) + 'º lugar · ' + prodNum(r.issues) + ' issue' + (r.issues !== 1 ? 's' : '') +
+            (temPontos ? ' · ' + prodNum(r.pontos) + ' pontos' : '') + '"><b class="ps">' + (i + 1) + 'º</b> <b>' + H.esc(r.nome) + '</b> <span class="mono">' + prodNum(r.issues) +
+            (temPontos ? ' · ' + prodNum(r.pontos) + ' pt' + (r.plan ? ' / ' + prodNum(r.plan) : '') : '') + '</span></span>';
+        }).join('') + (pos > 3 ? '<span class="note">· você em <b>' + pos + 'º</b> de ' + rank.length + '</span>'
+          : !eu ? '<span class="note">· você ainda não tem entrega aprovada neste período</span>' : '');
+    // No celular o periodo e o podio recolhem num botao: a faixa nao empurra o quadro para baixo.
+    return '<section class="ini-pd' + (MEU.pdAberto ? ' aberto' : '') + '" aria-label="Produtividade"><span class="ini-pd-t">' + H.ico('trophy') + ' Produtividade</span>' +
+      '<button type="button" class="btns ini-pd-tg" data-meu-pd="1" aria-expanded="' + MEU.pdAberto + '">' + (MEU.pdAberto ? 'Recolher' : 'Período e pódio' + (pos ? ' · ' + pos + 'º' : '')) + '</button>' +
+      '<select class="in" data-meu="prod" aria-label="Período da produtividade" title="Período do consolidado">' +
+      PROD_PER.map(function (o) { return '<option value="' + o[0] + '"' + (MEU.prod === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<span class="ini-pd-meus">' + meus + '</span>' +
+      (partes.length ? '<span class="ini-pd-av" title="' + H.esc(dicas.join('\n\n')) + '">' + H.ico('alert') + ' ' + H.esc(partes.join(' · ')) + '</span>' : '') +
+      '<span class="ini-pd-podio">' + podio + '</span></section>';
+  }
+  /* O CSS DESTES BLOCOS, a parte: a folha da tela e dividida com a aba "O que
+     pede voce". */
+  function cssMeu() {
+    if (document.getElementById('css-ini-meu')) return;
+    var st = document.createElement('style');
+    st.id = 'css-ini-meu';
+    st.textContent = [
+      '.axa .ini-pd{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 16px;border-radius:16px;background:rgba(var(--sf-rgb),.6);border:1px solid var(--bd);font-size:12.5px;color:var(--tx2)}',
+      '.axa .ini-pd-t{font-weight:800;color:var(--tx);display:inline-flex;align-items:center;gap:6px}',
+      '.axa .ini-pd select.in{height:32px;font-size:12.5px;width:auto}',
+      '.axa .ini-pd-meus,.axa .ini-pd-podio{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px 12px}',
+      '.axa .ini-pd-sem{color:var(--wn-t)}',
+      '.axa .ini-pd-av{color:var(--wn-t);font-weight:600;cursor:help}',
+      '.axa .ini-pd-md{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;background:var(--sf3);border:1px solid var(--bd2)}',
+      '.axa .ini-pd-md .ps{font-family:var(--font-mono);color:var(--ac-t)}',
+      '.axa .ini-pd-md.eu{border-color:rgba(var(--ac-rgb),.6);background:rgba(var(--ac-rgb),.1)}',
+      '.axa .ini-pd-podio{margin-left:auto}',
+      '.axa .ini-pd-tg{display:none}',
+      '@container app (max-width: 760px){.axa .ini-pd{font-size:12px;padding:10px 12px}.axa .ini-pd select.in{min-height:44px;flex:1 1 100%}' +
+        '.axa .ini-pd-podio{margin-left:0}.axa .ini-pd .note{font-size:12px}' +
+        '.axa .ini-pd-tg{display:inline-flex;align-items:center;min-height:44px;margin-left:auto}' +
+        '.axa .ini-pd:not(.aberto) select.in,.axa .ini-pd:not(.aberto) .ini-pd-podio,.axa .ini-pd:not(.aberto) .ini-pd-av{display:none}}'
+    ].join('\n');
+    document.head.appendChild(st);
+  }
+
   function meuTrabalhoDev(ctx) {
     var S = window.SPRINTPO, CAP = window.CAPACIDADE, Q = window.AXIS_QUADRO;
     var vs = H.visiveis();
@@ -597,8 +751,11 @@
     var sprint = H.sprintAtual();
     var d = diaDaSprint(sprint, ctx);
     var mes = mesAtual();
-    var noMes = function (m) { return CAP && CAP.diaDaEntrega(m).slice(0, 7) === mes; };
+    // Com Periodo escolhido, as concluidas dele aparecem todas (`getFiltered`, dev.html).
+    var comPeriodo = !!(MEU.ano || MEU.mes !== '');
+    var noMes = function (m) { return comPeriodo || (CAP && CAP.diaDaEntrega(m).slice(0, 7) === mes); };
     if (Q) Q.css();
+    cssMeu();
 
     /* O QUADRO PESSOAL MOSTRA O QUE O PAINEL DO DEV MOSTRA (`getFiltered`):
        no nome dele e a fila do time, com o filtro "Mostrar". */
@@ -612,11 +769,17 @@
     var doPainel = AC && AC.mostraNoPainel
       ? vs.filter(function (m) { return AC.mostraNoPainel(m, cx, EST.mostrar); })
       : minhas;
-    var noQuadro = AC && AC.casaSprintDoPainel
+    var noQuadro = (AC && AC.casaSprintDoPainel
       ? doPainel.filter(function (m) { return AC.casaSprintDoPainel(m, cx, EST.sprint); })
-      : doPainel;
+      : doPainel).filter(function (m) { return casaMeu(m, ctx.D); });
     var times = AC && AC.times ? AC.times() : '';
     var filtrosAtivos = (EST.sprint !== (sprint || '') ? 1 : 0) + (times ? 1 : 0);
+    filtrosAtivos += (MEU.tipo ? 1 : 0) + (MEU.tema ? 1 : 0) + (MEU.ano ? 1 : 0) + (MEU.mes !== '' ? 1 : 0);
+    /* TIPO E TEMA COM A CONTAGEM (`f-tipo` e `buildTemaSelect`, dev.html): os
+       numeros sao das demandas do dev; o tema so lista os que ele tem. */
+    var dDev = doDev(ctx.D);
+    var ct = contaTemas(dDev, (ctx.D || {}).temas || [], MEU.tema);
+    var nTipo = function (v) { return v === '__sem__' ? dDev.filter(function (m) { return !m.tipo; }).length : v ? dDev.filter(function (m) { return m.tipo === v; }).length : dDev.length; };
     var cols = colunasDoPainel(noQuadro, noMes);
     var porCol = {};
     cols.forEach(function (c) { porCol[c.k] = c.itens; });
@@ -671,6 +834,15 @@
       (AC && AC.times ? '<span class="qd-par"><label class="note" for="ini-times">Times</label>' +
         '<select id="ini-times" class="in" data-ini="times" style="height:36px" title="Por padrão aparece só o seu time. Escolha outro para ver a fila dele e poder ajudar.">' +
         opt('', 'Só o meu time', times) + opt('dados', '+ Dados/BI', times) + opt('sales', '+ Sales Ops', times) + opt('todos', 'Todos os times', times) + '</select></span>' : '') +
+      '<span class="qd-par"><label class="note" for="ini-tipo">Tipo</label><select id="ini-tipo" class="in" data-meu="tipo" style="height:36px">' +
+        TIPOS_MEU.map(function (o) { return opt(o[0], o[1] + ' (' + nTipo(o[0]) + ')', MEU.tipo); }).join('') + '</select></span>' +
+      '<span class="qd-par"><label class="note" for="ini-tema">Tema</label><select id="ini-tema" class="in" data-meu="tema" style="height:36px;max-width:240px">' +
+        opt('', 'Todos (' + dDev.length + ')', MEU.tema) + (window.catalogoOpcoesHTML ? window.catalogoOpcoesHTML(ct.visiveis, MEU.tema || '', { vazio: false, contagem: ct.conta }) : '') + '</select></span>' +
+      // Periodo (`f-ano` e `f-mes`): pelo inicio, ou pela criacao.
+      '<span class="qd-par"><label class="note" for="ini-ano">Período</label><select id="ini-ano" class="in" data-meu="ano" style="height:36px" aria-label="Ano">' +
+        opt('', 'Todos os anos', MEU.ano) + anosDaBase(ctx.D).map(function (a) { return opt(a, a, MEU.ano); }).join('') + '</select>' +
+        '<select id="ini-mes" class="in" data-meu="mes" style="height:36px" aria-label="Mês">' + opt('', 'Todos os meses', MEU.mes) +
+        H.MESES.map(function (n, i) { return opt(String(i), n.charAt(0).toUpperCase() + n.slice(1), MEU.mes); }).join('') + '</select></span>' +
       (filtrosAtivos ? '<button type="button" class="btns" data-ini="limpar" style="height:36px" title="Volta para a sprint atual e só o seu time">Limpar (' + filtrosAtivos + ')</button>' : '');
     var h = '<header class="ini-hd fim ini-hd-meu"><div style="display:flex;flex-direction:column;gap:6px;min-width:0"><h1 class="h1">Meu trabalho</h1><span class="sub ini-sub">' + sub + '</span></div>' +
       '<div class="ini-fil">' + H.filtros(fl, filtrosAtivos + (EST.mostrar ? 1 : 0), { id: 'meu' }) +
@@ -712,7 +884,7 @@
         'O RoadMap procura por ' + (H.meusNomes().join(', ') || 'seu nome') + ' no campo dev. Se o nome nas demandas estiver diferente, escolha como ele aparece.',
         '<button type="button" class="btnp" data-ini="vinculo">Escolher meu nome nas demandas</button>');
     }
-    return h + kp + faixaRisco(risco) + quadro + rod;
+    return h + kp + htmlProdutividade(ctx) + faixaRisco(risco) + quadro + rod;
   }
 
   function meuTrabalhoPO(ctx) {
@@ -731,7 +903,7 @@
       '<span class="sub">Entregas para validar, homologações paradas na área, prazos vencidos e itens para estimar.</span></div>' +
       '<div class="row" style="flex-wrap:wrap"><a class="btn" href="#poker" title="Abre o Planning Poker do app">' + H.ico('cards') + ' Planning Poker</a>' +
       '<a class="btnp" href="#backlog/validacao" title="As entregas esperando o seu aceite, com o que o dev implementou">Ir à validação</a></div></header>';
-    var kp = '<div class="ini-kg">' +
+    var kp = '<div class="ini-kg ini-kg-pede">' +
       kpi('Para validar', val.length, val.length ? 'mais antiga entregue ' + (H.dm(val[0].entregue_em) || '—') : 'fila vazia', { cls: val.length ? 'ac' : '', href: '#backlog/validacao' }) +
       kpi('Homologações a cobrar', hom.length, HO.DIAS_ATE_COBRAR + '+ dias na área sem registro', { cor: hom.length ? 'var(--pu-t)' : '' }) +
       kpi('Atrasadas', atr.length, atr.length ? codigos(atr) : 'tudo no prazo', { cls: atr.length ? 'dg' : '', cor: atr.length ? 'var(--dg-t)' : '', href: '#backlog/vencido' }) +
@@ -1028,7 +1200,7 @@
     var Q = window.AXIS_QUADRO;
     if (!m || !Q) return;
     var achar = function () { return el.querySelector('.qd-card[data-qd-id="' + String(m.id).replace(/"/g, '') + '"]'); };
-    if (!achar()) { EST.sprint = ''; EST.mostrar = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); }
+    if (!achar()) { EST.sprint = ''; EST.mostrar = ''; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); }
     var col = Q.COLUNAS_DEV.find(function (c) { return c.junto.indexOf(H.colunaDe(m)) >= 0; });
     if (col) { EST.etapa = col.k; EST.mais[col.k] = true; }
     redesenha(el, ctx);
@@ -1055,11 +1227,11 @@
         if (q === 'ntf') { EST.ntfFiltro = b.getAttribute('data-f'); EST.ntfLimite = 30; redesenha(el, ctx); return; }
         if (q === 'ntf-mais') { EST.ntfLimite += 30; redesenha(el, ctx); return; }
         // O Limpar do Meu trabalho volta para a sprint atual e so o seu time (o padrao).
-        if (q === 'limpar') { EST.sprint = H.sprintAtual() || ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
+        if (q === 'limpar') { EST.sprint = H.sprintAtual() || ''; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
         if (q === 'sprint-todas') { EST.sprint = ''; redesenha(el, ctx); return; }
         // A faixa e o numero do prazo vencido levam ate a demanda (dev.html: `devIrPara`, `limparFiltrosDev`).
         if (q === 'risco-abre') { irParaDemanda(el, ctx, b.getAttribute('data-id')); return; }
-        if (q === 'risco-limpa') { EST.sprint = ''; EST.mostrar = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
+        if (q === 'risco-limpa') { EST.sprint = ''; EST.mostrar = ''; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
         if (q === 'risco') {
           var um = el.querySelectorAll('[data-ini="risco-abre"]');
           var fx = el.querySelector('#ini-risco');
@@ -1068,6 +1240,7 @@
           return;
         }
       }
+      if (e.target.closest('[data-meu-pd]')) { MEU.pdAberto = !MEU.pdAberto; redesenha(el, ctx); return; }
       // "e mais N" da coluna do Meu trabalho: mostra o resto (o painel do dev nao corta).
       var mb = e.target.closest('[data-mais]');
       if (mb && el.contains(mb)) { EST.mais[mb.getAttribute('data-mais')] = true; redesenha(el, ctx); return; }
@@ -1081,6 +1254,17 @@
     if (mo) mo.onchange = function () { EST.mostrar = mo.value; redesenha(el, ctx); var n = el.querySelector('[data-ini="mostrar"]'); if (n) n.focus(); };
     var spr = el.querySelector('[data-ini="sprint"]');
     if (spr) spr.onchange = function () { EST.sprint = spr.value; redesenha(el, ctx); var n = el.querySelector('[data-ini="sprint"]'); if (n) n.focus(); };
+    // Tipo, Tema, Periodo e o periodo da produtividade (dev.html): redesenha e devolve o foco.
+    [].forEach.call(el.querySelectorAll('[data-meu]'), function (s) {
+      s.onchange = function () {
+        var k = s.getAttribute('data-meu');
+        MEU[k] = s.value;
+        if (k !== 'prod') EST.mais = {};
+        redesenha(el, ctx);
+        var n = el.querySelector('[data-meu="' + k + '"]');
+        if (n) n.focus();
+      };
+    });
     var tm = el.querySelector('[data-ini="times"]');
     if (tm) tm.onchange = function () { if (window.AXIS_ACOES) AXIS_ACOES.times(tm.value); redesenha(el, ctx); var n = el.querySelector('[data-ini="times"]'); if (n) n.focus(); };
     var sel = el.querySelector('[data-ini="cron-dev"]');

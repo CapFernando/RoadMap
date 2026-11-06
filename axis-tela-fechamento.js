@@ -1122,12 +1122,12 @@
         (pT ? ' · ' + pE + ' / ' + pT + ' pt' : '') + '</span></span>' +
         '<span class="bar"><span style="width:' + pct + '%;background:var(--ok)"></span></span>' +
         '<span class="note">' + ent.length + ' de ' + lista.length + ' entregues' + (tr ? ' · ' + tr + ' transbordaram' : '') + (cu ? ' · ' + cu + ' em curso' : '') + ' · clique para ver as demandas</span></summary>' +
-        '<div class="gx-tw"><table class="tbl"><tbody>' + lista.map(function (m) {
+        '<div class="gx-tw"><table class="tbl tc"><tbody>' + lista.map(function (m) {
           var c = fc.cls.get(m.id), rol = g.mesRolos(m);
-          return '<tr><td style="color:var(--tx)"><span class="row" style="gap:8px">' + g.codLink(m) + '<span class="ell" style="max-width:280px">' + esc(m.titulo || '') + '</span>' +
+          return '<tr><td style="color:var(--tx)" data-tc="titulo"><span class="row" style="gap:8px">' + g.codLink(m) + '<span class="ell" style="max-width:280px">' + esc(m.titulo || '') + '</span>' +
             (rol ? '<span class="mono" title="já rolou de mês ' + rol + 'x" style="color:var(--dg-t);font-size:11px;font-weight:700">⟳' + rol + '</span>' : '') + '</span></td>' +
-            '<td style="white-space:nowrap">' + esc(m.dev || '—') + '</td><td>' + H.chipEtapa(m) + '</td>' +
-            '<td class="mono" style="color:' + COR[c] + ';white-space:nowrap">' + ROT[c] + '</td></tr>';
+            '<td style="white-space:nowrap" data-label="Dev">' + esc(m.dev || '—') + '</td><td data-tc="topo">' + H.chipEtapa(m) + '</td>' +
+            '<td class="mono" style="color:' + COR[c] + ';white-space:nowrap" data-tc="topo-fim">' + ROT[c] + '</td></tr>';
         }).join('') + '</tbody></table></div></details>';
     }).join('');
 
@@ -1135,13 +1135,13 @@
     // (`renderGerCumprimento`): a do terceiro rolo esta sendo adiada.
     var nao = fc.transb.slice().sort(function (a, b) { return g.mesRolos(b) - g.mesRolos(a); });
     var pg = g.paginar(nao, _pagNao, 12);
-    var tabNao = nao.length ? '<div class="gx-tw"><table class="tbl"><thead><tr><th>ITEM</th><th>DEV</th><th>ETAPA</th><th>DESTINO</th></tr></thead><tbody>' +
+    var tabNao = nao.length ? '<div class="gx-tw"><table class="tbl tc"><thead><tr><th>ITEM</th><th>DEV</th><th>ETAPA</th><th>DESTINO</th></tr></thead><tbody>' +
       pg.itens.map(function (m) {
         var dest = g.mesDe(m), c = fc.cls.get(m.id), rol = g.mesRolos(m);
         var chipD = dest && dest !== alvo ? H.chip(esc(g.rotuloMes(dest)), 'in') : c === 'em_curso' ? H.chip('em curso', 'bk') : H.chip('não rolou', 'wn', 'O mês ainda não foi fechado: a demanda não ganhou mês novo.');
-        return '<tr><td style="color:var(--tx)"><span class="row" style="gap:8px">' + g.codLink(m) + '<span class="ell" style="max-width:220px" title="' + esc(m.titulo || '') + '">' + esc(m.titulo || '') + '</span>' +
+        return '<tr><td style="color:var(--tx)" data-tc="titulo"><span class="row" style="gap:8px">' + g.codLink(m) + '<span class="ell" style="max-width:220px" title="' + esc(m.titulo || '') + '">' + esc(m.titulo || '') + '</span>' +
           (rol ? '<span class="mono" title="já rolou de mês ' + rol + 'x" style="color:' + (rol >= 2 ? 'var(--dg-t)' : 'var(--tx3)') + ';font-size:11px;font-weight:700">⟳' + rol + '</span>' : '') + '</span></td>' +
-          '<td>' + esc(m.dev || '—') + '</td><td>' + H.chipEtapa(m) + '</td><td>' + chipD + '</td></tr>';
+          '<td data-label="Dev">' + esc(m.dev || '—') + '</td><td data-tc="topo">' + H.chipEtapa(m) + '</td><td data-label="Destino">' + chipD + '</td></tr>';
       }).join('') + '</tbody></table></div>' + g.navPag(pg, nao.length, 'pag-nao')
       : H.vazio('check', 'Tudo o que estava no mês saiu');
 
@@ -1161,11 +1161,11 @@
     // E a mesma lista que o Worker vai rolar (`mes-fechar`): estao no mes
     // agora e seguem abertas.
     var conf = rolam.length
-      ? '<div class="gx-tw"><table class="tbl"><tbody>' + rolam.slice(0, 10).map(function (m) {
+      ? '<div class="gx-tw"><table class="tbl tc"><tbody>' + rolam.slice(0, 10).map(function (m) {
           var rol = g.mesRolos(m);
-          return '<tr><td style="color:var(--tx)"><span class="row" style="gap:8px">' + g.codLink(m) + '<span class="ell" style="max-width:240px" title="' + esc(m.titulo || '') + '">' + esc(m.titulo || '') + '</span>' +
+          return '<tr><td style="color:var(--tx)" data-tc="titulo"><span class="row" style="gap:8px">' + g.codLink(m) + '<span class="ell" style="max-width:240px" title="' + esc(m.titulo || '') + '">' + esc(m.titulo || '') + '</span>' +
             (rol ? '<span class="mono" title="já rolou de mês ' + rol + 'x" style="color:var(--dg-t);font-size:11px;font-weight:700">⟳' + rol + '</span>' : '') + '</span></td>' +
-            '<td style="white-space:nowrap">' + esc(m.dev || '—') + '</td></tr>';
+            '<td style="white-space:nowrap" data-label="Dev">' + esc(m.dev || '—') + '</td></tr>';
         }).join('') + '</tbody></table></div>' + (rolam.length > 10 ? '<span class="note">… e mais ' + (rolam.length - 10) + '.</span>' : '')
       : H.vazio('check', 'Nada a rolar', 'Nenhuma demanda deste mês ficou em aberto.');
 
@@ -1309,7 +1309,7 @@
       'border:1px solid var(--bd2);background:radial-gradient(600px 300px at 85% 0%,rgba(var(--ac-rgb),.18),rgba(var(--ac-rgb),0) 70%),linear-gradient(160deg,var(--bg-top) 0%,var(--bg0) 100%)}' +
       '.axa .fc-ck{cursor:pointer}.axa .fc-ck input{accent-color:var(--ac);width:16px;height:16px;flex-shrink:0;margin:0}' +
       '.axa .fc-dest{display:flex;flex-direction:column;gap:6px;max-height:420px;overflow:auto}' +
-      '@container app (max-width: 760px){.axa .fc-slide{aspect-ratio:auto;padding:18px}}';
+      '@container app (max-width: 760px){.axa .fc-slide{aspect-ratio:auto;padding:18px}.axa .fc-ck .mono{font-size:12px !important}}';
     document.head.appendChild(s);
   }
 

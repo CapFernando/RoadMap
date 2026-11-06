@@ -35,6 +35,16 @@
    rota `mensagem-nova`, com @ para marcar alguem e anexo pelo `anexo-subir`,
    como na mensageria.html.
 
+   DO MODAL ANTIGO, TAMBEM: o dono da sprint repassa, move ou tira da sprint
+   pela linha Sprint (`sprintEscolher`, o gesto `sprint`); quem edita troca
+   "Quem pediu" ali mesmo (`m-solicitante`, o gesto `solicitante`); os votos
+   do Planning Poker (`votosRender`); e a faixa "Demanda de X — aberta para
+   leitura" do dev (`msModoLeitura`). Na conversa, a mencao e a da
+   mensageria (`comMencoes`, com a lista do @), o carimbo absoluto vai no
+   title, a consulta le sem o campo de escrever e o "Registro único" junta
+   criacao, historico, mensagens e a dependencia sem rastro numa linha so,
+   do mais antigo ao mais novo (`desenha`, mensageria.html).
+
    O MOTIVO DA TRAVA nao e inventado nem recalculado: e o que os modulos de
    regra responderiam se a demanda fosse movida para a proxima etapa agora —
    `PREVOO.presos` (o que o servidor barraria), `HOMOLOGACAO.barra`,
@@ -167,6 +177,14 @@
       '.axa .it-cod:hover{color:var(--ac-t)}',
       '.axa .it-conv-d,.axa .it-conv-m{display:flex;flex-direction:column;min-width:0}',
       '.axa .it-conv-m{display:none}',
+      // A demanda de outra pessoa, aberta para leitura (`ms-leitura`, dev.html).
+      '.axa .it-leitura{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;border:1px solid rgba(var(--in-rgb),.35);background:rgba(var(--in-rgb),.08);color:var(--in-t);font-size:13px;font-weight:600}',
+      // Os botoes da lateral (Sprint, Solicitante) e os votos do Poker.
+      '.axa .it-props .it-pbt{height:26px;padding:0 9px;font-size:12px;margin-left:4px;vertical-align:middle}',
+      '.axa .it-vt-res{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--tx2)}',
+      '.axa .it-vt-al{font-size:12.5px;color:var(--wn-t);font-weight:600}',
+      '.axa .it-vt.menor b{color:var(--ok-t)}.axa .it-vt.maior b{color:var(--dg-t)}',
+      '.axa .it-reg{gap:8px}.axa .it-reg .btns[aria-pressed="true"]{border-color:rgba(var(--ac-rgb),.55);color:var(--tx)}',
       // Toque de 44 px no celular: os botoes do topo e os da entrega.
       '@container app (max-width: 760px){.axa .it-acoes > .btn,.axa .it-acoes > .btnp{min-height:44px}' +
         '.axa .it-ent-ac > *{flex:1 1 150px;min-height:44px}.axa .it-ent{padding:16px}}',
@@ -177,7 +195,10 @@
         '.axa .it-conv-d{display:none}.axa .it-conv-m{display:flex}' +
         // O resto do Item no celular: linhas, o link da conversa e a estrela com 44 px; texto de 12 px.
         '.axa .it-linha{min-height:44px;box-sizing:border-box}.axa .it-sec > a.note,.axa .it-trilha a{display:inline-flex;align-items:center;min-height:44px}' +
-        '.axa .it-dest{padding:11px 0;margin:-11px 0}.axa .it-props .dim,.axa .it-props .note{font-size:12px !important}}'
+        '.axa .it-dest{padding:11px 0;margin:-11px 0}.axa .it-props .dim,.axa .it-props .note{font-size:12px !important}' +
+        '.axa .it-props .it-pbt{min-height:44px;height:auto;margin:4px 0 0}.axa .it-vt-res,.axa .it-vt-al{font-size:12px}' +
+        // Os anexos da Conversa (NESTE ITEM) sao chips que abrem: toque de 44 px.
+        '.axa .it button.chip[data-axa-anexo]{min-height:44px}}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -349,6 +370,14 @@
   }
 
   // ── Conversa e historico ─────────────────────────────────────────────
+  /* O CARIMBO ABSOLUTO (`quando`, mensageria.html): DD-MM-AAAA HH:MM. A bolha
+     mostra "hoje, 14:03"; o carimbo inteiro vai no title. */
+  function carimbo(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso || '—');
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return p(d.getDate()) + '-' + p(d.getMonth() + 1) + '-' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
   function quando(iso) {
     var d = new Date(iso);
     if (isNaN(d.getTime())) return String(iso || '—');
@@ -359,20 +388,22 @@
     return (dd === 0 ? 'hoje' : dd === 1 ? 'ontem' : H.dma(dia)) + ', ' + hora;
   }
 
-  /* AS MENCOES, como a Mensageria faz (`comMencoes`, mensageria.html): o nome
-     depois do @ so vira etiqueta se casar com uma pessoa conhecida. */
+  /* AS MENCOES — COPIA de `comMencoes` (mensageria.html): o nome depois do @
+     so vira etiqueta se casar com uma pessoa da lista, e a lista e a MESMA das
+     sugestoes do @ (`AXIS_ACOES.pessoasDaConversa`: os devs cadastrados e os
+     das demandas). Destacar quem nao esta nela faria parecer que alguem foi
+     marcado. */
   function pessoas(m, D) {
-    var set = {};
-    (D.desenvolvedores || []).forEach(function (n) { if (n) set[n] = true; });
-    (m.mensagens || []).forEach(function (g) { if (g && g.quem) set[g.quem] = true; });
-    if (m.solicitante) set[m.solicitante] = true;
-    return Object.keys(set).sort(function (a, b) { return b.length - a.length; });
+    var AC = window.AXIS_ACOES;
+    return AC && AC.pessoasDaConversa ? AC.pessoasDaConversa(D || {}) : [];
   }
   function comMencoes(texto, ps) {
-    return H.esc(texto).replace(/@([^\s@][^@\n]{0,40})/g, function (todo, depois) {
-      var achou = ps.find(function (p) { return depois.toLowerCase().indexOf(p.toLowerCase()) === 0; });
-      if (!achou) return todo;
-      return '<span class="it-mencao">@' + depois.slice(0, achou.length) + '</span>' + depois.slice(achou.length);
+    return H.esc(texto).replace(/@([\p{L}][\p{L}\s.'-]{1,39})/gu, function (todo, nome) {
+      var escrito = nome.trim().toLowerCase();
+      var casa = ps.find(function (p) { return escrito.indexOf(p.toLowerCase()) === 0 || p.toLowerCase().indexOf(escrito) === 0; });
+      if (!casa) return todo;
+      var usado = todo.slice(0, 1 + Math.min(nome.length, casa.length));
+      return '<span class="it-mencao">' + usado + '</span>' + todo.slice(usado.length);
     });
   }
   function ehEu(nome) {
@@ -387,7 +418,7 @@
     var eu = ehEu(g.quem);
     return '<div class="it-msg' + (eu ? ' eu' : '') + '">' + (eu ? '' : H.av(g.quem || '?', 30)) +
       '<div class="it-bolha"><span class="row" style="justify-content:space-between;gap:16px"><b style="font-size:12.5px">' + H.esc(g.quem || '(sem conta)') + '</b>' +
-      '<span class="note" style="font-size:11px">' + H.esc(quando(g.em)) + '</span></span>' +
+      '<span class="note" style="font-size:11px" title="' + H.esc(carimbo(g.em)) + '">' + H.esc(quando(g.em)) + '</span></span>' +
       '<span class="t">' + comMencoes(g.texto, ps) + '</span></div></div>';
   }
 
@@ -594,16 +625,23 @@
     if (fr) row('Árvore', '<span class="dim" style="font-size:12.5px">' + H.esc(fr) + '</span>');
     var devs = H.devsDe(m);
     row('Responsável', devs.length ? devs.map(H.esc).join(' / ') : '<span class="dim">sem responsável</span>');
-    row('Solicitante', m.solicitante ? H.esc(m.solicitante) : '<span class="dim">sem solicitante</span>');
+    /* QUEM PEDIU SE EDITA DAQUI (`m-solicitante`, admin.html), com a sugestao
+       dos colaboradores: o gesto `solicitante` de axis-acoes.js. */
+    var AC = window.AXIS_ACOES;
+    row('Solicitante', (m.solicitante ? H.esc(m.solicitante) : '<span class="dim">sem solicitante</span>') +
+      (AC && AC.GESTOS && AC.GESTOS.solicitante && permite('solicitante', m, {}) ? ' ' + AC.botao('solicitante', m, 'Editar', 'btns it-pbt', { ico: 'edit', titulo: 'Trocar quem pediu (é quem homologa a entrega)' }) : ''));
     if (window.ORDEMKB) row('Prioridade', H.esc(ORDEMKB.rotulo(m)));
     if (window.REQUISITOS) {
       row('Impacto', REQUISITOS.rotuloImpacto(m.impacto) ? H.esc(REQUISITOS.rotuloImpacto(m.impacto)) : '<span class="dim">não informado</span>');
       row('Urgência', REQUISITOS.rotuloUrgencia(m.urgencia) ? H.esc(REQUISITOS.rotuloUrgencia(m.urgencia)) : '<span class="dim">não informada</span>');
     }
     var sp = window.SPRINTPO ? SPRINTPO.doPO(m) : '';
-    row('Sprint', sp ? '<span title="' + H.esc(sp) + '">' + H.esc(SPRINTPO.rotuloCurto(sp)) + '</span>' +
+    row('Sprint', (sp ? '<span title="' + H.esc(sp) + '">' + H.esc(SPRINTPO.rotuloCurto(sp)) + '</span>' +
       (SPRINTPO.entrouAtrasada(m) ? ' <span class="dim">· veio de ' + H.esc(SPRINTPO.rotuloCurto(SPRINTPO.sprintDeOrigem(m) || '')) + '</span>' : '')
-      : '<span class="dim">fora de sprint</span>');
+      : '<span class="dim">fora de sprint</span>') +
+      // O dono da sprint repassa, move ou tira daqui (`sprintEscolher`, admin.html), como no chip do card.
+      (AC && AC.GESTOS && AC.GESTOS.sprint && H.donoDaSprint && H.donoDaSprint() ? ' ' + AC.botao('sprint', m, sp ? 'Trocar' : 'Repassar', 'btns it-pbt',
+        { ico: 'refresh', titulo: sp ? 'Mover para outra sprint ou tirar da sprint' : 'Repassar para uma sprint' }) : ''));
     if (m.inicio) row('Início', H.esc(H.dma(m.inicio)));
     var pz = H.prazoDe(m);
     var dp = window.PRAZO ? PRAZO.diasPausados(m, hoje) : 0;
@@ -644,7 +682,7 @@
   }
 
   function lateral(m, ctx) {
-    var h = props(m);
+    var h = props(m) + votosSec(m);
     var col = H.colunaDe(m);
 
     // CODIGO: o equivalente real do "PR #1912" do prototipo.
@@ -1169,6 +1207,47 @@
       '<a href="' + H.hrefItem(m) + '/conversa" class="note">Ver a conversa' + (msgs.length ? ' (' + msgs.length + ')' : '') + ' e o histórico' + (hist ? ' (' + hist + ')' : '') + '</a>');
   }
 
+  /* "DEMANDA DE X — ABERTA PARA LEITURA" (`msModoLeitura`, dev.html): o dev
+     que abre a demanda de outra pessoa le, e os botoes de gravar somem. A
+     frase e a regra sao a `soLeitura` de axis-acoes.js, a mesma que recusa o
+     gesto. */
+  function faixaLeitura(m, ctx) {
+    var AC = window.AXIS_ACOES;
+    var l = ctx.papel === 'dev' && AC && AC.soLeitura ? AC.soLeitura(m, AC.contexto()) : null;
+    return l ? '<div class="it-leitura" role="note">' + H.ico('eye') + ' ' + H.esc(l.erro) + '</div>' : '';
+  }
+
+  /* OS VOTOS DO PLANNING POKER (`votosRender`, admin.html): quem votou o que,
+     a media e os pontos gravados, e — quando os votos se espalharam — o
+     menor e o maior marcados e o "de X a Y". `votosDe` e a conta; a secao so
+     aparece com voto registrado. */
+  function votosDe(m) {
+    var vs = (m && Array.isArray(m.poker_votos)) ? m.poker_votos.filter(Boolean) : [];
+    var num = function (v) { var n = parseFloat(String(v.voto).replace(',', '.')); return isFinite(n) ? n : null; };
+    var ns = vs.map(num).filter(function (n) { return n !== null; });
+    var min = ns.length ? Math.min.apply(null, ns) : null, max = ns.length ? Math.max.apply(null, ns) : null;
+    var espalhou = min !== null && max !== null && max > min;
+    return { espalhou: espalhou, min: min, max: max, votos: vs.map(function (v) {
+      var n = num(v);
+      return { nome: v.nome, voto: String(v.voto), marca: !espalhou || n === null ? '' : n === min ? 'menor' : n === max ? 'maior' : '' };
+    }) };
+  }
+  function votosSec(m) {
+    var r = votosDe(m);
+    if (!r.votos.length) return '';
+    var resumo = (m.poker_media != null ? '<span>Média <b>' + H.esc(String(m.poker_media).replace('.', ',')) + '</b></span>' : '') +
+      (m.poker_pontos != null ? '<span>Gravado <b>' + H.esc(String(m.poker_pontos)) + ' pts</b></span>' : '') +
+      '<span>' + H.plural(r.votos.length, 'voto', 'votos') + '</span>';
+    return sec('VOTOS DO PLANNING POKER',
+      '<div class="it-vt-res">' + resumo + '</div>' +
+      (r.espalhou ? '<span class="it-vt-al">' + H.ico('alert') + ' de ' + r.min + ' a ' + r.max + ' — leituras diferentes da mesma demanda</span>' : '') +
+      (m.poker_votado_em ? '<span class="note">Votado em ' + H.esc(carimbo(m.poker_votado_em)) + '</span>' : '') +
+      r.votos.map(function (v) {
+        return '<div class="it-linha it-vt' + (v.marca ? ' ' + v.marca : '') + '"><span class="ell">' + H.esc(v.nome || '—') +
+          (v.marca ? ' <span class="note">' + v.marca + '</span>' : '') + '</span><b class="mono">' + H.esc(v.voto) + '</b></div>';
+      }).join(''));
+  }
+
   function detalhe(m, ctx) {
     var tv = travas(m, ctx.D, ctx.papel);
     return trilha(m) +
@@ -1176,7 +1255,7 @@
       '<div style="display:flex;flex-direction:column;gap:8px;max-width:760px;min-width:0">' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">' + chipsTopo(m) + '</div>' +
       '<h1 class="h1" style="font-size:26px;line-height:32px;overflow-wrap:anywhere">' + H.esc(m.titulo || '(sem título)') + '</h1></div>' +
-      acoes(m, ctx, tv) + '</header>' +
+      acoes(m, ctx, tv) + '</header>' + faixaLeitura(m, ctx) +
       barraEtapas(m, tv) +
       '<div class="grid" style="grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start">' +
       principal(m, ctx) + lateral(m, ctx) + '</div>' +
@@ -1197,6 +1276,9 @@
   function compositor(m) {
     var AC = window.AXIS_ACOES;
     if (!AC || !AC.enviarMensagem) return '';
+    /* SO QUEM PODE ESCREVER VE O CAMPO (mensageria.html, `temSessao`): a
+       consulta le o registro, e o Worker recusaria o envio dela. */
+    if (!H.pode('gravar')) return '<span class="note">Seu perfil é de leitura: a conversa e o registro ficam abertos, e quem escreve aqui é o time e o PM/PO.</span>';
     var r = rascMsg(m);
     var podeAnexar = permite('anexar', m, { novos: [{ nome: '-' }] });
     return '<div class="it-escrever">' +
@@ -1311,6 +1393,40 @@
   }
 
   // ── Aba Conversa ─────────────────────────────────────────────────────
+  /* O REGISTRO UNICO (`desenha`, mensageria.html): a criacao, cada entrada do
+     historico, as mensagens e — quando o vinculo e anterior ao registro — a
+     dependencia sem rastro, numa linha so, do mais antigo para o mais novo.
+     Devolve [{ em, tipo: marco|hist|msg|dep, e }]. */
+  var REG = { unico: false };
+  function eventosConversa(m, lista) {
+    var ev = [];
+    var nasc = m.criado_em || m.data_solicitacao;
+    if (nasc) ev.push({ em: nasc, tipo: 'marco' });
+    (Array.isArray(m.historico) ? m.historico : []).forEach(function (e) { if (e) ev.push({ em: e.em, tipo: 'hist', e: e }); });
+    (Array.isArray(m.mensagens) ? m.mensagens : []).forEach(function (g) { if (g) ev.push({ em: g.em, tipo: 'msg', e: g }); });
+    var noHist = (Array.isArray(m.historico) ? m.historico : []).some(function (e) { return (e && e.mudancas || []).some(function (c) { return c.campo === 'parent_id'; }); });
+    if (m.parent_id && !noHist) {
+      var pai = (lista || []).find(function (x) { return x && x.id === m.parent_id; });
+      ev.push({ em: m.atualizado_em || nasc || new Date().toISOString(), tipo: 'dep', e: pai || { codigo: m.parent_id } });
+    }
+    return ev.sort(function (a, b) { return String(a.em || '').localeCompare(String(b.em || '')); });
+  }
+  function registroUnico(m, ps) {
+    var ev = eventosConversa(m, lista());
+    if (!ev.length) return '<span class="note">Nada registrado nesta demanda ainda.</span>';
+    return ev.map(function (x) {
+      if (x.tipo === 'msg') return bolha(x.e, ps);
+      if (x.tipo === 'hist') return entradaHist(x.e);
+      if (x.tipo === 'dep') {
+        return '<div class="it-hist"><span class="row" style="gap:8px"><b style="font-size:12.5px">Dependência</b></span>' +
+          '<span class="it-mud">Esta demanda depende de <b>' + H.esc(x.e.codigo || '—') + '</b>' + (x.e.titulo ? ' — ' + H.esc(x.e.titulo) : '') + '.</span>' +
+          '<span class="note" style="color:var(--wn-t)">O vínculo foi criado antes de a dependência entrar no registro, então o dia e a hora dele não estão guardados. Os próximos ficam.</span></div>';
+      }
+      return '<div class="it-hist"><span class="row" style="gap:8px"><b style="font-size:12.5px">Demanda criada</b><span class="note" style="font-size:11.5px;margin-left:auto" title="' + H.esc(carimbo(x.em)) + '">' + H.esc(quando(x.em)) + '</span></span>' +
+        '<span class="it-mud">' + (m.solicitante ? 'Pedida por <b>' + H.esc(m.solicitante) + '</b>' : 'Sem solicitante registrado') + (H.TIPOS[m.tipo] ? ' · ' + H.esc(H.TIPOS[m.tipo].rotulo) : '') + '</span></div>';
+    }).join('');
+  }
+
   function conversa(m, ctx) {
     var msgs = mensagens(m);
     var ps = pessoas(m, ctx.D);
@@ -1327,7 +1443,16 @@
       '<span class="sub">Conversa do item com o PM/PO, o solicitante e o time, e tudo o que mudou nele.</span></div>' +
       (quem.length ? '<div class="row" style="flex-wrap:wrap"><span class="row" style="gap:4px">' + quem.slice(0, 6).map(function (n) { return H.av(n); }).join('') + '</span></div>' : '') + '</header>';
 
-    h += '<div class="grid" style="grid-template-columns:minmax(0,1fr) 300px;align-items:start">' +
+    /* DUAS LEITURAS: separada (mensagens e historico) ou o registro unico da
+       mensageria, numa linha so, com o campo de escrever no fim. */
+    var alterna = '<div class="row it-reg" role="group" aria-label="Como ler"><button type="button" class="btns" data-it-reg="0" aria-pressed="' + !REG.unico + '">Separado</button>' +
+      '<button type="button" class="btns" data-it-reg="1" aria-pressed="' + REG.unico + '">Registro único</button></div>';
+    if (REG.unico) {
+      h += alterna + '<div class="grid" style="grid-template-columns:minmax(0,1fr) 300px;align-items:start">' +
+        '<div style="display:flex;flex-direction:column;gap:16px;min-width:0"><section class="pn" style="gap:14px"><span class="lab">REGISTRO · DO MAIS ANTIGO AO MAIS NOVO</span>' +
+        registroUnico(m, ps) + compositor(m) + '</section></div>';
+    } else h += alterna;
+    if (!REG.unico) h += '<div class="grid" style="grid-template-columns:minmax(0,1fr) 300px;align-items:start">' +
       '<div style="display:flex;flex-direction:column;gap:16px;min-width:0">' +
       '<section class="pn" style="gap:14px"><span class="lab">MENSAGENS' + (msgs.length ? ' · ' + msgs.length : '') + '</span>' +
       (msgs.length ? msgs.map(function (g) { return bolha(g, ps); }).join('') : H.vazio('message', 'Nenhuma mensagem ainda', 'Escreva abaixo para começar a conversa desta demanda.')) +
@@ -1448,6 +1573,8 @@
       el.addEventListener('click', function (e) {
         var b = e.target.closest('[data-it-copia]');
         if (b) copiaCodigo(b.getAttribute('data-it-copia'), e.shiftKey || e.altKey);
+        var rg = e.target.closest('[data-it-reg]');
+        if (rg) { REG.unico = rg.getAttribute('data-it-reg') === '1'; AX.desenhar(true); }
       });
     }
   });

@@ -285,7 +285,19 @@
       '.axa .cfg-it.pass{opacity:.6}' +
       '.axa .cfg-ton{height:44px;border-radius:10px;border:1px solid var(--bd2)}' +
       '.axa .cfg-q{width:240px;max-width:100%}' +
-      '.axa .cfg-rec{display:inline-block;width:0}';
+      '.axa .cfg-rec{display:inline-block;width:0}' +
+      /* Celular: a lista de pessoas vira cartoes de uma linha (nome e papel;
+         frente, capacidade e demandas estao no perfil, logo abaixo), o papel
+         e os interruptores ganham 44 px de toque. O interruptor cresce por
+         borda transparente com margem negativa: o desenho fica. */
+      '@container app (max-width: 760px){' +
+      '.axa .cfg-pes-tb tr{grid-template-columns:minmax(0,1fr) auto !important;padding:10px 12px !important;margin-bottom:8px}' +
+      '.axa .cfg-pes-tb tr.on{border-color:rgba(var(--ac-rgb),.55)}' +
+      '.axa .cfg-pes-tb [data-tc="topo-fim"] > .row{justify-content:flex-end}' +
+      '.axa .cfg-papeis{grid-template-columns:repeat(2,minmax(0,1fr)) !important}.axa .cfg-papel{height:44px !important}' +
+      '.axa .cfg-lin{min-height:44px}' +
+      '.axa button.cfg-sw{box-sizing:content-box;border:12px solid transparent;border-left-width:4px;border-right-width:4px;background-clip:padding-box;margin:-12px -4px}' +
+      '.axa .cfg-tt .sub,.axa .cfg .tabs.vert .tab .pend{font-size:12px}}';
     document.head.appendChild(s);
   }
 
@@ -646,17 +658,17 @@
     var linhas = lista.length ? lista.map(function (p) {
       var pp = PAPEL[p.papel] || { rot: p.papel, cor: 'bk' };
       return '<tr class="cfg-tr' + (sel && p.chave === sel.chave ? ' on' : '') + '" data-cfg-pes="' + esc(p.chave) + '" tabindex="0">' +
-        '<td><span class="row">' + H.av(p.nome) + '<span style="display:flex;flex-direction:column;min-width:0"><b style="font-size:13px;color:var(--tx)">' + esc(p.nome) + '</b>' +
+        '<td data-tc="topo"><span class="row">' + H.av(p.nome) + '<span style="display:flex;flex-direction:column;min-width:0"><b style="font-size:13px;color:var(--tx)">' + esc(p.nome) + '</b>' +
         '<span class="note ell" style="font-size:11.5px">' + esc(p.email || (p.login ? p.login : 'só na lista de devs')) + '</span></span></span></td>' +
-        '<td><span class="row" style="gap:6px;flex-wrap:wrap">' + (p.papel === 'semconta' ? '' : H.chip(esc(p.papel === 'analista' ? 'Analista' : pp.rot), pp.cor, pp.rot)) + chipStatus(p) + '</span></td>' +
-        '<td>' + (p.frente.txt ? esc(p.frente.txt) + (p.frente.padrao ? ' <span class="note">(por padrão)</span>' : '') : '<span style="color:var(--tx4)">—</span>') +
+        '<td data-tc="topo-fim"><span class="row" style="gap:6px;flex-wrap:wrap">' + (p.papel === 'semconta' ? '' : H.chip(esc(p.papel === 'analista' ? 'Analista' : pp.rot), pp.cor, pp.rot)) + chipStatus(p) + '</span></td>' +
+        '<td data-tc="fora">' + (p.frente.txt ? esc(p.frente.txt) + (p.frente.padrao ? ' <span class="note">(por padrão)</span>' : '') : '<span style="color:var(--tx4)">—</span>') +
         (p.axcred ? ' ' + H.chip('DEV-AXCred', 'ac') : '') + '</td>' +
-        '<td class="mono" style="white-space:nowrap">' + (p.capacidade ? raiz.SPRINTPO.PONTOS_POR_DEV + ' pts' : '<span style="color:var(--tx4)">—</span>') + '</td>' +
-        '<td class="mono" style="white-space:nowrap" title="abertas / total">' + (p.dem.total ? p.dem.abertas + '/' + p.dem.total : '<span style="color:var(--tx4)">0</span>') + '</td></tr>';
+        '<td class="mono" style="white-space:nowrap" data-tc="fora">' + (p.capacidade ? raiz.SPRINTPO.PONTOS_POR_DEV + ' pts' : '<span style="color:var(--tx4)">—</span>') + '</td>' +
+        '<td class="mono" style="white-space:nowrap" title="abertas / total" data-tc="fora">' + (p.dem.total ? p.dem.abertas + '/' + p.dem.total : '<span style="color:var(--tx4)">0</span>') + '</td></tr>';
     }).join('') : '<tr><td colspan="5">' + H.vazio('users', 'Ninguém neste filtro', q ? 'Nada casa com "' + est.pesBusca + '".' : '') + '</td></tr>';
 
     return blocoPedidos() + '<div class="grid" style="grid-template-columns:minmax(0,1fr) 290px;align-items:start">' +
-      '<section class="pn" style="padding:14px 12px 6px"><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>PESSOA</th><th>PAPEL</th><th>FRENTE</th><th>CAP.</th><th title="Demandas abertas / total">DEM.</th></tr></thead><tbody>' +
+      '<section class="pn" style="padding:14px 12px 6px"><div style="overflow-x:auto"><table class="tbl tc cfg-pes-tb"><thead><tr><th>PESSOA</th><th>PAPEL</th><th>FRENTE</th><th>CAP.</th><th title="Demandas abertas / total">DEM.</th></tr></thead><tbody>' +
       linhas + '</tbody></table></div></section>' + painelPessoa(sel, D) + '</div>' +
       '<span class="note">Capacidade = ' + raiz.SPRINTPO.PONTOS_POR_DEV + ' pontos por sprint para quem está na lista de devs ativos (a mesma conta do Gantt). Demandas casam pelo “nome nas demandas”.</span>' + blocoDevs(D) + blocoLink();
   }
@@ -744,7 +756,7 @@
       h += info('Está na lista de devs da base (entra na capacidade e no Gantt), mas não tem login.') +
         (edita ? '<div class="row">' + b('u-criar', 'Criar conta', 'btnp', ' data-cfg-nome="' + esc(p.nome) + '"', 'plus') + '</div>' : '');
     } else {
-      h += '<span class="note">Papel</span><div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">' + papeis + '</div>' +
+      h += '<span class="note">Papel</span><div class="grid cfg-papeis" style="grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">' + papeis + '</div>' +
         '<label class="note" for="cfg-u-nomedem">Nome que aparece nas demandas</label>' +
         (edita ? '<select class="in" id="cfg-u-nomedem"' + dLogin + '>' + opcoesNomeDem(u, D) + '</select>'
                : '<span class="in">' + (p.declarado || p.nomeDev ? esc(p.declarado || p.nomeDev) : '<span style="color:var(--tx4)">— não declarado —</span>') + '</span>') +
@@ -1485,6 +1497,9 @@
         if (p) {
           est.pesSel = p.getAttribute('data-cfg-pes');
           pintarPessoas(ctx.D);
+          // No celular o perfil fica abaixo da lista: leva ate ele.
+          var perfil = raiz.matchMedia && raiz.matchMedia('(max-width: 760px)').matches && el.querySelector('#cfg-pes .pnh');
+          if (perfil) perfil.scrollIntoView({ block: 'start', behavior: 'smooth' });
           return;
         }
         var t = e.target.closest('[data-cfg-tema]');
