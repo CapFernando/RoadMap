@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="eaddab7c56">
+<html lang="pt-BR" data-build="7396cf195f">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -736,7 +736,7 @@
   <script src="vinculo.js?v=56499cb6e1"></script>
 <script src="resumo-dev.js?v=d113e5ce31"></script>
 <script src="tema.js?v=5d9c25fd66"></script>
-<script src="axis.js?v=d59365ebfe"></script>
+<script src="axis.js?v=b9a7c89f9f"></script>
 <script src="prazo.js?v=88870a48ae"></script>
 <script src="capacidade.js?v=efaf632603"></script>
 <script src="dialogo.js?v=9e20f6c47f"></script>
@@ -3894,7 +3894,10 @@ async function sessaoDevValida() {
     if (!res.ok) return false;
     const j = await res.json().catch(() => ({}));
     if (j && j.usuario) {
-      _eu = j.usuario;
+      // O `quem-sou` devolve o papel FORA do usuario ({ papel, usuario }). Gravar
+      // so o usuario apagava o papel do `rm_eu`, e o menu lateral (axis.js) caia
+      // no papel padrao desta pagina, "dev": um admin via o menu de dev a cada F5.
+      _eu = Object.assign({}, j.usuario, j.papel ? { papel: j.papel } : {});
       try { sessionStorage.setItem('rm_eu', JSON.stringify(_eu)); } catch (_) {}
     }
     return true;

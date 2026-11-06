@@ -27553,6 +27553,49 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     })());
   }
 
+  /* AS TELAS ANTIGAS NAVEGAM PELO APP. O menu lateral delas (axis.js) levava a
+     elas mesmas (dev.html, gantt.html, admin.html#aba): quem clicava em "Meu
+     painel" caia no layout antigo achando que era o AXIS. E o `quem-sou` do
+     dev.html gravava o `rm_eu` SEM o papel (ele vem fora do usuario), e o menu
+     de um admin virava o de dev a cada F5. As duas coisas executadas aqui. */
+  sec('Telas antigas: menu leva ao app, e o papel nao se perde no dev.html');
+  {
+    const AXJ = lerTela('axis.js');
+    const ANTIGAS = ['admin.html', 'dev.html', 'gantt.html', 'poker.html', 'follow.html', 'projetos.html', 'importar.html'];
+    const fora = [];
+    let itens = 0;
+    for (const pg of ANTIGAS) {
+      for (const papel of ['admin', 'analista', 'dev', 'consulta']) {
+        const store = { rm_eu: JSON.stringify({ nome: 'Ana', papel }) };
+        const doc = { readyState: 'complete', getElementById: () => null, querySelector: () => null, querySelectorAll: () => [],
+                      head: { appendChild() {} }, documentElement: { appendChild() {} }, createElement: () => ({}) };
+        const janela = { location: { pathname: '/' + pg }, sessionStorage: { getItem: (k) => store[k] || null }, document: doc };
+        const mod = { exports: {} };
+        new Function('window', 'document', 'sessionStorage', 'location', 'module', AXJ)(undefined, doc, janela.sessionStorage, janela.location, mod);
+        const AX = mod.exports;
+        const html = (AX.htmlMenu || (() => ''))();
+        const links = (html.match(/class="axis-sb-it[^"]*" href="([^"]+)"/g) || []).map((x) => x.replace(/.*href="/, '').replace(/"$/, ''));
+        itens += links.length;
+        links.filter((h) => !/^axis\.html#/.test(h) && h !== 'index.html').forEach((h) => fora.push(pg + '/' + papel + ' -> ' + h));
+        if (papel === 'admin' && !/PM\/PO/.test(html)) fora.push(pg + '/admin sem rotulo de admin');
+      }
+    }
+    ok(itens > 50 && !fora.length, 'o menu das telas antigas so leva ao app (e ao painel publico), em toda pagina e perfil', fora.slice(0, 4).join(' | ') || String(itens));
+
+    const fn = corpo(lerTela('dev.html'), 'async function sessaoDevValida(');
+    const guarda = {};
+    const sessao = new Function('credDev', 'fetch', 'ADMIN_PROXY_URL', 'sessionStorage',
+      'let _eu = null;\n' + fn + '\nreturn async () => { const ok = await sessaoDevValida(); return { ok, _eu }; };')(
+      () => ({ token: 't' }),
+      async () => ({ ok: true, json: async () => ({ ok: true, papel: 'admin', usuario: { id: 1, login: 'ana', nome: 'Ana' } }) }),
+      'x', { setItem: (k, v) => { guarda[k] = v; } });
+    pendentes.push(sessao().then((r) => {
+      const gravado = JSON.parse(guarda.rm_eu || '{}');
+      ok(r.ok && gravado.papel === 'admin' && gravado.login === 'ana',
+         'dev.html: o quem-sou grava o rm_eu COM o papel (senao o menu de um admin vira o de dev no F5)', guarda.rm_eu);
+    }));
+  }
+
   /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir
      de forma sincrona — a do `conflito` executa uma funcao `async` —, e sem
      esta espera o resumo sairia antes delas e um `ok` que falhasse depois nao

@@ -132,36 +132,35 @@
   }
 
   // ── O menu ────────────────────────────────────────────────────────────
-  // `aba` = aba do admin.html. `papeis` = quem ve o item.
-  var A = ['admin'], AD = ['admin', 'dev'];
-  /* AS TELAS ANTIGAS VIRARAM O EDITOR. A navegacao do dia a dia mora no app
-     novo (axis.html); aqui o menu leva de volta a ele e, abaixo, as abas e
-     telas onde ainda se grava (o "Editar" do app novo cai nelas). */
+  /* O MENU LEVA AO APP AXIS. As telas antigas continuam no ar (quem tem o
+     endereco ainda chega nelas), mas a navegacao e a do app: o mesmo menu, com
+     os mesmos grupos e nomes de `axis-app.js`. `pg` (pagina antiga) e `aba`
+     (aba do admin.html) servem SO para marcar o item da tela em que a pessoa
+     esta; o link e sempre o do app. */
+  var A = ['admin'], AD = ['admin', 'analista', 'dev'], ADC = ['admin', 'analista', 'dev', 'consulta'], AC = ['admin', 'consulta'];
   var MENU = [
-    { grupo: 'AXIS', itens: [
-      { id: 'axis',       rotulo: 'Voltar ao AXIS', ico: 'home',     href: 'axis.html#inicio', papeis: ['admin', 'dev', 'consulta'] }
-    ] },
-    { grupo: 'Editor', itens: [
-      { id: 'dev',        rotulo: 'Meu painel',     ico: 'user',     href: 'dev.html',     papeis: AD },
-      { id: 'melhorias',  rotulo: 'Backlog',        ico: 'menu',     aba: 'melhorias',     papeis: A },
-      { id: 'kanban',     rotulo: 'Quadro',         ico: 'board',    aba: 'kanban',        papeis: A },
-      { id: 'gantt',      rotulo: 'Planejamento',   ico: 'calendar', href: 'gantt.html',   papeis: AD },
-      { id: 'projetos',   rotulo: 'Projetos',       ico: 'package',  aba: 'projetos',      papeis: A },
-      { id: 'poker',      rotulo: 'Planning Poker', ico: 'cards',    href: 'poker.html',   papeis: AD }
+    { grupo: 'Trabalho', itens: [
+      { id: 'inicio',     rotulo: 'Início',          ico: 'home',     href: 'axis.html#inicio',          papeis: ADC },
+      { id: 'dev',        rotulo: 'Meu trabalho',    ico: 'user',     href: 'axis.html#inicio/meu',      papeis: AD,  pg: 'dev.html' },
+      { id: 'kanban',     rotulo: 'Quadro',          ico: 'board',    href: 'axis.html#quadro',          papeis: AD,  aba: 'kanban' },
+      { id: 'melhorias',  rotulo: 'Backlog',         ico: 'menu',     href: 'axis.html#backlog',         papeis: AD,  aba: 'melhorias' },
+      { id: 'gantt',      rotulo: 'Planejamento',    ico: 'calendar', href: 'axis.html#planejamento',    papeis: AD,  pg: 'gantt.html' },
+      { id: 'projetos',   rotulo: 'Projetos',        ico: 'package',  href: 'axis.html#projetos',        papeis: ADC, aba: 'projetos', pg: 'projetos.html' },
+      { id: 'poker',      rotulo: 'Planning Poker',  ico: 'cards',    href: 'axis.html#poker',           papeis: AD,  pg: 'poker.html' }
     ] },
     { grupo: 'Acompanhamento', itens: [
-      { id: 'follow',     rotulo: 'Acompanhamentos', ico: 'flag',    href: 'follow.html',  papeis: A },
-      { id: 'publico',    rotulo: 'Painel público',  ico: 'globe',   href: 'index.html',   papeis: A }
+      { id: 'follow',     rotulo: 'Acompanhamentos', ico: 'flag',     href: 'axis.html#acompanhamentos', papeis: A,   pg: 'follow.html' },
+      { id: 'publico',    rotulo: 'Painel público',  ico: 'globe',    href: 'index.html',                papeis: ADC }
     ] },
     { grupo: 'Análises', itens: [
-      { id: 'gerencial',  rotulo: 'Painéis',           ico: 'chart',   aba: 'gerencial',  papeis: A },
-      { id: 'relatorios', rotulo: 'Relatórios',        ico: 'receipt', aba: 'relatorios', papeis: A },
-      { id: 'mes',        rotulo: 'Fechamento do mês', ico: 'clock',   aba: 'mes',        papeis: A }
+      { id: 'gerencial',  rotulo: 'Painéis',           ico: 'chart',   href: 'axis.html#paineis',    papeis: AC, aba: 'gerencial' },
+      { id: 'relatorios', rotulo: 'Relatórios',        ico: 'receipt', href: 'axis.html#relatorios', papeis: AC, aba: 'relatorios' },
+      { id: 'mes',        rotulo: 'Fechamento do mês', ico: 'clock',   href: 'axis.html#fechamento', papeis: A,  aba: 'mes' }
     ] },
     { grupo: 'Configurações', itens: [
-      { id: 'temas',      rotulo: 'Catálogo de sistemas', ico: 'layers', aba: 'temas',      papeis: A },
-      { id: 'usuarios',   rotulo: 'Pessoas e acessos',    ico: 'users',  aba: 'usuarios',   papeis: A },
-      { id: 'importar',   rotulo: 'Importar demandas',    ico: 'upload', href: 'importar.html', papeis: A }
+      { id: 'temas',      rotulo: 'Catálogo de sistemas', ico: 'layers', href: 'axis.html#configuracoes/catalogo', papeis: A, aba: 'temas' },
+      { id: 'usuarios',   rotulo: 'Pessoas e perfis',     ico: 'users',  href: 'axis.html#configuracoes/pessoas',  papeis: A, aba: 'usuarios' },
+      { id: 'importar',   rotulo: 'Importar demandas',    ico: 'upload', href: 'axis.html#importar',               papeis: A, pg: 'importar.html' }
     ] }
   ];
 
@@ -193,7 +192,7 @@
     if (p === 'admin.html') return abaAdminAtiva();
     for (var g = 0; g < MENU.length; g++) {
       for (var i = 0; i < MENU[g].itens.length; i++) {
-        if (MENU[g].itens[i].href === p) return MENU[g].itens[i].id;
+        if (MENU[g].itens[i].pg === p) return MENU[g].itens[i].id;
       }
     }
     return '';
@@ -221,9 +220,8 @@
       if (!itens.length) return;
       h += '<div class="axis-sb-grp"><span class="axis-sb-lab">' + esc(g.grupo) + '</span>';
       itens.forEach(function (it) {
-        var href = it.href || ('admin.html#' + it.aba);
-        h += '<a class="axis-sb-it' + (it.id === ativo ? ' on' : '') + '" href="' + href + '"' +
-          ' data-axis-item="' + it.id + '"' + (it.aba ? ' data-axis-aba="' + it.aba + '"' : '') +
+        h += '<a class="axis-sb-it' + (it.id === ativo ? ' on' : '') + '" href="' + it.href + '"' +
+          ' data-axis-item="' + it.id + '"' +
           (it.id === ativo ? ' aria-current="page"' : '') + '>' +
           icone(it.ico) + '<span class="axis-sb-t">' + esc(it.rotulo) + '</span></a>';
       });
@@ -231,7 +229,7 @@
     });
     var e = eu() || {};
     var nome = e.nome || e.login || '';
-    var rotPapel = { admin: 'PM/PO · Admin', dev: 'Dev', consulta: 'Consulta' }[meu] || meu;
+    var rotPapel = { admin: 'PM/PO · Admin', analista: 'Analista de requisitos', dev: 'Dev', consulta: 'Consulta' }[meu] || meu;
     h += '<div class="axis-sb-user">' +
       '<span class="axis-sb-av">' + (esc(iniciais(nome)) || icone('user', '16px')) + '</span>' +
       '<span class="axis-sb-quem"><b>' + (esc(nome) || 'Minha conta') + '</b><small>' + esc(rotPapel) + '</small></span>' +
@@ -273,32 +271,11 @@
   }
 
   function aoClicar(ev) {
-    var a = ev.target.closest && ev.target.closest('[data-axis-aba], [data-axis-acao]');
-    if (!a) return;
-    if (a.getAttribute('data-axis-acao') === 'sair') {
-      // Cada tela tem o proprio logout, com a propria limpeza de sessao.
-      var sair = window[SAIR[pagina()]];
-      if (typeof sair === 'function') sair();
-      return;
-    }
-    var aba = a.getAttribute('data-axis-aba');
-    // Meio-clique e Ctrl+clique abrem em aba nova: o navegador cuida.
-    if (ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey) {
-      try { localStorage.setItem('rm_admin_tab', aba); } catch (_) {}
-      return;
-    }
-    if (pagina() === 'admin.html' && typeof window.switchTab === 'function') {
-      ev.preventDefault();
-      // O elemento da regua vai junto: sem ele, `switchTab` marcaria como ativa
-      // a aba que estivesse em `event.currentTarget` — que seria este link.
-      var regua = Array.prototype.find.call(document.querySelectorAll('.tab'), function (t) {
-        return (t.getAttribute('onclick') || '').indexOf("'" + aba + "'") >= 0;
-      });
-      window.switchTab(aba, regua || null);
-      marcar(aba);
-      return;
-    }
-    try { localStorage.setItem('rm_admin_tab', aba); } catch (_) {}
+    var a = ev.target.closest && ev.target.closest('[data-axis-acao]');
+    if (!a || a.getAttribute('data-axis-acao') !== 'sair') return;
+    // Cada tela tem o proprio logout, com a propria limpeza de sessao.
+    var sair = window[SAIR[pagina()]];
+    if (typeof sair === 'function') sair();
   }
 
   function montar() {
@@ -347,7 +324,7 @@
     if (nav) nav.innerHTML = htmlMenu();
   }
 
-  var AXIS = { icone: icone, ICONES: ICONES, cssIcones: cssIcones, MENU: MENU, atualizarMenu: atualizar, marcar: marcar };
+  var AXIS = { icone: icone, ICONES: ICONES, cssIcones: cssIcones, MENU: MENU, atualizarMenu: atualizar, marcar: marcar, htmlMenu: htmlMenu };
   if (typeof window !== 'undefined') {
     window.AXIS = AXIS;
     if (!document.getElementById('axis-icones')) {
