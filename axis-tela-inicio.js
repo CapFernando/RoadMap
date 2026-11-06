@@ -7,7 +7,8 @@
      Meu trabalho    "o que esta comigo" — o quadro pessoal do dev; para o
                      PM/PO, o que pede a acao dele (validar, cobrar, estimar).
      Meu cronograma  as entregas nas proximas semanas, como o Cronograma do
-                     painel do dev (dev.html), que e de leitura.
+                     painel do dev (dev.html), que e de leitura — com o "Meu
+                     resumo" ao lado da navegacao, o mesmo `RESUMODEV.abrir`.
      Notificacoes    o que pede acao (o mesmo sino do nucleo), as mencoes nas
                      mensagens e o historico recente das demandas.
 
@@ -147,6 +148,30 @@
       '.axa .ini-nt .cx>span:first-child{font-size:13.5px;line-height:19px}',
       '.axa .ini-nt .qd{display:flex;flex-direction:column;align-items:flex-end;gap:6px;font-size:11.5px;color:var(--tx3);white-space:nowrap}',
       '.axa .ini-nt .pt{width:8px;height:8px;border-radius:4px;background:var(--ac)}',
+      /* O "MEU RESUMO" (resumo-dev.js) cria o proprio modal, com as classes das
+         telas antigas (.modal-overlay, .modal), que o app nao desenha: aqui ele
+         vira a caixa do app — tela inteira no celular, toque de 44 px e texto
+         de 12 px no minimo (o modulo usa 10,5 e 11,5 nos detalhes). */
+      'html.axa #modal-dev-resumo.modal-overlay{position:fixed;inset:0;z-index:1200;align-items:center;justify-content:center;padding:24px}',
+      'html.axa #modal-dev-resumo .modal{position:relative;box-sizing:border-box;width:100%;max-height:calc(100dvh - 48px);overflow:auto;padding:24px;display:flex;flex-direction:column;gap:4px;color:var(--tx);font-family:var(--font-ui)}',
+      'html.axa #modal-dev-resumo h2{margin:0 48px 4px 0;font-size:20px;font-weight:800}',
+      'html.axa #modal-dev-resumo .ap-dica{font-size:13px;line-height:19px;color:var(--tx3)}',
+      'html.axa #modal-dev-resumo .modal-close-btn{position:absolute;top:10px;right:10px;width:44px;height:44px;border:0;border-radius:12px;background:transparent;color:var(--tx2);font-size:18px;cursor:pointer}',
+      'html.axa #modal-dev-resumo .modal-close-btn:hover{background:var(--sf4);color:var(--tx)}',
+      'html.axa #modal-dev-resumo .form-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}',
+      'html.axa #modal-dev-resumo .form-actions .btn{min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:6px}',
+      'html.axa #modal-dev-resumo .dr-cod,html.axa #modal-dev-resumo .dr-sis,html.axa #modal-dev-resumo .dr-sit,html.axa #modal-dev-resumo .dr-sis small,' +
+        'html.axa #modal-dev-resumo .dr-sit small,html.axa #modal-dev-resumo .dr-kpi span,html.axa #modal-dev-resumo .dr-sec-tit small{font-size:12px}',
+      '@media (max-width: 760px){',
+      'html.axa #modal-dev-resumo.modal-overlay{padding:0;align-items:stretch}',
+      'html.axa #modal-dev-resumo .modal{max-width:none !important;max-height:100dvh;min-height:100dvh;border-radius:0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}',
+      'html.axa #modal-dev-resumo .form-actions{position:sticky;bottom:calc(-16px - env(safe-area-inset-bottom));margin:8px -16px calc(-16px - env(safe-area-inset-bottom));padding:10px 16px calc(16px + env(safe-area-inset-bottom));background:var(--sf3);border-top:1px solid var(--bd2)}',
+      'html.axa #modal-dev-resumo .form-actions .btn{flex:1 1 140px;min-height:44px}',
+      'html.axa #modal-dev-resumo .dr-kpi{box-sizing:border-box;min-width:0;flex:1 1 calc(50% - 10px)}',
+      // Abaixo de 560 px o modulo poe o titulo na coluna de 58 px do codigo: aqui ele e a situacao ganham a linha.
+      'html.axa #modal-dev-resumo .dr-item{grid-template-columns:72px minmax(0,1fr);row-gap:4px}',
+      'html.axa #modal-dev-resumo .dr-tt,html.axa #modal-dev-resumo .dr-sit{grid-column:1 / -1}',
+      '}',
       '@container app (max-width: 760px){',
       '.axa .ini-kg,.axa .ini-kg.seis{grid-template-columns:repeat(2,minmax(0,1fr)) !important}',
       '.axa .ini-kg.seis>.k:last-child{grid-column:1 / -1}',
@@ -682,9 +707,10 @@
       return h + kp + faixaRisco(risco) + H.vazio('inbox', 'Nada nesta sprint com estes filtros', 'Troque a sprint no filtro ou escolha Todas.') + rod;
     }
     if (!minhas.length && !noQuadro.length) {
+      // O vinculo do 1o acesso (dev.html, `corrigirVinculo`): escolher como o nome aparece nas demandas.
       return h + H.vazio('user', 'Nenhuma demanda com o seu nome',
-        'O RoadMap procura por ' + (H.meusNomes().join(', ') || 'seu nome') + ' no campo dev. Se o nome nas demandas estiver diferente, ajuste em Minha conta › Nome nas demandas.',
-        '<a class="btn" href="#conta">Abrir Minha conta</a>');
+        'O RoadMap procura por ' + (H.meusNomes().join(', ') || 'seu nome') + ' no campo dev. Se o nome nas demandas estiver diferente, escolha como ele aparece.',
+        '<button type="button" class="btnp" data-ini="vinculo">Escolher meu nome nas demandas</button>');
     }
     return h + kp + faixaRisco(risco) + quadro + rod;
   }
@@ -805,7 +831,14 @@
       '<button type="button" class="btns" data-ini="cron" data-d="-1" aria-label="Duas semanas antes">‹</button>' +
       '<span class="in" style="height:32px">' + H.dm(A0) + ' a ' + H.dm(B0) + '</span>' +
       '<button type="button" class="btns" data-ini="cron" data-d="1" aria-label="Duas semanas depois">›</button>' +
-      (EST.cronDesloc ? '<button type="button" class="btns" data-ini="cron" data-d="0">Hoje</button>' : '') + '</div>';
+      (EST.cronDesloc ? '<button type="button" class="btns" data-ini="cron" data-d="0">Hoje</button>' : '') +
+      /* O "MEU RESUMO" DO CRONOGRAMA DO dev.html, ao lado da navegacao e nao
+         dentro do cronograma: o resumo nao e da janela, e de tudo que esta na
+         mao da pessoa. Para o PM/PO, o do dev escolhido no filtro. */
+      (window.RESUMODEV && (dev || EST.cronDev)
+        ? '<button type="button" class="btns" data-ini="resumo" title="Resumo do que está na ' + (dev ? 'sua mão' : 'mão de ' + H.esc(EST.cronDev)) +
+          ' — atrasado, em andamento e em validação, com texto pronto para o grupo">' + H.ico('clipboard') + ' ' + (dev ? 'Meu resumo' : 'Resumo de ' + H.esc(EST.cronDev)) + '</button>'
+        : '') + '</div>';
     var h = '<header class="ini-hd fim"><div style="display:flex;flex-direction:column;gap:6px"><h1 class="h1">' + titulo + '</h1>' +
       '<span class="sub">' + (dev ? 'Suas demandas' : 'As demandas do time') + ' nas próximas semanas. Somente leitura: datas mudam no planejamento.</span></div>' + nav + '</header>';
     var leg = '<div class="ini-leg">' + ['ok', 'amanha', 'hoje', 'entregue', 'feito', 'pausada'].map(function (k) {
@@ -844,6 +877,30 @@
     var mais = linhas.length > mostra.length
       ? '<button type="button" class="btns" data-ini="cron-mais" style="align-self:center">Mostrar mais ' + Math.min(40, linhas.length - mostra.length) + ' de ' + (linhas.length - mostra.length) + '</button>' : '';
     return h + leg + '<section class="pn ini-cr" style="overflow-x: auto"><div style="min-width:900px">' + cab + corpo + '</div></section>' + mais;
+  }
+
+  /* `RESUMODEV.abrir(state, currentDev, { proprio: true })`, como no dev.html.
+     O nome e o da grafia da base (o `currentDev`): o resumo compara pelo
+     DEVNOME, e o nome declarado com duas grafias nao e um nome de demanda. */
+  function abrirResumo(ctx) {
+    var R = window.RESUMODEV;
+    if (!R) return;
+    var dev = ctx.papel === 'dev';
+    var C = window.AXIS_CONTA;
+    var nome = dev ? (C && C.meuDev ? C.meuDev(ctx.eu, ctx.D) : (H.meusNomes()[0] || '')) : EST.cronDev;
+    if (!nome) { H.toast('Escolha antes o seu nome nas demandas, em Minha conta.', 'erro'); return; }
+    R.abrir(ctx.D, nome, { proprio: dev });
+    var cx = document.getElementById('modal-dev-resumo');
+    if (!cx) return;
+    var fechar = cx.querySelector('.modal-close-btn');
+    if (fechar) fechar.focus();
+    // Esc fecha, como as caixas do app (o modulo so fecha no clique).
+    if (!cx.__esc) {
+      cx.__esc = true;
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && cx.style.display !== 'none') { e.preventDefault(); R.fechar(); }
+      });
+    }
   }
 
   // ═════════════════════════════════════════════════════════════════════
@@ -993,6 +1050,8 @@
         if (q === 'lista-mais') { EST.listaTudo = !EST.listaTudo; redesenha(el, ctx); return; }
         if (q === 'cron') { var d = +b.getAttribute('data-d'); EST.cronDesloc = d ? EST.cronDesloc + d : 0; EST.cronLimite = 40; redesenha(el, ctx); return; }
         if (q === 'cron-mais') { EST.cronLimite += 40; redesenha(el, ctx); return; }
+        if (q === 'resumo') { abrirResumo(ctx); return; }
+        if (q === 'vinculo') { if (A.vincular) A.vincular(); return; }
         if (q === 'ntf') { EST.ntfFiltro = b.getAttribute('data-f'); EST.ntfLimite = 30; redesenha(el, ctx); return; }
         if (q === 'ntf-mais') { EST.ntfLimite += 30; redesenha(el, ctx); return; }
         // O Limpar do Meu trabalho volta para a sprint atual e so o seu time (o padrao).

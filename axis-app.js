@@ -20,6 +20,14 @@
 
    As telas se registram com AXIS_APP.tela({...}) em arquivos axis-tela-*.js.
 
+   SESSAO E BASE FRESCA, como nas telas antigas: qualquer 401 de sessao, em
+   qualquer chamada, traz a tela de entrar sem perder o que estava aberto, e a
+   entrada volta para a mesma rota (`sessaoExpirou`); a base e relida a cada
+   30 s e ao voltar para a aba, sem redesenhar por cima de formulario ou
+   gaveta aberta — ai aparece a faixa "Ha alteracoes mais novas no servidor"
+   (`conferirServidor`). Quem desenvolve e entra sem nome nas demandas escolhe
+   o nome antes de abrir o app (`pedirVinculo`, axis-tela-conta.js).
+
    NO CELULAR (largura do app ate 760 px, a mesma container query `app` do
    axis-app.css) o app e outro desenho, nao o do computador encolhido:
    - MENU: a barra lateral some e entra a BARRA INFERIOR fixa (`.bn`): Inicio,
@@ -127,8 +135,11 @@
     carregadoEm: 0,
     telas: {},
     ordem: [],
-    rota: { tela: '', aba: '', param: '' }
+    rota: { tela: '', aba: '', param: '' },
+    sessaoCaiu: false   // a sessao venceu com a tela aberta (ver `sessaoExpirou`)
   };
+  // "Ainda nao tenho demandas — entrar assim mesmo": nao pergunta de novo nesta entrada.
+  var VINCULO_DEPOIS = 'rm_vinculo_depois';
 
   function lerSessao() {
     try { APP.eu = JSON.parse(sessionStorage.getItem('rm_eu') || 'null'); } catch (_) { APP.eu = null; }
@@ -141,6 +152,8 @@
      sempre ja logado — e vice-versa. */
   function gravarSessao(token, usuario) {
     try {
+      // Cada entrada pergunta o vinculo de novo, como a do dev.html.
+      sessionStorage.removeItem(VINCULO_DEPOIS);
       sessionStorage.setItem('rm_eu', JSON.stringify(usuario || {}));
       if ((usuario || {}).papel !== 'admin') {
         sessionStorage.setItem('rm_dev_token', token);
@@ -153,10 +166,115 @@
   }
 
   function limparSessao() {
-    ['rm_eu', 'rm_admin_token', 'rm_admin_pw', 'rm_dev_token', 'rm_dev_pw', 'rm_dev_authed'].forEach(function (k) {
+    ['rm_eu', 'rm_admin_token', 'rm_admin_pw', 'rm_dev_token', 'rm_dev_pw', 'rm_dev_authed', VINCULO_DEPOIS].forEach(function (k) {
       try { sessionStorage.removeItem(k); } catch (_) {}
     });
     lerSessao();
+  }
+
+  /* ── A SESSAO CAI SOZINHA, E O APP TEM DE PERCEBER ─────────────────────
+     A regra do `sessaoExpirou` do admin.html e do dev.html. A sessao vale 12 h
+     e, vencida com a aba aberta, o app seguia mostrando a base velha sem dizer
+     nada — so a primeira gravacao avisava "Sessao expirada", e o que a pessoa
+     mexeu entre o vencimento e a gravacao parecia valer.
+
+     Qualquer 401 de sessao, em QUALQUER chamada (a releitura de 30 s, a volta
+     do foco, uma acao), derruba a sessao na hora e traz a tela de entrar.
+
+     A INTERCEPTACAO E NO `fetch`, como nas telas antigas, e nao chamada a
+     chamada: axis-acoes.js, o Poker, a hidratacao do historico e a escolha da
+     interface tem fetch proprio, e o proximo a ser escrito esqueceria.
+
+     O QUE ESTAVA NA TELA NAO SE PERDE (o "o que está na tela não se perdeu"
+     das antigas): o formulario, as gavetas e as caixas abertas ficam no DOM,
+     so escondidos, e voltam depois da entrada; a rota tambem, porque o hash
+     nao muda. O formulario de demanda guarda ainda o rascunho no navegador
+     (axis-form-demanda.js), para o caso de a aba fechar antes de entrar de
+     novo. Se quem entra e OUTRA conta, o que era da anterior sai da tela.
+
+     UMA DIFERENCA DE PROPOSITO: `senha-alterar` responde 401 `credencial`
+     quando a SENHA ATUAL digitada na troca esta errada. Nas telas antigas isso
+     derrubava a sessao de quem so errou a senha; aqui fica de fora, com o
+     login. A sessao vencida, nessa rota, volta 403 `sem_conta`. */
+  var ACOES_SEM_SESSAO = ['login', 'auth', 'cadastrar', 'esqueci', 'redefinir', 'reset', 'senha-alterar'];
+  var ERROS_DE_SESSAO = ['senha', 'credencial', 'token', 'sessao'];
+  function caiuASessao(status, acao, erro) {
+    return status === 401 && ACOES_SEM_SESSAO.indexOf(acao) < 0 && ERROS_DE_SESSAO.indexOf(erro) >= 0;
+  }
+  /** Embrulha o fetch: a resposta 401 do Worker com erro de sessao chama
+      `aoCair`. Quem chamou recebe a resposta igual (o corpo so pode ser lido
+      uma vez, entao volta uma copia). */
+  function vigiaSessao(nativo, url, aoCair) {
+    return async function (recurso, opcoes) {
+      var res = await nativo.apply(raiz, arguments);
+      try {
+        if (res.status !== 401) return res;
+        var u = typeof recurso === 'string' ? recurso : (recurso && recurso.url) || '';
+        if (u.indexOf(url) !== 0) return res;
+        var acao = '';
+        try { acao = (JSON.parse((opcoes && opcoes.body) || '{}') || {}).action || ''; } catch (_) {}
+        var texto = await res.text();
+        var erro = '';
+        try { erro = (JSON.parse(texto) || {}).error || ''; } catch (_) {}
+        if (caiuASessao(res.status, acao, erro)) aoCair();
+        return new Response(texto, { status: res.status, statusText: res.statusText, headers: res.headers });
+      } catch (_) { return res; }
+    };
+  }
+
+  var _sessaoCaiu = false;   // venceu, e a tela espera a entrada de novo
+  var _caiuDe = '';          // o login de quem estava na tela
+  var _escondidos = [];      // o que estava aberto por cima, so escondido
+  var _travas = [];
+  // Derruba a sessao e pede a entrada. NAO avisa o servidor: o token ja nao
+  // vale, e o logout voltaria 401 — reentrando aqui.
+  function sessaoExpirou() {
+    if (_sessaoCaiu || !APP.token) return;   // varias chamadas em paralelo, um aviso so
+    _sessaoCaiu = true;
+    APP.sessaoCaiu = true;
+    _caiuDe = (APP.eu || {}).login || '';
+    var comTela = !!APP.D;
+    if (raiz.AXIS_FORM && raiz.AXIS_FORM.guardaRascunho) raiz.AXIS_FORM.guardaRascunho();
+    _escondidos = [];
+    if (comTela) {
+      document.querySelectorAll('body > .ovl, body > .gv-fundo, body > .modal-overlay').forEach(function (o) {
+        _escondidos.push({ el: o, display: o.style.display });
+        o.style.display = 'none';
+      });
+    }
+    var raizHtml = document.documentElement;
+    _travas = ['gv-trava', 'fl-trava'].filter(function (c) { return raizHtml.classList.contains(c); });
+    _travas.forEach(function (c) { raizHtml.classList.remove(c); });
+    limparSessao();
+    _novoNoServidor = false;
+    _noVinculo = false;
+    desenharLogin(comTela ? 'Sua sessão expirou (ela vale 12 horas). Entre de novo — o que está na tela não se perdeu.'
+                          : 'Sua sessão expirou. Entre de novo.', { usuario: _caiuDe });
+  }
+
+  /** Depois da entrada: devolve o que estava aberto, ou tira da tela o que
+      era de outra conta. Devolve quantos itens voltaram. */
+  function voltaDaSessao() {
+    if (!_sessaoCaiu) return 0;
+    var mesma = !_caiuDe || ((APP.eu || {}).login || '') === _caiuDe;
+    var voltaram = 0;
+    _escondidos.forEach(function (x) {
+      if (!x.el.isConnected) return;
+      if (mesma) { x.el.style.display = x.display; voltaram++; }
+    });
+    if (mesma) _travas.forEach(function (c) { document.documentElement.classList.add(c); });
+    else {
+      // O rascunho fica guardado para a conta dona dele; so a tela e limpa.
+      if (raiz.AXIS_FORM && raiz.AXIS_FORM.soltar) raiz.AXIS_FORM.soltar();
+      fecharGavetas();
+      _escondidos.forEach(function (x) { if (x.el.isConnected) x.el.remove(); });
+    }
+    _escondidos = []; _travas = [];
+    _sessaoCaiu = false;
+    APP.sessaoCaiu = false;
+    if (mesma && voltaram) toast('Bem-vindo de volta. O que estava na tela continua aqui — salve de novo o que ficou pela metade.');
+    else if (mesma) toast('Bem-vindo de volta.');
+    return voltaram;
   }
 
   async function api(action, extra) {
@@ -211,14 +329,19 @@
      pre-voo, envia por publish (admin) ou dev-publish (dev) e, gravando, rele
      a base e redesenha. Devolve o resultado do GRAVACAO.gravar. */
   var _gravando = Promise.resolve();
+  var _naFila = 0;   // gravacoes em curso: a releitura de 30 s espera por elas
   function gravar(patch, opts) {
     var o = opts || {};
     // Uma gravacao por vez: duas acoes rapidas leriam a mesma base e a segunda
     // desfaria a primeira no servidor. A fila e a mesma ideia do saveViaProxy.
+    _naFila++;
     var vez = _gravando.then(function () { return gravarAgora(patch, o); });
+    var fim = function () { _naFila = Math.max(0, _naFila - 1); };
+    vez.then(fim, fim);
     _gravando = vez.catch(function () {});
     return vez;
   }
+  var MSG_SESSAO = 'Sua sessão expirou. Entre de novo e salve outra vez — o que estava na tela não se perdeu.';
   async function gravarAgora(patch, o) {
     if (!raiz.GRAVACAO) throw new Error('gravacao.js nao carregado');
     if (['admin', 'analista', 'dev'].indexOf(APP.papel) < 0) { toast('Seu perfil é só de leitura.', 'erro'); return { ok: false }; }
@@ -236,7 +359,8 @@
         }
       });
     } catch (e) {
-      r = { ok: false, erro: 'Sem conexão com o servidor: ' + (e.message || e) };
+      r = e.status === 401 ? { ok: false, status: 401, erro: MSG_SESSAO }
+        : { ok: false, erro: 'Sem conexão com o servidor: ' + (e.message || e) };
     }
     if (r.ok) {
       APP.D = r.base;
@@ -247,7 +371,8 @@
       if ((rs.sem_dev || []).length) toast('Sem desenvolvedor, voltou para Backlog: ' + rs.sem_dev.join(', '), 'erro');
       if ((rs.comite_revertidas || []).length) toast('Validado em Comitê é de PM/PO ou liderança — revertido em: ' + rs.comite_revertidas.join(', '), 'erro');
     } else {
-      var msg = r.status === 401 ? 'Sessão expirada — saia e entre de novo.' : (r.erro || 'Não foi possível salvar.');
+      if (r.status === 401) r.erro = MSG_SESSAO;
+      var msg = r.erro || 'Não foi possível salvar.';
       if (r.itens && r.itens.length > 1) msg += ' (e mais ' + (r.itens.length - 1) + ': ' + r.itens.slice(1).map(function (x) { return x.codigo; }).join(', ') + ')';
       toast(msg, 'erro');
     }
@@ -554,6 +679,7 @@
   /* Esc fecha e Tab nao sai da gaveta. Em captura, antes dos ouvintes das
      telas: a lista de sprints (`.fsp`) aberta dentro da gaveta fecha primeiro. */
   function tecladoGaveta(e) {
+    if (_sessaoCaiu) return;   // a gaveta esta escondida atras da tela de entrar
     var topo = gavetaDoTopo();
     if (!topo) return;
     if (e.key === 'Escape') {
@@ -827,24 +953,29 @@
   /* `o.ok`: a frase e de sucesso (senha redefinida), e nao erro; `o.usuario`
      ja vem no campo. Recuperar a senha e criar a conta sao passos desta mesma
      caixa (AXIS_CONTA.passo, axis-tela-conta.js). */
-  function desenharLogin(msg, o) {
-    o = o || {};
-    raizEl.innerHTML =
-      '<div class="lg"><div class="lg-esq"><span class="axis-logo" role="img" aria-label="AXIS"></span>' +
+  /** A moldura da tela de entrar (marca a esquerda); `dir` e a caixa da direita. */
+  function moldura(dir) {
+    return '<div class="lg"><div class="lg-esq"><span class="axis-logo" role="img" aria-label="AXIS"></span>' +
       '<h1 class="lg-tit">Todas as demandas da tecnologia em um só eixo.</h1>' +
       '<p class="lg-sub">Backlog, sprints e projetos do time em um só lugar.</p>' + curvaLogin() + '</div>' +
-      '<div class="lg-dir"><form class="lg-box" id="lg-form" autocomplete="on">' +
+      '<div class="lg-dir">' + dir + '</div></div>';
+  }
+
+  function desenharLogin(msg, o) {
+    o = o || {};
+    raizEl.innerHTML = moldura(
+      '<form class="lg-box" id="lg-form" autocomplete="on">' +
       '<span class="sb-mark" style="width:56px;height:56px;border-radius:16px"><img src="axis/marca/axis-leao-branco.png" alt="" style="width:36px"></span>' +
       '<h2 style="margin:6px 0 0;font-family:var(--font-title);font-size:26px;font-weight:800">Bem-vindo de volta</h2>' +
       '<span class="sub" style="margin-bottom:8px">Entre com a sua conta da Tecnologia.</span>' +
       '<label for="lg-usuario">Usuário ou e-mail</label><input class="in" id="lg-usuario" autocomplete="username" required value="' + esc(o.usuario || '') + '">' +
       '<span style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><label for="lg-senha">Senha</label>' +
-      '<button type="button" class="link" data-lg="recuperar" style="font-size:12.5px;font-weight:700">Esqueci a senha</button></span>' +
+      '<button type="button" class="link" data-lg="recuperar" style="font-size:12.5px;font-weight:700;min-height:44px;margin:-13px 0">Esqueci a senha</button></span>' +
       '<input class="in" id="lg-senha" type="password" autocomplete="current-password" required>' +
       '<div class="lg-err" id="lg-err" role="alert"' + (o.ok ? ' style="color:var(--ok-t)"' : '') + '>' + esc(msg || '') + '</div>' +
       '<button class="btnp" id="lg-btn" type="submit">Entrar</button>' +
-      '<span class="note" style="text-align:center">Primeiro acesso? <button type="button" class="link" data-lg="cadastro">Criar minha conta</button></span>' +
-      '</form></div></div>';
+      '<span class="note" style="text-align:center">Primeiro acesso? <button type="button" class="link" data-lg="cadastro" style="min-height:44px;margin:-12px 0">Criar minha conta</button></span>' +
+      '</form>');
     raizEl.querySelectorAll('[data-lg]').forEach(function (b) {
       b.addEventListener('click', function () {
         var modo = b.getAttribute('data-lg');
@@ -879,7 +1010,9 @@
   function desenhar(manterRolagem) {
     if (!raizEl) return;
     lerSessao();
-    if (!APP.token) { desenharLogin(); return; }
+    if (!APP.token) { _noVinculo = false; desenharLogin(); return; }
+    // O passo do vinculo esta na tela: a releitura e a troca de rota nao passam por cima dele.
+    if (_noVinculo) return;
     if (!APP.D) {
       raizEl.innerHTML = '<div class="app"><nav class="sb" aria-label="Menu principal">' + htmlMenu('') + '</nav><main class="main">' +
         '<div class="sk" style="height:40px;width:420px;max-width:100%"></div><div class="sk" style="height:34px;width:260px"></div>' +
@@ -927,7 +1060,8 @@
       '<span style="position:relative"><button type="button" class="tb-ico" data-acao="ntf" aria-label="Notificações" aria-expanded="false">' + ico('bell') +
       (nN.length ? '<span class="dot">' + nN.length + '</span>' : '') + '</button></span>' +
       '<a href="#conta" class="tb-av" aria-label="Minha conta" style="background:var(--ac);color:var(--on-ac)">' + esc(iniciais((APP.eu || {}).nome || (APP.eu || {}).login || '')) + '</a>' +
-      '</div>' + abasHtml + '<div class="view" id="vista"></div></main>' + htmlBarra(ativoMenu) + '</div>';
+      '</div><div id="axa-faixas"></div>' + abasHtml + '<div class="view" id="vista"></div></main>' + htmlBarra(ativoMenu) + '</div>';
+    pintaFaixas();
     var vista = raizEl.querySelector('#vista');
     if (!t) {
       vista.innerHTML = vazio('package', 'Esta tela ainda está sendo montada', 'Use o menu para ir a outra tela.');
@@ -965,6 +1099,136 @@
     btn.setAttribute('aria-expanded', 'true');
   }
 
+  // ── Releitura a cada 30 s e as faixas do topo ─────────────────────────
+  /* O `adminCheckUpdates` do admin.html: a cada 30 s (e ao voltar para a aba)
+     le a base e compara o `atualizado_em` com o da tela. Mudou e nada esta
+     aberto: rele e redesenha, mantendo a rolagem. Mudou com um formulario,
+     gaveta, caixa ou campo de texto em uso: NAO redesenha por cima — mostra a
+     faixa "Ha alteracoes mais novas no servidor" e a decisao fica com quem
+     esta na tela. Nao mudou: a faixa sai.
+
+     Antes o app so relia ao voltar o foco depois de um minuto: quem ficava na
+     tela via a base de quando abriu, e a mudanca de outra pessoa so aparecia
+     depois de gravar por cima dela.
+
+     ABA ESCONDIDA NAO LE: a releitura acontece quando ela volta a ficar
+     visivel. E nao le no meio de uma gravacao — o `atualizado_em` novo seria o
+     da propria gravacao, e o aviso diria "outra pessoa" sobre o que voce fez. */
+  var RELEITURA_MS = 30000;
+  function decisaoDaReleitura(tsTela, tsServidor, bloqueado) {
+    var novo = tsTela !== undefined && tsServidor !== tsTela;
+    return novo && bloqueado ? 'aviso' : novo ? 'rele' : 'nada';
+  }
+  /** Algo aberto que um redesenho apagaria ou tiraria do lugar. */
+  function telaOcupada() {
+    if (_arrastando) return true;   // um card no meio do arraste (Quadro, Planejamento)
+    if (document.querySelector('.ovl, .gv-fundo, .fl.aberto, .ntf')) return true;
+    var a = document.activeElement;
+    if (!a || !raizEl || !raizEl.contains(a)) return false;
+    if (a.isContentEditable || a.tagName === 'TEXTAREA') return true;
+    return a.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|range|color|file)$/i.test(a.type || '');
+  }
+  var _relendo = false;
+  var _novoNoServidor = false;
+  var _arrastando = false;
+  async function conferirServidor() {
+    if (_relendo || _naFila || !APP.token || !APP.D || _sessaoCaiu || _noVinculo) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    _relendo = true;
+    try {
+      var j = await api('dados');
+      var d = decisaoDaReleitura((APP.D || {}).atualizado_em, j.atualizado_em, telaOcupada());
+      if (d === 'rele' && !_naFila && APP.token) {
+        APP.D = await hidrata(j);
+        APP.carregadoEm = Date.now();
+        _novoNoServidor = false;
+        desenhar(true);
+      } else avisaNovo(d === 'aviso');
+    } catch (_) { /* rede: tenta de novo na proxima volta; 401 ja derrubou a sessao */ }
+    _relendo = false;
+  }
+  function avisaNovo(sim) {
+    if (_novoNoServidor === !!sim) return;
+    _novoNoServidor = !!sim;
+    pintaFaixas();
+  }
+  function atualizarAgora() {
+    _novoNoServidor = false;
+    pintaFaixas();
+    return carregar().then(function () { desenhar(true); toast('Atualizado com a versão do servidor.'); })
+      .catch(function (e) { if (e.status !== 401) toast('Não foi possível ler os dados: ' + (e.message || e), 'erro'); });
+  }
+
+  /* AS FAIXAS DO TOPO, que duram enquanto o motivo dura (um toast some em
+     segundos): a de "mais novo no servidor" e a das demandas NAO gravadas que
+     ficaram guardadas neste navegador (a `pend-banner` do admin.html; o
+     rascunho e do axis-form-demanda.js). */
+  function poeCssFaixas() {
+    if (document.getElementById('css-axa-faixas')) return;
+    var st = document.createElement('style');
+    st.id = 'css-axa-faixas';
+    st.textContent = [
+      '.axa #axa-faixas{display:flex;flex-direction:column;gap:8px}',
+      '.axa #axa-faixas:empty{display:none}',
+      '.axa .fx-aviso{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 14px;border-radius:12px;font-size:13px;line-height:20px}',
+      '.axa .fx-aviso>.axi{flex-shrink:0}',
+      '.axa .fx-wn{background:rgba(var(--wn-rgb),.1);border:1px solid rgba(var(--wn-rgb),.4);color:var(--wn-t)}',
+      '.axa .fx-dg{background:rgba(var(--dg-rgb),.1);border:1px solid rgba(var(--dg-rgb),.35);color:var(--dg-t)}',
+      '.axa .fx-t{flex:1 1 240px;min-width:0}',
+      '.axa .fx-b{display:flex;gap:8px;flex-wrap:wrap}'
+    ].join('\n');
+    document.head.appendChild(st);
+  }
+  function pintaFaixas() {
+    var z = raizEl && raizEl.querySelector('#axa-faixas');
+    if (!z) return;
+    poeCssFaixas();
+    var h = '';
+    if (_novoNoServidor) {
+      h += '<div class="fx-aviso fx-wn" role="status">' + ico('refresh') +
+        '<span class="fx-t">Há alterações mais novas no servidor (feitas no Planejamento, no Painel Dev ou por outra pessoa). Esta tela está mostrando uma versão anterior.</span>' +
+        '<span class="fx-b"><button type="button" class="btns" data-acao="atualizar">Atualizar agora</button>' +
+        '<button type="button" class="btns" data-acao="depois">Depois</button></span></div>';
+    }
+    var rs = raiz.AXIS_FORM && raiz.AXIS_FORM.rascunhos ? raiz.AXIS_FORM.rascunhos() : [];
+    if (rs.length) {
+      h += '<div class="fx-aviso fx-dg" role="status">' + ico('alert') +
+        '<span class="fx-t"><b>' + plural(rs.length, 'demanda', 'demandas') + ' ainda NÃO ' + (rs.length === 1 ? 'gravada' : 'gravadas') + ' no servidor</b> (' +
+        rs.map(function (r) { return esc(r.codigo || r.titulo || 'demanda nova'); }).join(', ') + '). ' +
+        (rs.length === 1 ? 'Está guardada' : 'Estão guardadas') + ' neste navegador — abra, confira e salve.</span>' +
+        '<span class="fx-b">' + rs.slice(0, 3).map(function (r) {
+          return '<button type="button" class="btns" data-acao="rascunho" data-alvo="' + esc(r.alvo) + '">Abrir ' + esc(r.codigo || (r.alvo === 'nova' ? 'a demanda nova' : 'a demanda')) + '</button>';
+        }).join('') + '</span></div>';
+    }
+    z.innerHTML = h;
+  }
+
+  // ── O vinculo do nome no 1o acesso (dev.html: `pedirVinculo`) ─────────
+  /* Quem desenvolve e entra sem que a conta case com um nome das demandas
+     responde UMA vez "como o seu nome aparece nas demandas?" — no lugar da
+     tela de entrar, como o passo do dev.html. A regra (quem precisa, a lista,
+     o palpite) e a gravacao sao as da Minha conta (axis-tela-conta.js). */
+  function precisaVinculo() {
+    var C = raiz.AXIS_CONTA;
+    if (!C || !C.precisaVinculo || !APP.D) return false;
+    try { if (sessionStorage.getItem(VINCULO_DEPOIS) === '1') return false; } catch (_) {}
+    return C.precisaVinculo(APP.eu, APP.papel, APP.D);
+  }
+  var _noVinculo = false;
+  function pedirVinculo() {
+    var C = raiz.AXIS_CONTA;
+    if (!C || !C.vinculo || !raizEl || !APP.D) { ir('#conta'); return; }
+    fecharGavetas();
+    _noVinculo = true;
+    raizEl.innerHTML = moldura('');
+    C.vinculo(raizEl.querySelector('.lg-dir'), {
+      eu: APP.eu, D: APP.D,
+      pronto: function () { _noVinculo = false; lerSessao(); desenhar(); },
+      depois: function () { _noVinculo = false; try { sessionStorage.setItem(VINCULO_DEPOIS, '1'); } catch (_) {} desenhar(); },
+      sair: function () { _noVinculo = false; sair(); }
+    });
+  }
+
   /* QUEM NAO TEM A INTERFACE NOVA LIGADA VOLTA PARA A TELA DE SEMPRE
      (axis-interface.js). Decide primeiro pelo `rm_eu` da sessao, para nem
      desenhar o app, e depois confirma com o servidor: o admin pode ter ligado
@@ -979,19 +1243,28 @@
 
   async function iniciarApp() {
     if (!interfaceCerta()) return;
+    // Voltando de sessao vencida com OUTRA conta: a base da anterior nao e desenhada.
+    if (_sessaoCaiu && _caiuDe && ((APP.eu || {}).login || '') !== _caiuDe) APP.D = null;
     if (raiz.AXIS_INTERFACE) raiz.AXIS_INTERFACE.atualizar().then(function (e) { if (e) interfaceCerta(); });
     desenhar();
     try {
       await carregar();
+      _novoNoServidor = false;
+      if (!_sessaoCaiu && precisaVinculo()) { pedirVinculo(); return; }
       desenhar();
     } catch (e) {
       if (e.status === 401) { limparSessao(); desenharLogin('Sua sessão expirou. Entre de novo.'); return; }
       raizEl.querySelector('#vista, .main') && (raizEl.querySelector('.main').innerHTML =
         vazio('alert', 'Não foi possível ler os dados', String(e.message || e), '<button class="btnp" type="button" onclick="location.reload()">Tentar de novo</button>'));
     }
+    if (APP.token) voltaDaSessao();
   }
 
   function ligar() {
+    if (raiz.fetch && !raiz.fetch.__vigiaSessao) {
+      raiz.fetch = vigiaSessao(raiz.fetch, WORKER, sessaoExpirou);
+      raiz.fetch.__vigiaSessao = true;
+    }
     raizEl = document.getElementById('axa');
     document.addEventListener('click', function (e) {
       var a = e.target.closest('[data-acao]');
@@ -1002,6 +1275,12 @@
         if (acao === 'mais') { abrirMais(); return; }
         if (acao === 'tema') { if (raiz.temaAlternar) raiz.temaAlternar(); desenhar(); return; }
         if (acao === 'ntf') { abrirNotificacoes(a); return; }
+        if (acao === 'atualizar') { atualizarAgora(); return; }
+        if (acao === 'depois') { avisaNovo(false); return; }
+        if (acao === 'rascunho') {
+          if (raiz.AXIS_FORM && raiz.AXIS_FORM.abrirRascunho) raiz.AXIS_FORM.abrirRascunho(a.getAttribute('data-alvo'));
+          return;
+        }
         // "+ Nova demanda": o formulario do app (axis-form-demanda.js).
         if (acao === 'novo') {
           if (raiz.AXIS_FORM && raiz.AXIS_FORM.abrir) raiz.AXIS_FORM.abrir(null);
@@ -1024,11 +1303,12 @@
     document.addEventListener('keydown', tecladoGaveta, true);
     ligarGestoGaveta();
     window.addEventListener('hashchange', function () { fecharGavetas(); desenhar(); });
-    // Volta a ler a base quando a aba volta ao foco depois de um minuto: quem
-    // editou no admin e voltou ve a mudanca sem recarregar.
-    window.addEventListener('focus', function () {
-      if (APP.token && APP.D && Date.now() - APP.carregadoEm > 60000) carregar().then(desenhar).catch(function () {});
-    });
+    // A releitura de 30 s e a da volta para a aba (`adminCheckUpdates`).
+    setInterval(conferirServidor, RELEITURA_MS);
+    document.addEventListener('pointerdown', function () { _arrastando = true; }, true);
+    ['pointerup', 'pointercancel'].forEach(function (t) { document.addEventListener(t, function () { _arrastando = false; }, true); });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') conferirServidor(); });
+    window.addEventListener('focus', conferirServidor);
     lerSessao();
     if (APP.token) iniciarApp(); else desenhar();
   }
@@ -1042,10 +1322,12 @@
     porCodigo: porCodigo, meusNomes: meusNomes, minha: minha, pode: pode, donoDaSprint: donoDaSprint, hidrata: hidrata,
     ico: ico, chip: chip, chipEtapa: chipEtapa, chipTipo: chipTipo, chipsReq: chipsReq, chipCasoUso: chipCasoUso, CASO_USO_COR: CASO_USO_COR, av: av, cod: cod, hrefItem: hrefItem,
     prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, gravar: gravar, kpi: kpi, toast: toast, ir: ir, api: api, recarregar: function () { return carregar().then(desenhar); },
-    filtros: filtros, filtrosN: filtrosN, gaveta: gaveta, celula: celula
+    filtros: filtros, filtrosN: filtrosN, gaveta: gaveta, celula: celula, pintaFaixas: pintaFaixas, vincular: pedirVinculo
   };
 
-  var AXIS_APP = { tela: tela, H: H, APP: APP, desenhar: desenhar, notificacoes: notificacoes, MENU: MENU, RODAPE: RODAPE, barraInferior: barraInferior, abrirBusca: abrirBusca, WORKER: WORKER };
+  var AXIS_APP = { tela: tela, H: H, APP: APP, desenhar: desenhar, notificacoes: notificacoes, MENU: MENU, RODAPE: RODAPE, barraInferior: barraInferior, abrirBusca: abrirBusca, WORKER: WORKER,
+                   pintaFaixas: pintaFaixas, vincular: pedirVinculo, sessaoExpirou: sessaoExpirou,
+                   caiuASessao: caiuASessao, vigiaSessao: vigiaSessao, decisaoDaReleitura: decisaoDaReleitura, RELEITURA_MS: RELEITURA_MS };
   raiz.AXIS_APP = AXIS_APP;
   if (typeof document !== 'undefined' && document.getElementById) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ligar); else ligar();

@@ -149,16 +149,141 @@
     (D.melhorias || []).forEach(function (m) { H.devsDe(m).forEach(function (n) { if (n) vistos[n] = 1; }); });
     return Object.keys(vistos).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
   }
+  /** As opcoes do seletor de nome — o da Minha conta e o do vinculo no 1o acesso. */
+  function opcoesNome(lista, atual) {
+    return '<option value="">— escolha —</option>' + lista.map(function (n) {
+      return '<option value="' + H.esc(n) + '"' + (n === atual ? ' selected' : '') + '>' + H.esc(n) + '</option>';
+    }).join('');
+  }
   function seletorNome(ctx, nomesDem) {
     var atual = nomesDem[0] || '';
     var lista = nomesDaBase(ctx.D || {});
     if (atual && lista.indexOf(atual) < 0) lista.unshift(atual);
     return '<span class="row" style="gap:6px;flex-wrap:wrap">' +
-      '<select class="in" id="ct-nome" style="height:32px" aria-label="Nome nas demandas">' +
-      '<option value="">— escolha —</option>' + lista.map(function (n) {
-        return '<option value="' + H.esc(n) + '"' + (n === atual ? ' selected' : '') + '>' + H.esc(n) + '</option>';
-      }).join('') + '</select>' +
+      '<select class="in" id="ct-nome" style="height:32px" aria-label="Nome nas demandas">' + opcoesNome(lista, atual) + '</select>' +
       '<button type="button" class="btns" data-ct="nome">Salvar</button></span>';
+  }
+  /** Guarda o nome no `rm_eu` da sessao, que `H.meusNomes` le. */
+  function nomeNaSessao(nome) {
+    var eu = {};
+    try { eu = JSON.parse(sessionStorage.getItem('rm_eu') || '{}') || {}; } catch (_) {}
+    eu.nome_demandas = nome;
+    try { sessionStorage.setItem('rm_eu', JSON.stringify(eu)); } catch (_) {}
+  }
+  /** Grava pela rota `meu-nome-demandas` (so a propria conta) e poe na sessao. */
+  async function gravaNome(nome) {
+    var j = await H.api('meu-nome-demandas', { nome_demandas: nome });
+    nomeNaSessao(j.nome_demandas || nome);
+    return j;
+  }
+
+  // ═══ O VINCULO NO 1o ACESSO (dev.html: `entrarComoEu`, `pedirVinculo`) ════
+  /* Quem desenvolve e entra com uma conta cujo nome nao casa com nenhum nome
+     das demandas e perguntado UMA vez "como o seu nome aparece nas demandas?",
+     com a lista e o palpite; a escolha vai para o perfil (`meu-nome-demandas`)
+     e a pergunta nao volta. Antes o Meu trabalho abria vazio e mandava
+     procurar o ajuste em outro lugar.
+
+     AS REGRAS SAO COPIAS do dev.html, e a suite roda cada uma ao lado da
+     original:
+       contaSplitDevs   `splitDevs`
+       contaListaDevs   `getDevList` (a lista do cadastro de devs e o que esta
+                        grafado nas demandas, sem repetir, em ordem)
+       contaNorm        `normNome` (sem acento e sem caixa)
+       contaMeuDev      `resolveMeuDev`: o nome declarado (ou o da conta) que
+                        bate por IGUALDADE com um da lista — nada de semelhanca,
+                        que ja abriu o painel na fila de outra pessoa
+       contaPalpite     o palpite do `pedirVinculo`: palavras em comum, e so
+                        com um vencedor unico (empate nao pre-seleciona)
+     Como no dev.html, so o perfil dev e perguntado: PM/PO e analista
+     coordenam e nao precisam ter demanda no proprio nome. */
+  function contaSplitDevs(s) { return s ? String(s).split(/[\/,]/).map(function (x) { return x.trim(); }).filter(Boolean) : []; }
+  function contaListaDevs(D) {
+    var todos = [];
+    ((D || {}).desenvolvedores || []).forEach(function (d) { todos = todos.concat(contaSplitDevs(d)); });
+    ((D || {}).melhorias || []).forEach(function (m) { todos = todos.concat(contaSplitDevs(m && m.dev)); });
+    var vistos = {};
+    return todos.filter(function (n) { if (vistos['$' + n]) return false; vistos['$' + n] = 1; return true; }).sort();
+  }
+  function contaNorm(s) {
+    return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+  function contaMeuDev(eu, devs) {
+    if (!eu) return '';
+    var dec = String(eu.nome_demandas || '').split(/[\/,;]/).map(function (x) { return x.trim(); }).filter(Boolean);
+    var meus = dec.length ? dec : (eu.nome ? [eu.nome] : []);
+    if (!meus.length) return '';
+    var alvo = meus.map(contaNorm);
+    return (devs || []).find(function (d) { return alvo.indexOf(contaNorm(d)) >= 0; }) || '';
+  }
+  function contaPalpite(nome, devs) {
+    var meus = {};
+    contaNorm(nome).split(' ').filter(Boolean).forEach(function (p) { meus[p] = 1; });
+    var melhor = '', placar = 0, empate = false;
+    (devs || []).forEach(function (d) {
+      var n = contaNorm(d).split(' ').filter(Boolean).reduce(function (c, p) { return c + (meus[p] ? 1 : 0); }, 0);
+      if (n > placar) { placar = n; melhor = d; empate = false; }
+      else if (n === placar && n > 0) empate = true;
+    });
+    return melhor && placar > 0 && !empate ? melhor : '';
+  }
+  function precisaVinculo(eu, papel, D) {
+    return papel === 'dev' && !!eu && !contaMeuDev(eu, contaListaDevs(D));
+  }
+  /** O nome com que a pessoa aparece nas demandas, na grafia da base (o
+      `currentDev` do dev.html), ou o declarado quando a base nao o tem. */
+  function meuDev(eu, D) {
+    return contaMeuDev(eu, contaListaDevs(D)) || H.meusNomes()[0] || ((eu || {}).nome || '');
+  }
+
+  /* O PASSO NA CAIXA DE ENTRAR (o `step-vinculo` do dev.html): o mesmo
+     seletor e a mesma gravacao da Minha conta. "Entrar assim mesmo" segue sem
+     gravar — a conta nova ainda sem demanda resolve sozinha quando a primeira
+     nascer no nome dela. Se a gravacao falhar, o nome vale nesta sessao. */
+  function vinculo(dir, o) {
+    o = o || {};
+    var eu = o.eu || {};
+    var devs = contaListaDevs(o.D || {});
+    var palpite = contaPalpite(eu.nome || '', devs);
+    dir.innerHTML = '<form class="lg-box" id="lg-vin" novalidate>' +
+      '<span class="sb-mark" style="width:56px;height:56px;border-radius:16px"><img src="axis/marca/axis-leao-branco.png" alt="" style="width:36px"></span>' +
+      '<h2 style="margin:6px 0 0;font-family:var(--font-title);font-size:26px;font-weight:800">Falta ligar sua conta às suas demandas</h2>' +
+      '<span class="sub" id="vin-explica" style="margin-bottom:8px">Você entrou como <b>' + H.esc(eu.nome || eu.login || '') + '</b>. ' +
+      'Não consegui dizer com certeza quais demandas são suas — ou não há nenhuma nesse nome, ou o nome coincide com o de outra pessoa. ' +
+      'Escolha como seu nome aparece nas demandas: guardamos no seu perfil e esta tela não volta.</span>' +
+      '<label for="vin-nome">Seu nome nas demandas</label>' +
+      '<select class="in" id="vin-nome">' + opcoesNome(devs, palpite) + '</select>' +
+      '<div class="lg-err" id="lg-err" role="alert"></div>' +
+      '<button class="btnp" id="vin-ok" type="submit">Continuar</button>' +
+      // Links de texto com area de toque de 44 px (o desenho continua o de link).
+      '<button type="button" class="link" data-vin="depois" style="align-self:center;min-height:44px;padding:0 12px;font-size:13px;font-weight:700">Ainda não tenho demandas — entrar assim mesmo</button>' +
+      '<button type="button" class="link" data-vin="sair" style="align-self:center;min-height:44px;min-width:44px;padding:0 12px;margin-top:-8px;font-size:13px;font-weight:700">' + H.ico('logout') + ' Sair</button>' +
+      '</form>';
+    var f = dir.querySelector('#lg-vin');
+    f.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var nome = String(f.querySelector('#vin-nome').value || '').trim();
+      var err = f.querySelector('#lg-err');
+      if (!nome) { err.textContent = 'Escolha um nome da lista.'; f.querySelector('#vin-nome').focus(); return; }
+      err.textContent = '';
+      var b = f.querySelector('#vin-ok');
+      b.disabled = true; b.textContent = 'Gravando…';
+      try { await gravaNome(nome); }
+      catch (ex) {
+        nomeNaSessao(nome);
+        if (ex.status !== 401) H.toast('Não consegui guardar no seu perfil — vale só nesta sessão. Ajuste depois em Minha conta.', 'erro');
+        if (ex.status === 401) return;
+      }
+      if (o.pronto) o.pronto(nome);
+    });
+    dir.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-vin]');
+      if (!b) return;
+      if (b.getAttribute('data-vin') === 'sair') { if (o.sair) o.sair(); }
+      else if (o.depois) o.depois();
+    });
+    setTimeout(function () { var s = f.querySelector('#vin-nome'); if (s) s.focus(); }, 0);
   }
 
   function depois(el) {
@@ -177,11 +302,7 @@
         if (!nome) { H.toast('Escolha um nome da lista.', 'erro'); return; }
         b.disabled = true;
         try {
-          var j = await H.api('meu-nome-demandas', { nome_demandas: nome });
-          var eu = {};
-          try { eu = JSON.parse(sessionStorage.getItem('rm_eu') || '{}') || {}; } catch (_) {}
-          eu.nome_demandas = j.nome_demandas || nome;
-          try { sessionStorage.setItem('rm_eu', JSON.stringify(eu)); } catch (_) {}
+          await gravaNome(nome);
           H.toast('Pronto: suas demandas agora são as de ' + nome + '.', 'ok');
           A.desenhar();
         } catch (e) {
@@ -372,7 +493,8 @@
       }
     });
   }
-  window.AXIS_CONTA = { passo: passo };
+  window.AXIS_CONTA = { passo: passo, vinculo: vinculo, precisaVinculo: precisaVinculo, meuDev: meuDev,
+                        contaListaDevs: contaListaDevs, contaMeuDev: contaMeuDev, contaPalpite: contaPalpite };
 
   A.tela({
     id: 'conta',

@@ -412,7 +412,46 @@
     return { ok: true, patch: patch };
   }
 
+  /* ══ O RASCUNHO: O QUE FOI ESCRITO E AINDA NAO GRAVOU ══════════════════
+     A regra do `rascunhoSalvar`/`mPersistir` do admin.html e da faixa de "nao
+     publicadas" (`nao-publicada.js`): aviso que some nao protege trabalho,
+     copia protege. O texto do formulario ficava so na memoria da aba — a
+     gravacao falhava (rede, Worker fora do ar, sessao vencida), a pessoa fechava
+     a aba, e acabou.
+
+     Agora o formulario aberto guarda no navegador (localStorage) o que esta
+     nele enquanto difere do que abriu, e GUARDA ANTES DE TENTAR gravar, como o
+     `mPersistir`: se a gravacao falha, ou a aba morre no meio, o rascunho ja
+     esta la. Gravou: sai. Fechou descartando: sai. Ao reabrir o mesmo
+     formulario (a mesma demanda, ou a nova), ele e oferecido de volta; e a
+     faixa do topo do app lista o que ficou para tras, com o caminho de volta.
+
+     UM POR CONTA E POR ALVO (o id da demanda, ou "nova"): a conta que entra
+     depois na mesma maquina nao ve o rascunho de outra. */
+  function rascunhoDe(itens, login, alvo) {
+    return (itens || []).filter(function (r) { return r && r.login === login && r.alvo === alvo; })[0] || null;
+  }
+  function rascunhoTira(itens, login, alvo) {
+    return (itens || []).filter(function (r) { return r && !(r.login === login && r.alvo === alvo); });
+  }
+  function rascunhoPoe(itens, r) {
+    return rascunhoTira(itens, r.login, r.alvo).concat([r]);
+  }
+  function rascunhosDe(itens, login) {
+    return (itens || []).filter(function (r) { return r && r.login === login; });
+  }
+  /** O ciclo do `mPersistir`: guarda antes, grava, e so limpa se gravou. */
+  async function comRascunho(guarda, gravar, limpa) {
+    guarda();
+    var out;
+    try { out = await gravar(); }
+    catch (e) { guarda(); throw e; }
+    if (out && out.ok) limpa(); else guarda();
+    return out;
+  }
+
   var api = { nova: nova, edicao: edicao, ETAPAS_DATA_TRAVADA: ETAPAS_DATA_TRAVADA,
+              rascunhoDe: rascunhoDe, rascunhoTira: rascunhoTira, rascunhoPoe: rascunhoPoe, rascunhosDe: rascunhosDe, comRascunho: comRascunho,
               marcaDadosBiPorTema: marcaDadosBiPorTema, TEMA_DADOS_RE: TEMA_DADOS_RE,
               fibonacciMaisProximo: fibonacciMaisProximo, comiteDe: comiteDe, biAdiciona: biAdiciona,
               refAdiciona: refAdiciona, githubDe: githubDe, mesesDoCampo: mesesDoCampo, temaNovo: temaNovo, extras: extras };
@@ -472,6 +511,10 @@
       '.axa .axf-in-erro{border-color:var(--dg) !important}',
       '.axa .axf .poker-aplicar{background:none;border:0;padding:0;color:var(--ac-t);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}',
       '.axa .axf .gh-refs{margin-top:2px}',
+      // A oferta do rascunho: em cima de tudo, para ser vista antes de digitar por cima.
+      '.axa .axf-rasc{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 14px;border-radius:12px;background:rgba(var(--wn-rgb),.1);border:1px solid rgba(var(--wn-rgb),.4);color:var(--wn-t);font-size:13px;line-height:20px}',
+      '.axa .axf-rasc>span{flex:1 1 240px;min-width:0}',
+      '.axa .axf-rasc .row{gap:8px;flex-wrap:wrap}',
       '@container app (max-width: 760px){.axa .axf-sec{grid-template-columns:minmax(0,1fr)}.axa .axf{padding:18px}}',
       '@media (max-width: 760px){.axa .axf-lin,.axa .axf-gh{grid-template-columns:minmax(0,1fr)}}',
       '@media (max-width: 760px){.axa .axf-sec{grid-template-columns:minmax(0,1fr)}.axa .axf{padding:18px 16px}.axa .axf-pe{margin:0 -16px -18px;padding:12px 16px}}'
@@ -587,7 +630,8 @@
       '<button type="button" class="dlg-x" data-axf="fechar" aria-label="Fechar">' + H.ico('x') + '</button>' +
       '<div style="display:flex;flex-direction:column;gap:6px"><span class="lab">' + (m ? H.esc(m.codigo || 'DEMANDA') + ' · EDITAR' : 'NOVA DEMANDA') + '</span>' +
       '<h2 class="axf-t" id="axf-t">' + (m ? H.esc(m.titulo || '(sem título)') : 'Nova demanda') + '</h2>' +
-      (m ? '<span class="note">A etapa muda pelas ações do item (mover, entregar, validar), cada uma com a sua regra.</span>' : '') + '</div>';
+      (m ? '<span class="note">A etapa muda pelas ações do item (mover, entregar, validar), cada uma com a sua regra.</span>' : '') + '</div>' +
+      '<div id="axf-rasc-oferta" hidden></div>';
 
     // O QUE E
     h += '<section class="axf-sec"><span class="lab">O QUE É</span>' +
@@ -743,7 +787,7 @@
         H.api('anexo-subir', { nome: f.name, dados: rd.result }).then(function (j) {
           meu.anexos.push({ nome: j.nome, tipo: j.tipo, tamanho: j.tamanho, chave: j.chave });
         }).catch(function (e) { H.toast('Falha ao anexar "' + f.name + '": ' + (e.message || e), 'erro'); })
-          .then(function () { meu.enviando--; if (EST === meu) pintaAnexos(); });
+          .then(function () { meu.enviando--; if (EST === meu) { pintaAnexos(); guardaLogo(); } });
       };
       rd.onerror = function () { meu.enviando--; H.toast('Não foi possível ler "' + f.name + '".', 'erro'); if (EST === meu) pintaAnexos(); };
       rd.readAsDataURL(f);
@@ -933,6 +977,8 @@
     patch[id] = m ? r.patch : r.obj;
     var out;
     var opts = { ok: m ? 'Demanda salva.' : 'Demanda criada.' };
+    // Gravar e a decisao: um rascunho antigo ainda oferecido deixa de valer.
+    if (EST.rascOferta) fechaOferta();
     try {
       /* O SISTEMA NOVO ENTRA NA LISTA FRESCA DO SERVIDOR, e nao na da tela: a
          lista de temas vai inteira, e uma tela aberta ha horas desfaria a
@@ -947,7 +993,7 @@
         if (tf.novo) { opts.raiz = { temas: (base.temas || []).concat([tf.novo]) }; opts.ok += ' Sistema "' + tf.novo.nome + '" criado.'; }
         else patch[id].tema_id = tf.id;
       }
-      out = await H.gravar(patch, opts);
+      out = await comRascunho(function () { guardaRascunho(true); }, function () { return H.gravar(patch, opts); }, apagaRascunho);
     } finally {
       if (b.isConnected) { b.disabled = false; b.textContent = rot; }
     }
@@ -985,17 +1031,154 @@
   }
 
   function retrato() { try { return JSON.stringify(ler()); } catch (_) { return ''; } }
+  function mexido() { return !!EST && (EST.anexosMexidos || retrato() !== EST.inicial); }
+
+  // ── O rascunho no navegador (as regras puras estao la em cima) ───────
+  var RASCUNHO_KEY = 'rm_axis_rascunho';
+  function rascLer() {
+    try { var d = JSON.parse(localStorage.getItem(RASCUNHO_KEY) || 'null'); return d && d.v === 1 && Array.isArray(d.itens) ? d.itens : []; }
+    catch (_) { return []; }
+  }
+  function rascGravar(itens) {
+    try {
+      if (itens.length) localStorage.setItem(RASCUNHO_KEY, JSON.stringify({ v: 1, itens: itens }));
+      else localStorage.removeItem(RASCUNHO_KEY);
+    } catch (_) { /* sem localStorage, segue sem a rede de seguranca */ }
+  }
+  function login() { var e = AX.APP.eu || {}; return String(e.login || e.email || AX.APP.papel || ''); }
+  function alvoDe(m) { return m ? String(m.id) : 'nova'; }
+  /** Tudo o que esta no formulario, campo a campo, e as listas que vivem fora dos campos. */
+  function foto() {
+    var campos = {};
+    [].forEach.call(EST.ov.querySelectorAll('input[id^="axf-"], select[id^="axf-"], textarea[id^="axf-"]'), function (x) {
+      if (x.type === 'file' || x.disabled) return;
+      campos[x.id] = x.type === 'checkbox' ? !!x.checked : x.value;
+    });
+    return { campos: campos, anexos: EST.anexos, bis: EST.bis, refs: EST.refs, grill: EST.grill,
+             marcas: { anexosMexidos: !!EST.anexosMexidos, bisMexidos: !!EST.bisMexidos, refsMexidos: !!EST.refsMexidos,
+                       grillMexido: !!EST.grillMexido, pokerNaMao: !!EST.pokerNaMao },
+             id: EST.id || '', temaId: EST.temaId || '' };
+  }
+  /** Guarda o formulario aberto. `forca`: guarda mesmo sem mudanca (logo antes
+      de gravar). Com um rascunho anterior ainda oferecido, nao escreve por cima
+      dele: a pessoa ainda nao disse se quer o antigo de volta. */
+  function guardaRascunho(forca) {
+    if (!EST || !EST.ov || !EST.ov.isConnected) return;
+    if (EST.rascOferta && !forca) return;
+    var lg = EST.login, alvo = alvoDe(EST.m);
+    if (!lg) return;
+    if (!forca && !mexido()) { rascGravar(rascunhoTira(rascLer(), lg, alvo)); return; }
+    rascGravar(rascunhoPoe(rascLer(), { login: lg, alvo: alvo, codigo: (EST.m && EST.m.codigo) || '',
+      titulo: val('axf-titulo') || (EST.m && EST.m.titulo) || '', em: new Date().toISOString(), foto: foto() }));
+  }
+  function apagaRascunho() {
+    if (!EST) return;
+    rascGravar(rascunhoTira(rascLer(), EST.login, alvoDe(EST.m)));
+  }
+  var _rascTimer = null;
+  function guardaLogo() {
+    clearTimeout(_rascTimer);
+    _rascTimer = setTimeout(function () { guardaRascunho(false); }, 400);
+  }
+  /** Devolve o rascunho para os campos, e os pedacos que dependem deles. */
+  function aplicaFoto(f) {
+    var c = (f && f.campos) || {};
+    Object.keys(c).forEach(function (id) {
+      var x = el(id);
+      if (!x || x.disabled) return;
+      if (x.type === 'checkbox') { x.checked = !!c[id]; return; }
+      if (x.tagName === 'SELECT' && ![].some.call(x.options, function (o) { return o.value === String(c[id]); })) {
+        if (id === 'axf-pontos') garanteCarta(x, String(c[id])); else return;
+      }
+      x.value = c[id];
+    });
+    ['anexos', 'bis', 'refs'].forEach(function (k) { if (Array.isArray(f[k])) EST[k] = JSON.parse(JSON.stringify(f[k])); });
+    if (f.grill && typeof f.grill === 'object') EST.grill = JSON.parse(JSON.stringify(f.grill));
+    Object.keys(f.marcas || {}).forEach(function (k) { EST[k] = !!f.marcas[k]; });
+    if (f.id) EST.id = f.id;
+    if (f.temaId) EST.temaId = f.temaId;
+    var tsel = el('axf-tema');
+    if (tsel) { el('axf-tema-novo-caixa').style.display = tsel.value === '__novo__' ? 'flex' : 'none'; el('axf-tema-previa').innerHTML = previaTema(val('axf-tema-novo')); }
+    var dsel = el('axf-dev');
+    if (dsel) el('axf-dev-manual').style.display = dsel.value === '__manual__' ? '' : 'none';
+    var cmt = el('axf-comite');
+    if (cmt) el('axf-comite-caixa').style.display = cmt.checked ? 'flex' : 'none';
+    pintaBis(); pintaRefs(); pintaGrill(); pintaAnexos(); contaResumo(); pintaPoker(); pintaSemana(false);
+  }
+  function quandoTxt(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    return H.dm(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')) +
+      ' às ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  function ofereceRascunho(r) {
+    var box = el('axf-rasc-oferta');
+    if (!box) return;
+    EST.rascOferta = r;
+    box.hidden = false;
+    box.className = 'axf-rasc';
+    box.setAttribute('role', 'status');
+    box.innerHTML = H.ico('alert') + '<span>Há um rascunho deste formulário, de ' + H.esc(quandoTxt(r.em)) + ', que <b>não foi gravado</b>' +
+      (r.titulo ? ' ("' + H.esc(r.titulo) + '")' : '') + '.</span>' +
+      '<span class="row"><button type="button" class="btns" data-axf="rasc-volta">Recuperar</button>' +
+      '<button type="button" class="btns" data-axf="rasc-descarta">Descartar</button></span>';
+  }
+  function fechaOferta() {
+    var box = el('axf-rasc-oferta');
+    if (box) { box.hidden = true; box.innerHTML = ''; box.className = ''; }
+    if (EST) EST.rascOferta = null;
+  }
+  function recupera() {
+    var r = EST && EST.rascOferta;
+    if (!r) return;
+    fechaOferta();
+    aplicaFoto(r.foto || {});
+    guardaRascunho(true);
+    var t = el('axf-titulo');
+    if (t && !t.disabled) t.focus();
+  }
+  /** Os rascunhos desta conta que nao estao abertos agora (a faixa do app). */
+  function rascunhos() {
+    var aberto = EST ? alvoDe(EST.m) : null;
+    return rascunhosDe(rascLer(), login()).filter(function (r) { return r.alvo !== aberto; })
+      .map(function (r) { return { alvo: r.alvo, codigo: r.codigo, titulo: r.titulo, em: r.em }; });
+  }
+  /** Abre o formulario com o rascunho ja devolvido (a faixa do app). */
+  function abrirRascunho(alvo) {
+    var r = rascunhoDe(rascLer(), login(), alvo);
+    if (!r) { if (AX.pintaFaixas) AX.pintaFaixas(); return; }
+    if (alvo === 'nova') { abrir(null, { rascunho: true }); return; }
+    var m = ((D().melhorias) || []).find(function (x) { return x && String(x.id) === alvo && !x.oculto; });
+    if (!m) {
+      rascGravar(rascunhoTira(rascLer(), login(), alvo));
+      H.toast('A demanda ' + (r.codigo || '') + ' não existe mais; o rascunho dela foi descartado.', 'erro');
+      if (AX.pintaFaixas) AX.pintaFaixas();
+      return;
+    }
+    abrir(m, { rascunho: true });
+  }
 
   async function fecha(forcado) {
     if (!EST) return;
-    if (!forcado && (EST.anexosMexidos || retrato() !== EST.inicial) && raiz.AXIS_ACOES) {
+    if (!forcado && mexido() && raiz.AXIS_ACOES) {
       var ok = await raiz.AXIS_ACOES.caixa({ titulo: 'Descartar o que foi escrito?', texto: 'As alterações deste formulário não foram gravadas.', ok: 'Descartar', perigo: true });
       if (!ok) return;
     }
+    // Fechar de fato (gravou, nada mudou, ou descartou) leva o rascunho junto.
+    // Um rascunho anterior so oferecido, e nem recuperado nem descartado, fica.
+    clearTimeout(_rascTimer);
+    if (!EST.rascOferta) apagaRascunho();
+    solta();
+  }
+  /** Tira o formulario da tela sem mexer no rascunho (outra conta entrou). */
+  function solta() {
+    if (!EST) return;
+    clearTimeout(_rascTimer);
     var e = EST;
     EST = null;
     if (e.ov) e.ov.remove();
     document.removeEventListener('keydown', e.tecla, true);
+    if (AX.pintaFaixas) AX.pintaFaixas();
   }
 
   /** Os valores iniciais da demanda nova (ver o cabecalho). Antes do
@@ -1017,7 +1200,7 @@
     o = o || {};
     if (!H.pode('gravar')) { H.toast('Seu perfil é só de leitura.', 'erro'); return; }
     if (m && raiz.AXIS_ACOES && !raiz.AXIS_ACOES.podeEditar(m)) { H.toast('Esta demanda não é sua: quem edita é o responsável ou o PM/PO.', 'erro'); return; }
-    if (EST) { document.removeEventListener('keydown', EST.tecla, true); EST.ov.remove(); EST = null; }
+    if (EST) solta();
     css();
     var ov = document.createElement('div');
     ov.className = 'ovl axf-ovl';
@@ -1026,7 +1209,10 @@
     EST = { m: m || null, ov: ov, anexos: JSON.parse(JSON.stringify((m && m.anexos) || [])), enviando: 0, anexosMexidos: false,
             // Copias em edicao, como `_mBis`, `_mRefs` e `_mGrill` do admin: cancelar nao deixa nada aplicado.
             bis: raiz.BIS ? raiz.BIS.daDemanda(m || {}) : [], refs: raiz.REFERENCIA ? raiz.REFERENCIA.daDemanda(m || {}) : [],
-            grill: JSON.parse(JSON.stringify((m && m.grill) || {})), pokerNaMao: false };
+            grill: JSON.parse(JSON.stringify((m && m.grill) || {})), pokerNaMao: false,
+            // A conta dona do rascunho e a de quem abriu: com a sessao vencida no meio
+            // da gravacao, a sessao ja esta vazia quando o rascunho e guardado de novo.
+            login: login() };
     if (el('axf-link-repo') && raiz.ghLinkPreenche) raiz.ghLinkPreenche('axf', m || null, D().melhorias || []);
     pintaBis(); pintaRefs(); pintaGrill(); contaResumo();
     var tsel = el('axf-tema');
@@ -1091,13 +1277,16 @@
       if (q === 'salvar') salvar();
       else if (q === 'bi') incluiBi();
       else if (q === 'ref') incluiRef();
+      else if (q === 'rasc-volta') recupera();
+      else if (q === 'rasc-descarta') { fechaOferta(); guardaRascunho(false); }
       else if (q === 'poker-aplicar') {
         var sg = fibonacciMaisProximo(val('axf-poker-media')), sl = el('axf-pontos');
         if (sg && sl) { garanteCarta(sl, sg); sl.value = sg; EST.pokerNaMao = false; pintaPoker(); }
       } else fecha(false);
     });
     EST.tecla = function (e) {
-      if (!EST || document.querySelector('.ovl:not(.axf-ovl)')) return;
+      // Escondido atras da tela de entrar (sessao vencida): o teclado e do login.
+      if (!EST || EST.ov.style.display === 'none' || document.querySelector('.ovl:not(.axf-ovl)')) return;
       if (e.key === 'Escape') { e.preventDefault(); fecha(false); }
       else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); salvar(); }
     };
@@ -1110,6 +1299,13 @@
     if (!m) preencheNova(o);
     EST.extras0 = rawExtras();
     EST.inicial = retrato();
+    // Cada mudanca guarda o rascunho (um pouco depois de parar de digitar).
+    ov.addEventListener('input', guardaLogo);
+    ov.addEventListener('change', guardaLogo);
+    ov.addEventListener('click', function (e) { if (e.target.closest('[data-axf-tira], [data-axf-bi-tira], [data-axf-ref-tira], [data-axf="bi"], [data-axf="ref"], [data-axf="poker-aplicar"]')) guardaLogo(); });
+    var antes = rascunhoDe(rascLer(), EST.login, alvoDe(m || null));
+    if (antes) { if (o.rascunho) { EST.rascOferta = antes; recupera(); } else ofereceRascunho(antes); }
+    if (AX.pintaFaixas) AX.pintaFaixas();
     setTimeout(function () {
       var alvo = el(FOCO[o.foco] || 'axf-titulo');
       if (alvo && !alvo.disabled) { alvo.focus(); if (o.foco) try { alvo.scrollIntoView({ block: 'center' }); } catch (_) {} }
@@ -1117,5 +1313,6 @@
     }, 0);
   }
 
-  raiz.AXIS_FORM = Object.assign(api, { abrir: abrir });
+  raiz.AXIS_FORM = Object.assign(api, { abrir: abrir, rascunhos: rascunhos, abrirRascunho: abrirRascunho, soltar: solta,
+                                         guardaRascunho: function () { clearTimeout(_rascTimer); guardaRascunho(false); } });
 }(typeof window !== 'undefined' ? window : globalThis));

@@ -16,9 +16,12 @@
                                      `promoveAoAgendar` (status_planejamento
                                      'planejado', status 'estimada') — so com
                                      sprint, pela trava do sprint.js;
-     arrastar a barra                onLayerDrop (card): { inicio, entrega }
-                                     andando os dias uteis do arraste, e
-                                     `dev` quando cai na linha de outra pessoa;
+     arrastar a barra                onLayerDrop (card), regra `soltarBarra`:
+                                     { inicio: dia, entrega: dia + os mesmos
+                                     dias corridos } e, na linha de outra
+                                     pessoa, `dev` = so quem recebeu (a dupla
+                                     sai, como no gantt). Na propria linha so
+                                     as datas: o gantt desfazia a dupla ai;
      puxar as pontas da barra        { inicio } ou { entrega } — o gantt nao
                                      tinha; e o mesmo campo do formulario;
      voltar ao backlog               returnToBacklog: { inicio: '', entrega:
@@ -29,6 +32,11 @@
                                      inicio, fim, obs } — aqui tambem editar;
      feriados                        a lista `feriados` ({ data, nome }). Nao
                                      havia tela para ela (o gantt so lia);
+     clicar na barra (ou no cartao)  o duplo clique do gantt (openModal): a
+                                     demanda inteira na gaveta do Item
+                                     (`AXIS_QUADRO.abrirItem`), com "Mover
+                                     para…" (o seletor unico de etapa) e, para
+                                     quem planeja, "Dev e datas" no pe;
      clicar no dia vazio da linha    onLayerClick/onDayCellClick -> openModal(
                                      null, dev, dia): o formulario do app
                                      (`AXIS_FORM.abrir(null, { dev, inicio,
@@ -59,6 +67,16 @@
    capacidade.js; herdada, etapas que herdam e prazo do prazo.js; etapa do
    etapa-demanda.js; frente do pipelines.js; ordem da fila do ordem-kanban.js;
    selo do selo-validacao.js. A tela so recorta pela janela e desenha.
+
+   O ROTULO DO DEV e o do gantt: % de dias ocupados, dias livres, ausentes e
+   em conflito, "pt planejados · entregues", o quadro Valid./S-plan/Exec. por
+   sprint da janela, sem pontuar, veio de antes e rolou de sprint. Os CHIPS DE
+   ETAPA com a contagem (renderIndicators) filtram o quadro e a fila.
+
+   NO CELULAR (app ate 760 px) a regua nao serve: a tela vira AGENDA, por
+   pessoa ou por dia, com um cartao por demanda (datas, etapa, prazo e
+   "Mover"); o toque abre a gaveta. A fila fica recolhida em cima, e
+   Ausencias, Feriados, Juntar e Apresentar vao para o menu "…".
 
    O QUE FICOU NO gantt.html, e por que: o resumo e o ranking do mes (estao
    em Paineis e Fechamento). Gerenciar devs, juntar dois nomes da mesma
@@ -112,16 +130,12 @@
   function dow(s) { return dUTC(s).getUTCDay(); }
   function fds(s) { var w = dow(s); return w === 0 || w === 6; }
   /** Anda `n` dias de semana (seg a sex) — a regua do quadro tem uma coluna
-   *  por dia de semana, feriado incluido, entao o arraste anda nessa unidade. */
+   *  por dia de semana, feriado incluido: e quanto a barra que comecava antes
+   *  da janela anda no arraste. O prazo depois anda em dias corridos. */
   function maisUteis(s, n) {
     var d = s, passo = n < 0 ? -1 : 1, k = Math.abs(n), guarda = 0;
     while (k > 0 && guarda++ < 4000) { d = maisDias(d, passo); if (!fds(d)) k--; }
     return d;
-  }
-  function uteisEntre(a, b) {
-    var n = 0, d = a, guarda = 0;
-    while (d < b && guarda++ < 4000) { d = maisDias(d, 1); if (!fds(d)) n++; }
-    return n;
   }
 
   // ── Estado da tela (sobrevive aos redesenhos do nucleo) ────────────────
@@ -135,7 +149,10 @@
     rolagem: 0,
     el: null,
     M: null,           // o que o ultimo desenho calculou (janela, linhas, barras)
-    juntar: null       // { sel: [ids] } no modo "juntar": [0] e a principal
+    juntar: null,      // { sel: [ids] } no modo "juntar": [0] e a principal
+    celular: false,    // o ultimo desenho foi a agenda (app ate 760 px)?
+    modo: lerLS('axis_plan_modo') === 'dia' ? 'dia' : 'pessoa',
+    filaAberta: false
   };
   if (!ZOOMS.some(function (z) { return z.n === EST.zoom; })) EST.zoom = 2;
   var _arr = null, _suprime = false;
@@ -163,7 +180,7 @@
       '.axa .pl-fil .ct{font-size:12px;color:var(--tx3);margin-left:4px}',
       '.axa .pl-lay{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px;align-items:start}',
       '.axa .pl-lay.so{grid-template-columns:minmax(0,1fr)}',
-      '.axa .pl-gt{overflow-x:auto;border-radius:16px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd);--lw:190px}',
+      '.axa .pl-gt{overflow-x:auto;border-radius:16px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd);--lw:224px}',
       '.axa .pl-in{min-width:calc(var(--lw) + var(--nc) * var(--dmin));position:relative}',
       '.axa .pl-gr{display:grid;grid-template-columns:var(--lw) repeat(var(--nc),minmax(0,1fr))}',
       '.axa .pl-gr.cab{border-bottom:1px solid var(--sf5)}',
@@ -178,14 +195,70 @@
       '.axa .pl-dd.hj{background:rgba(var(--ac-rgb),.12);color:var(--ac-t);font-weight:800}',
       '.axa .pl-dd.fe{color:var(--tl-t)}',
       '.axa .pl-dd small{font-size:9.5px;font-weight:700}',
-      '.axa .pl-ln{display:grid;grid-template-columns:var(--lw) repeat(var(--nc),minmax(0,1fr));grid-template-rows:repeat(var(--nr),34px);row-gap:6px;padding:10px 0;border-bottom:1px solid var(--sf4);position:relative}',
+      '.axa .pl-ln{display:grid;grid-template-columns:var(--lw) repeat(var(--nc),minmax(0,1fr));grid-template-rows:repeat(var(--nr),34px) auto;row-gap:6px;padding:10px 0;border-bottom:1px solid var(--sf4);position:relative}',
       '.axa .pl-ln.alvo{background:rgba(var(--ac-rgb),.05);box-shadow:inset 3px 0 0 var(--ac)}',
       '.axa .pl-lb{grid-column:1;grid-row:1 / -1;padding:0 14px;display:flex;flex-direction:column;gap:3px;min-width:0;position:sticky;left:0;z-index:3;background:var(--sf)}',
       '.axa .pl-ln.alvo .pl-lb{background:var(--sf2)}',
       '.axa .pl-lb .nm{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;min-width:0}',
       '.axa .pl-lb .nm b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.axa .pl-lb .nm .chip{height:16px;font-size:9.5px;padding:0 5px}',
-      '.axa .pl-lb .cp{font-size:11.5px;font-family:var(--font-mono)}',
+      '.axa .pl-lb .pc{display:flex;align-items:center;gap:8px}',
+      '.axa .pl-lb .pc .pl-tr{flex:1}',
+      '.axa .pl-lb .pc b{font-size:11.5px;font-family:var(--font-mono);min-width:34px;text-align:right}',
+      '.axa .pl-lb .nt.pk{color:var(--tx2);white-space:normal}',
+      '.axa .pl-lb .nt.pk b{color:var(--tx)}',
+      '.axa .pl-lb .nt.pk b.ok{color:var(--ok-t)}',
+      '.axa .pl-nmb{border:0;padding:0;background:transparent;color:inherit;font:inherit;font-weight:700;cursor:pointer;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.axa .pl-nmb:hover{color:var(--ac-t);text-decoration:underline}',
+      // O quadro por sprint do rotulo: Valid. / S/plan / Exec. alinhados pelas sprints.
+      '.axa .pl-cq{display:grid;grid-template-columns:42px repeat(var(--cq),minmax(0,1fr));gap:1px 2px;font-family:var(--font-mono);font-size:10.5px;margin-top:2px}',
+      '.axa .pl-cq span{text-align:center;padding:1px 0;border-radius:3px;min-width:0;overflow:hidden}',
+      '.axa .pl-cq .hd{color:var(--tx3);font-weight:700}',
+      '.axa .pl-cq .r{text-align:left;color:var(--tx3)}',
+      '.axa .pl-cq .val{color:var(--ok-t);background:rgba(var(--ok-rgb),.08)}',
+      '.axa .pl-cq .sval{color:var(--wn-t);background:rgba(var(--wn-rgb),.08)}',
+      '.axa .pl-cq .cq-bateu{color:var(--ok-t);background:rgba(var(--ok-rgb),.18);font-weight:700}',
+      '.axa .pl-cq .cq-abaixo{color:var(--dg-t);background:rgba(var(--dg-rgb),.16);font-weight:700}',
+      '.axa .pl-cq .cq-neutro{color:var(--tx2);background:var(--sf4)}',
+      // Os chips de etapa com a contagem (a barra de indicadores do gantt).
+      '.axa .pl-chs{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}',
+      '.axa .pl-ch{height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--bd2);background:var(--sf);color:var(--tx2);font:inherit;font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap}',
+      '.axa .pl-ch:hover{border-color:var(--bd4);color:var(--tx)}',
+      '.axa .pl-ch i{width:8px;height:8px;border-radius:50%;flex-shrink:0}',
+      '.axa .pl-ch b{font-family:var(--font-mono);color:var(--tx)}',
+      '.axa .pl-ch.on{border-color:rgba(var(--ac-rgb),.7);background:rgba(var(--ac-rgb),.12);color:var(--ac-t)}',
+      // A agenda do celular.
+      '.axa .pl-ag{display:flex;flex-direction:column;gap:14px}',
+      '.axa .pl-agmodo{display:grid;grid-template-columns:1fr 1fr;gap:8px}',
+      '.axa .pl-agmodo .btn.on{border-color:rgba(var(--ac-rgb),.7);background:rgba(var(--ac-rgb),.12);color:var(--ac-t)}',
+      '.axa .pl-agp,.axa .pl-agd{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:16px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd)}',
+      '.axa .pl-agd.hj{border-color:rgba(var(--ac-rgb),.55)}',
+      '.axa .pl-agp header{display:flex;align-items:center;gap:8px;font-size:15px;min-width:0}',
+      '.axa .pl-agp header .pl-nmb{min-height:44px;min-width:44px;font-size:15px}',
+      '.axa .pl-agp header .pct{margin-left:auto;font-family:var(--font-mono);font-size:14px}',
+      '.axa .pl-agp .nt,.axa .pl-agd .nt{font-size:12.5px;color:var(--tx3)}',
+      '.axa .pl-agp .nt.wn{color:var(--wn-t)}',
+      '.axa .pl-agd h3{margin:0;font-size:15px;font-weight:800;display:flex;flex-wrap:wrap;gap:6px;align-items:center}',
+      '.axa .pl-agd .lab{font-size:12px;margin-top:4px}',
+      '.axa .pl-ag .aus{display:flex;flex-wrap:wrap;gap:6px}',
+      '.axa .pl-agc{--k-rgb:var(--pu-rgb);border-radius:12px;background:var(--sf2);border:1px solid var(--bd2);box-shadow:inset 3px 0 0 rgba(var(--k-rgb),.8);overflow:hidden}',
+      '.axa .pl-agc.k-ac{--k-rgb:var(--ac-rgb)}', '.axa .pl-agc.k-in{--k-rgb:var(--in-rgb)}', '.axa .pl-agc.k-wn{--k-rgb:var(--wn-rgb)}',
+      '.axa .pl-agc.k-ok{--k-rgb:var(--ok-rgb)}', '.axa .pl-agc.k-dg{--k-rgb:var(--dg-rgb)}', '.axa .pl-agc.k-tl{--k-rgb:var(--tl-rgb)}',
+      '.axa .pl-agc.jsel{box-shadow:inset 3px 0 0 rgba(var(--k-rgb),.8),0 0 0 2px rgba(var(--ac-rgb),.55)}',
+      '.axa .pl-agc.jpri{box-shadow:inset 3px 0 0 rgba(var(--k-rgb),.8),0 0 0 2px var(--ac)}',
+      '.axa .pl-aga{display:flex;flex-direction:column;gap:5px;padding:12px 14px;min-height:44px;color:var(--tx);text-decoration:none}',
+      '.axa .pl-aga:hover{color:var(--tx)}',
+      '.axa .pl-aga .r1{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-family:var(--font-mono);font-size:12px;color:var(--tx3)}',
+      '.axa .pl-aga .t{font-size:14px;line-height:19px}',
+      '.axa .pl-aga .r2{font-size:12.5px;color:var(--tx3)}',
+      '.axa .pl-aga .pz{font-size:12.5px;font-weight:700;color:var(--tx2)}',
+      '.axa .pl-aga .pz.dg{color:var(--dg-t)}', '.axa .pl-aga .pz.wn{color:var(--wn-t)}', '.axa .pl-aga .pz.ok{color:var(--ok-t)}', '.axa .pl-aga .pz.mg{color:var(--mg-t, var(--pu-t))}',
+      '.axa .pl-agc .pe{display:flex;justify-content:flex-end;padding:0 10px 10px}',
+      '.axa .pl-agc .jtag{height:18px;padding:0 6px;border-radius:5px;background:var(--ac);color:var(--on-ac);font-size:12px;font-weight:800;display:inline-flex;align-items:center}',
+      '.axa .pl-filam > summary{display:flex;justify-content:space-between;align-items:center;min-height:44px;cursor:pointer;list-style:none}',
+      '.axa .pl-filam > summary::-webkit-details-marker{display:none}',
+      '.pl-menu{display:flex;flex-direction:column;gap:10px}',
+      '.pl-menu .btn{width:100%;justify-content:flex-start;min-height:44px}',
       '.axa .pl-lb .nt{font-size:11px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.axa .pl-lb .nt.wn{color:var(--wn-t)}',
       '.axa .pl-tr{height:5px;border-radius:3px;background:var(--track);overflow:hidden;display:block}',
@@ -284,7 +357,28 @@
       '@container app (max-width: 760px){',
       '.axa .pl-lay{grid-template-columns:minmax(0,1fr)}',
       '.axa .pl-gt{--lw:128px}',
-      '.axa .pl-hd .ac{width:100%}',
+      '.axa .pl-hd .ac{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}',
+      '.axa .pl-hd .ac .pl-sel{order:2;height:48px;font-size:14px;width:100%}',
+      '.axa .pl-hd .ac .pl-mais{order:1}',
+      '.axa .pl-hd .sub{font-size:13px}',
+      '.axa .pl-nav{height:48px;justify-content:space-between}',
+      '.axa .pl-nav a{width:44px;height:44px;font-size:20px}',
+      '.axa .pl-nav span{font-size:14px}',
+      '.axa .pl-mais{width:48px;height:48px;padding:0;justify-content:center;font-size:20px}',
+      '.axa .pl-hd .ac > a.btn{min-height:48px;order:3}',
+      '.axa .pl-chs{flex-wrap:nowrap;overflow-x:auto;margin:0 -16px;padding:2px 16px 6px;scrollbar-width:none}',
+      '.axa .pl-ch{height:44px;font-size:13px;padding:0 14px}',
+      '.axa .pl-fila{padding:4px 14px}',
+      '.axa .pl-fila[open]{padding-bottom:14px}',
+      '.axa .pl-fila .in{height:44px;font-size:14px}',
+      '.axa .pl-fc{min-height:44px}',
+      '.axa .pl-fc .r,.axa .pl-fc small{font-size:12px}',
+      '.axa .pl-lim > button{min-height:44px}',
+      '.axa .pl-lim > button small{font-size:12px}',
+      '.axa .pl-lim .it{min-height:44px;font-size:13px}',
+      '.axa .pl-lim .it .por{font-size:12px}',
+      '.axa .pl-cap > summary{min-height:44px}',
+      '.axa .pl-cap .note,.axa .pl-cap th{font-size:12px}',
       '.axa .pl-fil select{flex:1 1 140px;max-width:100%;min-width:0;width:0}',
       '.axa .pl-lb{padding:0 8px}',
       '.axa .pl-lim .it{grid-template-columns:70px minmax(0,1fr)}',
@@ -343,6 +437,182 @@
   }
   function sprintCurto(r) { return r ? SP().rotuloCurto(r) : ''; }
 
+  // ── As regras do gantt.html, puras (a suite roda lado a lado) ──────────
+  /* Cada funcao abaixo e a conta de um pedaco do gantt.html, sem DOM e sem
+     estado da tela: o que ela precisa vem por parametro. A suite recorta a do
+     gantt e esta e roda as duas na mesma amostra. */
+
+  /** SOLTAR A BARRA (onLayerDrop do gantt.html, o ramo 'card'): o inicio vai
+   *  para o dia em que ela caiu e o prazo anda os mesmos DIAS CORRIDOS que a
+   *  barra tinha; sem as duas datas, as duas viram o dia. O dev passa a ser so
+   *  quem recebeu a barra — numa dupla, o outro sai —, como no gantt. A unica
+   *  diferenca: soltar na PROPRIA linha so mexe nas datas (`mesmaLinha`). O
+   *  gantt gravava o dev da linha ate quando a barra so andava de lado, e a
+   *  dupla sumia num arraste que era so de data, sem aviso nenhum. */
+  function soltarBarra(m, dia, devDestino, mesmaLinha) {
+    var p = {};
+    if (m.inicio && m.entrega) {
+      var a = String(m.inicio).slice(0, 10).split('-'), b = String(m.entrega).slice(0, 10).split('-'), d = String(dia).split('-');
+      var dur = Math.round((Date.UTC(+b[0], +b[1] - 1, +b[2]) - Date.UTC(+a[0], +a[1] - 1, +a[2])) / 864e5);
+      p.inicio = dia;
+      p.entrega = new Date(Date.UTC(+d[0], +d[1] - 1, +d[2] + dur)).toISOString().slice(0, 10);
+    } else {
+      p.inicio = dia;
+      p.entrega = dia;
+    }
+    if (devDestino && !mesmaLinha) p.dev = devDestino;
+    return p;
+  }
+
+  /** OS CHIPS DE ETAPA (renderIndicators do gantt.html): a contagem e da base
+   *  inteira, e nao do recorte, e "Todos" e a soma das etapas. Pausada, "veio
+   *  de antes", API e Painel Dev contam por fora, porque a demanda continua na
+   *  etapa dela. Validacao da area entra como etapa: o gantt nao tinha o chip
+   *  e a demanda dela nao aparecia em chip nenhum, nem no Todos. */
+  function contaEtapas(lista, o) {
+    var c = { backlog: 0, levantar_req: 0, planning: 0, planejado: 0, em_andamento: 0, validacao_area: 0, validacao: 0, concluido: 0, atrasado: 0 };
+    var x = { __pausada__: 0, __herdada__: 0, __api__: 0, __painel__: 0 };
+    (lista || []).forEach(function (m) {
+      var e = o.etapaDe(m);
+      if (c[e] !== undefined) c[e]++;
+      if (o.pausada(m)) x.__pausada__++;
+      if (o.herdada && o.herdada(m)) x.__herdada__++;
+      if (o.viaApi && o.viaApi(m)) x.__api__++;
+      if (o.viaPainel && o.viaPainel(m)) x.__painel__++;
+    });
+    var todos = 0;
+    Object.keys(c).forEach(function (k) { todos += c[k]; });
+    return { etapas: c, paralelos: x, todos: todos };
+  }
+
+  /** VEIO DE ANTES DA JANELA (o `ehHerdada` do gantt, com a janela no lugar do
+   *  mes): ainda na esteira e com o prazo antes do primeiro dia. Nao se herda
+   *  para o futuro: a janela que comeca depois de hoje nao herdou nada. */
+  function herdadaNaJanela(m, gravada, ini, hoje, herdam) {
+    var b = String(m.entrega || m.inicio || '').slice(0, 10);
+    return !!b && herdam.indexOf(gravada) >= 0 && ini <= hoje && b < ini;
+  }
+
+  /** A OCUPACAO DO DEV EM DIAS (a barra de capacidade do gantt.html): dias
+   *  uteis da janela cobertos por alguma demanda, sobre os dias em que a
+   *  pessoa pode trabalhar. Feriado nao conta; ausencia sai do disponivel; o
+   *  agrupador (D0) nao ocupa dia, quem ocupa sao as quebras. */
+  function ocupacaoDoDev(devCards, dias, ausencias, ehAgrupador) {
+    var uteis = dias.filter(function (d) { return !d.fe; });
+    var ocup = {}, aus = {};
+    (devCards || []).forEach(function (m) {
+      if (ehAgrupador(m)) return;
+      var s = m.inicio || m.entrega, e = m.entrega || m.inicio;
+      if (!s) return;
+      uteis.forEach(function (d) { if (d.d >= s && d.d <= e) ocup[d.d] = true; });
+    });
+    (ausencias || []).forEach(function (a) {
+      uteis.forEach(function (d) { if (d.d >= a.inicio && d.d <= (a.fim || a.inicio)) aus[d.d] = true; });
+    });
+    var nAus = Object.keys(aus).length;
+    var disp = Math.max(0, uteis.length - nAus);
+    var ocupados = Object.keys(ocup);
+    var occ = ocupados.filter(function (d) { return !aus[d]; }).length;
+    return {
+      disp: disp, occ: occ, nAus: nAus,
+      pct: disp > 0 ? Math.min(Math.round(occ / disp * 100), 100) : (occ > 0 ? 100 : 0),
+      livres: Math.max(0, disp - occ),
+      conflitos: ocupados.filter(function (d) { return aus[d]; }).length
+    };
+  }
+
+  /** Em que sprint cai o dia (semanaIndexFor do gantt.html): o dia util, ou o
+   *  intervalo da sprint que contem o fim de semana. */
+  function semanaIndexFor(dataStr, semanas) {
+    if (!dataStr) return -1;
+    var i;
+    for (i = 0; i < semanas.length; i++) {
+      if (semanas[i].some(function (d) { return d.str === dataStr; })) return i;
+    }
+    for (i = 0; i < semanas.length; i++) {
+      var dd = semanas[i];
+      if (dd.length && dataStr >= dd[0].str && dataStr <= dd[dd.length - 1].str) return i;
+    }
+    return -1;
+  }
+
+  /** Os pontos de uma demanda espalhados pelas sprints que a barra ocupa,
+   *  proporcional aos dias uteis em cada uma, com o maior resto preservando a
+   *  soma (distribuiPorSprint do gantt.html). */
+  function distribuiPorSprint(pontos, inicio, entrega, semanas) {
+    var zero = semanas.map(function () { return 0; });
+    if (!pontos) return zero;
+    var ini = String(inicio || entrega || '').slice(0, 10);
+    var fim = String(entrega || inicio || '').slice(0, 10);
+    if (!ini || !fim) return zero;
+    var a = ini <= fim ? ini : fim, b = ini <= fim ? fim : ini;
+    var dias = semanas.map(function (sem) { return sem.filter(function (d) { return d.str >= a && d.str <= b; }).length; });
+    var totalDias = dias.reduce(function (t, n) { return t + n; }, 0);
+    if (!totalDias) {
+      var i = semanaIndexFor(fim, semanas);
+      if (i < 0) { for (var k = 0; k < semanas.length; k++) { if (semanas[k].length && semanas[k][0].str > fim) { i = k; break; } } }
+      if (i < 0) i = semanas.length - 1;
+      if (i >= 0) zero[i] = pontos;
+      return zero;
+    }
+    var exato = dias.map(function (n) { return (pontos * n) / totalDias; });
+    var parte = exato.map(function (v) { return Math.floor(v); });
+    var sobra = pontos - parte.reduce(function (t, n) { return t + n; }, 0);
+    var ordem = exato.map(function (v, j) { return { i: j, resto: v - Math.floor(v) }; }).sort(function (x, y) { return y.resto - x.resto; });
+    for (var q = 0; q < ordem.length && sobra > 0; q++) { parte[ordem[q].i] += 1; sobra -= 1; }
+    return parte;
+  }
+
+  /** PLANEJADO x ENTREGUE DO DEV, por sprint da janela (pontosPokerPorSemana
+   *  do gantt.html). O planejado entra pelo dia do plano e se espalha pelos
+   *  dias da barra; o entregue cai na sprint em que o dev entregou; os dois
+   *  so contam dentro da janela. O planejado se reparte em Valid. (com selo
+   *  da planning) e S/plan (sem), e os dois somam o total. */
+  function pontosDoDev(devCards, semanas, de, ate, o) {
+    var CAP = o.CAP;
+    var cards = (devCards || []).filter(function (m) { return !o.ehAgrupador(m); });
+    var dentro = function (d) { return !!d && d >= de && d <= ate; };
+    var zeros = function () { return semanas.map(function () { return 0; }); };
+    var plan = zeros(), validado = zeros(), semSelo = zeros(), feito = zeros();
+    var total = 0, totalFeito = 0, semPontuar = 0, totalValidado = 0;
+    cards.forEach(function (m) {
+      var p = CAP.planejados(m), e = CAP.entregues(m);
+      if (CAP.semPontuacao(m)) semPontuar += 1;
+      if (p && dentro(CAP.diaDoPlano(m) || m.inicio)) {
+        total += p;
+        var fatias = distribuiPorSprint(p, m.inicio, CAP.diaDoPlano(m), semanas);
+        var selada = o.temSelo(m);
+        if (selada) totalValidado += p;
+        for (var i = 0; i < fatias.length; i++) {
+          plan[i] += fatias[i];
+          if (selada) validado[i] += fatias[i]; else semSelo[i] += fatias[i];
+        }
+      }
+      if (e && dentro(CAP.diaDaEntrega(m))) {
+        totalFeito += e;
+        var k = semanaIndexFor(CAP.diaDaEntrega(m), semanas);
+        if (k >= 0) feito[k] += e;
+      }
+    });
+    return { porSemana: plan, porSemanaValidado: validado, porSemanaSemSelo: semSelo,
+             total: total, totalValidado: totalValidado, feito: feito, totalFeito: totalFeito, semPontuar: semPontuar };
+  }
+
+  /** A cor do executado na sprint (o quadro do gantt.html): verde quando bateu
+   *  o planejado ou fez a semana forte (`sprintForte`); vermelho so depois que
+   *  a sprint fechou abaixo do plano; o resto fica neutro. */
+  function execDaSprint(p, f, fechou, CAP) {
+    var forte = CAP.sprintForte(p, f);
+    var porVolume = forte && !(p && f >= p);
+    var cls = forte ? 'cq-bateu' : (fechou && p ? 'cq-abaixo' : 'cq-neutro');
+    var rot = forte
+      ? (porVolume ? f + ' pontos na sprint — semana forte' : 'bateu o planejado') + (fechou ? '' : ' (sprint ainda em curso)')
+      : !p ? 'nada planejado nesta sprint'
+      : !fechou ? 'sprint ainda em curso — ainda dá tempo'
+      : 'abaixo do planejado';
+    return { cls: cls, rot: rot };
+  }
+
   // ── A janela: sprints seguidas, uma coluna por dia de semana ───────────
   /* A coluna do feriado continua na regua (riscada), como no prototipo: sumir
      com o dia faria a segunda-feira de feriado parecer que nao existe. Por
@@ -382,7 +652,7 @@
   function colAnt(J, d) { for (var i = J.n - 1; i >= 0; i--) if (J.dias[i].d <= d) return i; return -1; }
 
   // ── Filtros (matchesFilters do gantt.html) ─────────────────────────────
-  function passa(D, m) {
+  function passa(D, m, J) {
     if (F.tipo === '__sem__') { if (m.tipo) return false; }
     else if (F.tipo && m.tipo !== F.tipo) return false;
     // Roll-up: filtrar por "AXCred - Cadastro" traz os submodulos dele.
@@ -393,11 +663,18 @@
       if (F.sprintPo === '__fora__' ? !SP().foraDaSprint(m) : !SP().naSprint(m, F.sprintPo)) return false;
     }
     if (F.projeto && m.projeto_id !== F.projeto) return false;
-    // Pausada e estado paralelo a etapa, nao um valor dela.
+    // Os chips paralelos (pausada, veio de antes, API, Painel Dev) nao sao
+    // valores da etapa: a demanda continua na dela (matchesFilters).
     if (F.etapa === '__pausada__') { if (!H.pausada(m)) return false; }
+    else if (F.etapa === '__herdada__') { if (!J || !herdadaNaJanela(m, etapaGravada(m), J.ini, H.hoje(), herdam())) return false; }
+    else if (F.etapa === '__api__') { if (!(raiz.ABERTURA && raiz.ABERTURA.viaEndpoint(m))) return false; }
+    else if (F.etapa === '__painel__') { if (!(raiz.ABERTURA && raiz.ABERTURA.viaPainelDev(m))) return false; }
     else if (F.etapa && H.etapaDe(m) !== F.etapa) return false;
     return true;
   }
+  function herdam() { return (raiz.PRAZO && raiz.PRAZO.ETAPAS_QUE_HERDAM) || ['planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao']; }
+  /** A etapa do chip, quando e etapa de verdade (a fila responde por ela). */
+  function etapaDoChip() { return F.etapa && F.etapa.indexOf('__') !== 0 ? F.etapa : ''; }
   function nFiltros() {
     return ['tipo', 'tema', 'frente', 'prio', 'sprintPo', 'projeto', 'etapa'].filter(function (k) { return F[k]; }).length + (F.dev ? 1 : 0);
   }
@@ -409,19 +686,26 @@
     var hoje = H.hoje();
     var vivas = H.visiveis();
     var HERDAM = (raiz.PRAZO && raiz.PRAZO.ETAPAS_QUE_HERDAM) || ['planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao'];
-    var herdaAqui = J.ini <= hoje;   // nao se herda para o futuro (PRAZO.herdadaDeMesAnterior)
     var eHoje = colAnt(J, hoje < J.fim ? hoje : J.fim);
 
     // Quem tem filho e agrupador (a D0): a barra dele nao ocupa dia.
     var filhos = {};
     vivas.forEach(function (m) { var p = String(m.parent_id || ''); if (p) (filhos[p] = filhos[p] || []).push(m.id); });
+    // O agrupador das contas e o do VINCULO (o mesmo do gantt.html), lido uma vez por demanda.
+    var agr = {};
+    var ehAgr = function (m) {
+      if (agr[m.id] === undefined) agr[m.id] = raiz.VINCULO ? raiz.VINCULO.ehAgrupador(D.melhorias || [], m) : !!filhos[m.id];
+      return agr[m.id];
+    };
 
     // Linhas: o time cadastrado mais quem tem barra na janela.
     var canon = {}, ordem = [];
     var poe = function (n) { var k = norm(n); if (k && !canon[k]) { canon[k] = n; ordem.push(k); } };
     devsAtivos(D).forEach(poe);
 
-    var barras = [], semGrupo = [];
+    // `cartoes`: o que cada pessoa tem com data e passa nos filtros (o `devCards`
+    // do gantt): as contas de dias e de pontos leem daqui, dentro ou fora da janela.
+    var barras = [], semGrupo = [], cartoes = {};
     vivas.forEach(function (m0) {
       var m = comPend(m0);
       var gr = etapaGravada(m);
@@ -430,14 +714,15 @@
       if (!nomes.length) return;
       var a = iso(m.inicio) || iso(m.entrega), b = iso(m.entrega) || iso(m.inicio);
       if (!a) { if (filhos[m.id]) semGrupo.push(m); return; }
+      if (!passa(D, m, J)) return;
+      nomes.forEach(function (n) { (cartoes[norm(n)] = cartoes[norm(n)] || []).push(m); });
       if (b < a) b = a;
       var her = false;
       if (b < J.ini) {
         // A HERDADA: prazo antes da janela e ainda na esteira. O prazo NAO
         // muda; a barra ocupa do inicio da janela ate hoje (faixaDoCard).
-        if (herdaAqui && HERDAM.indexOf(gr) >= 0) her = true; else return;
+        if (herdadaNaJanela(m, gr, J.ini, hoje, HERDAM)) her = true; else return;
       } else if (a > J.fim) return;
-      if (!passa(D, m)) return;
       var s, e;
       if (her) { s = 0; e = eHoje; } else { s = colProx(J, a); e = colAnt(J, b); }
       if (s >= J.n || e < 0 || e < s) return;
@@ -457,7 +742,7 @@
 
     // A D0 sem data propria: a barra cobre as quebras daquela linha (gantt.html).
     semGrupo.forEach(function (m) {
-      if (!passa(D, m)) return;
+      if (!passa(D, m, J)) return;
       nomesDe(m).forEach(function (n) {
         var l = porK[norm(n)];
         if (!l) return;
@@ -486,23 +771,15 @@
       return String(x.nome).localeCompare(String(y.nome), 'pt-BR');
     });
 
-    // Capacidade por pessoa: a conta do modulo, sprint a sprint da janela,
-    // cada pessoa como a propria "frente" (30 de capacidade, dupla divide).
-    var cap = {};
-    var nomesCap = mostra.map(function (l) { return l.nome; });
-    J.sprints.forEach(function (r) {
-      SP().capacidadeDaSprint(D, r, {
-        devs: nomesCap, frenteDoDev: function (n) { return canon[norm(n)] || n; },
-        frenteDe: function () { return '(sem dev)'; }, semFrente: '(sem dev)', etapaDe: H.etapaDe
-      }).forEach(function (e) {
-        var c = cap[norm(e.frente)] || (cap[norm(e.frente)] = { alocado: 0, capacidade: 0 });
-        c.alocado += e.alocado; c.capacidade += e.capacidade;
-      });
+    // As sprints da janela como o quadro S1..Sn do gantt as le: os dias uteis de cada uma.
+    var semanas = J.faixas.map(function (fx, k) {
+      return J.dias.filter(function (dd) { return dd.sk === k && !dd.fe; }).map(function (dd) { return { str: dd.d }; });
     });
+    var CAP = raiz.CAPACIDADE;
+    var temSelo = function (m) { return raiz.SELO ? !!raiz.SELO.de(m) : false; };
 
     mostra.forEach(function (l) {
       // Faixas: o que tem selo sobe; dentro do grupo, quem comeca antes vem antes.
-      var temSelo = function (m) { return raiz.SELO ? !!raiz.SELO.de(m) : false; };
       l.barras.sort(function (x, y) {
         var sx = temSelo(x.m) ? 0 : 1, sy = temSelo(y.m) ? 0 : 1;
         return sx - sy || x.s - y.s || (y.e - y.s) - (x.e - x.s);
@@ -515,30 +792,26 @@
         faixas.push([x]); x.f = faixas.length - 1;
       });
       l.nf = faixas.length;
-      // Dias: ocupados pelas barras (sem a D0), ausentes, livres e em conflito.
-      var ocup = {}, ausD = {}, uteis = 0;
+      // A celula riscada de cada dia ausente (o desenho).
+      var ausD = {};
       J.dias.forEach(function (dd, i) {
         if (dd.fe) return;
-        uteis++;
         l.aus.forEach(function (x) { if (dd.d >= iso(x.inicio) && dd.d <= iso(x.fim || x.inicio)) ausD[i] = x; });
       });
-      l.barras.forEach(function (x) {
-        if (x.grupo) return;
-        for (var i = x.s; i <= x.e; i++) if (!J.dias[i].fe) ocup[i] = true;
-      });
-      var nAus = Object.keys(ausD).length;
-      var disp = Math.max(0, uteis - nAus);
-      var occ = Object.keys(ocup).filter(function (i) { return !ausD[i]; }).length;
       l.ausD = ausD;
-      l.livres = Math.max(0, disp - occ);
-      l.disp = disp;
-      l.nAus = nAus;
-      l.conflito = Object.keys(ocup).filter(function (i) { return ausD[i]; }).length;
-      var c = cap[l.k] || { alocado: 0, capacidade: SP().PONTOS_POR_DEV * J.sprints.length };
-      l.cap = { alocado: Math.round(c.alocado * 10) / 10, capacidade: c.capacidade };
+      // As contas do rotulo, as do gantt.html (ver as regras puras acima).
+      var cards = cartoes[l.k] || [];
+      l.oc = ocupacaoDoDev(cards, J.dias, l.aus.map(function (x) { return { inicio: iso(x.inicio), fim: iso(x.fim || x.inicio) }; }), ehAgr);
+      l.pts = CAP ? pontosDoDev(cards, semanas, J.ini, J.fim, { CAP: CAP, ehAgrupador: ehAgr, temSelo: temSelo }) : null;
+      var hers = cards.filter(function (m) { return herdadaNaJanela(m, etapaGravada(m), J.ini, hoje, HERDAM); });
+      var meses = {};
+      hers.forEach(function (m) { var x = raiz.PRAZO ? raiz.PRAZO.mesDoPrazo(m) : ''; if (x) meses[x] = true; });
+      l.her = { n: hers.length, meses: Object.keys(meses).sort(),
+        pts: CAP ? Math.round(hers.reduce(function (t, m) { return t + CAP.planejados(m) / Math.max(1, nomesDe(m).length); }, 0)) : 0 };
+      l.rolou = CAP && CAP.rolagens ? CAP.rolagens(cards) : { total: 0, alerta: [] };
     });
 
-    return { J: J, linhas: mostra, todas: linhas, barras: barras, canon: canon, filhos: filhos, hoje: hoje };
+    return { J: J, linhas: mostra, todas: linhas, barras: barras, canon: canon, filhos: filhos, hoje: hoje, semanas: semanas };
   }
 
   // ── A fila (renderBacklog do gantt.html) ──────────────────────────────
@@ -546,7 +819,7 @@
      por ela — e o que estiver sem pontos aparece para ser aberto, mas nao
      arrasta: agendar sem estimativa e o que se quer evitar. */
   function fila(D) {
-    var et = F.etapa && F.etapa !== '__pausada__' ? F.etapa : '';
+    var et = etapaDoChip();
     var lista = H.visiveis().map(comPend).filter(function (m) {
       if (etapaGravada(m) === 'negada' || m.status === 'negada') return false;
       if (et) { if (H.etapaDe(m) !== et) return false; }
@@ -646,7 +919,6 @@
     var sps = {};
     vivas.forEach(function (m) { var s = SP().doPO(m); if (s) sps[s] = true; });
     M.J.sprints.forEach(function (r) { sps[r] = true; });
-    var ETS = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'atrasado'];
     var projs = (D.projetos || []).slice().sort(function (a, b) { return String(a.codigo || '').localeCompare(String(b.codigo || '')); });
     var s = function (k, rot, ops) { return '<select data-plf="' + k + '" aria-label="' + rot + '"' + (F[k] ? ' class="on"' : '') + '>' + ops + '</select>'; };
     var n = nFiltros();
@@ -660,7 +932,6 @@
       s('sprintPo', 'Sprint do PM/PO', opt('', 'Toda sprint', F.sprintPo) + opt('__fora__', 'Fora da sprint', F.sprintPo) +
         Object.keys(sps).filter(function (r) { return SP().rotuloValido(r); }).sort(function (a, b) { return chave(a).localeCompare(chave(b)); })
           .map(function (r) { return opt(r, 'Sprint ' + sprintCurto(r), F.sprintPo); }).join('')) +
-      s('etapa', 'Etapa', opt('', 'Toda etapa', F.etapa) + ETS.map(function (e) { return opt(e, (H.ETAPA_POR_ID[e] || {}).rotulo || e, F.etapa); }).join('') + opt('__pausada__', 'Pausada', F.etapa)) +
       s('projeto', 'Projeto', opt('', 'Todos os projetos', F.projeto) + projs.map(function (p) { return opt(p.id, (p.codigo ? p.codigo + ' · ' : '') + (p.nome || ''), F.projeto); }).join('')) +
       (n ? '<button type="button" class="btns" data-pl="limpar">Limpar (' + n + ')</button>' : ''), n, { id: 'planejamento' }) +
       '<span class="ct">' + H.plural(M.barras.length, 'demanda no período', 'demandas no período') + ' · ' + H.plural(M.linhas.length, 'pessoa', 'pessoas') + '</span>' +
@@ -689,7 +960,7 @@
       (js === 0 ? ' jpri' : js > 0 ? ' jsel' : '');
     var sprintsFora = x.her && raiz.PRAZO ? raiz.PRAZO.sprintsEstouradas(m, etapaGravada(m), M.hoje) : 0;
     return '<a class="' + cls + '" href="' + H.hrefItem(m) + '" draggable="false" data-id="' + esc(m.id) + '" data-ln="' + esc(l.nome) + '"' +
-      ' data-s="' + x.s + '" data-e="' + x.e + '"' + (arr ? ' data-arr="1"' : '') + (ed ? ' data-ed="1"' : '') +
+      ' data-s="' + x.s + '" data-e="' + x.e + '"' + (x.cs ? ' data-cs="1"' : '') + (arr ? ' data-arr="1"' : '') + (ed ? ' data-ed="1"' : '') +
       ' style="grid-column:' + (x.s + 2) + ' / ' + (x.e + 3) + ';grid-row:' + (x.f + 1) + '" title="' + esc(tit) + '">' +
       (arr && !x.cs && !x.her ? '<i class="pl-h pl-hi" aria-hidden="true"></i>' : '') +
       (js === 0 ? '<span class="jtag">PRINCIPAL</span>' : '') +
@@ -700,6 +971,88 @@
       (semPts ? '<span class="x" style="opacity:.75">' + ico('cards') + '</span>' : '') +
       '<span class="t">' + esc(m.titulo || '') + '</span>' +
       (arr && !x.ce ? '<i class="pl-h pl-hf" aria-hidden="true"></i>' : '') + '</a>';
+  }
+
+  var MES_C = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  /** A sprint no quadro do rotulo: "S2" de "S2-11-2026". */
+  function sprintMini(r) { return String(r || '').split('-')[0]; }
+
+  /** O ROTULO DO DEV (a `dev-label` do gantt.html): o nome abre o resumo da
+   *  pessoa; a barra e a porcentagem sao DIAS OCUPADOS sobre os disponiveis;
+   *  depois os dias livres, ausentes e em conflito, os pontos planejados e
+   *  entregues, o quadro por sprint (Valid. / S/plan / Exec.), o que esta sem
+   *  pontuar, o que veio de antes e o que rolou de sprint. */
+  function htmlRotulo(D, M, l, meu, axcred) {
+    var oc = l.oc, pt = l.pts, CAP = raiz.CAPACIDADE;
+    var corBar = oc.pct >= 85 ? 'var(--wn)' : 'var(--ok)';
+    var ausTxt = l.aus.map(function (x) {
+      return (AUS[x.tipo] || AUS.outro).rot.toLowerCase() + ' ' + H.dm(x.inicio) + (x.fim && x.fim !== x.inicio ? '–' + H.dm(x.fim) : '');
+    }).join(' · ');
+    var h = '<div class="pl-lb"><span class="nm">' +
+      (raiz.RESUMODEV ? '<button type="button" class="pl-nmb" data-pl-resumo="' + esc(l.nome) + '"' + (meu ? ' style="color:var(--ac-t)"' : '') +
+        ' title="' + esc('Ver o resumo de ' + l.nome + ' — atrasado, em andamento e em validação') + '">' + esc(l.nome) + '</button>'
+        : '<b' + (meu ? ' style="color:var(--ac-t)"' : '') + ' title="' + esc(l.nome) + '">' + esc(l.nome) + '</b>') +
+      (axcred ? chip('AXCred', 'wn', 'DEV-AXCred: aparece primeiro') : '') + '</span>' +
+      '<span class="pc" title="Dias úteis da janela com alguma demanda, sobre os dias em que a pessoa pode trabalhar (feriado e ausência saem)">' +
+        '<span class="pl-tr"><i style="width:' + Math.min(100, oc.pct) + '%;background:' + corBar + '"></i></span><b>' + oc.pct + '%</b></span>' +
+      '<span class="nt">' + H.plural(oc.livres, 'dia livre', 'dias livres') + ' / ' + oc.disp + '</span>' +
+      (oc.nAus ? '<span class="nt" title="' + esc('Dias úteis de ausência na janela, fora do total disponível: ' + ausTxt) + '">' + ico('calendar') + ' ' + H.plural(oc.nAus, 'dia ausente', 'dias ausente') + '</span>' : '') +
+      (oc.conflitos ? '<span class="nt wn" title="Há demanda planejada em dia de ausência: considere realocar">' + ico('alert') + ' ' + H.plural(oc.conflitos, 'dia', 'dias') + ' em conflito</span>' : '');
+    if (pt && (pt.total > 0 || pt.totalFeito > 0)) {
+      h += '<span class="nt pk" title="Pontos planejados (pela data do prazo combinado) contra entregues (pela data em que o dev entregou), dentro da janela.">' +
+        '<b>' + pt.total + '</b> pt planejados · <b class="ok">' + pt.totalFeito + '</b> entregues <span>(' + esc(CAP.rotulo(pt.total, pt.totalFeito)) + ')</span></span>';
+      var ns = M.semanas.length;
+      var linha = function (rot, tit, vals, cls) {
+        return '<span class="r" title="' + esc(tit) + '">' + rot + '</span>' + vals.map(function (v, i) {
+          var c = cls(v, i);
+          return '<span class="v ' + c.cls + '" title="' + esc(c.tit) + '">' + v + '</span>';
+        }).join('');
+      };
+      var fimDa = function (i) { var sem = M.semanas[i] || []; return sem.length ? sem[sem.length - 1].str : ''; };
+      h += '<div class="pl-cq" style="--cq:' + ns + '" title="Pontos por sprint: planejado pela data do prazo combinado, executado pela data em que o dev entregou.">' +
+        '<span></span>' + M.J.sprints.map(function (r) { return '<span class="hd">' + esc(sprintMini(r)) + '</span>'; }).join('') +
+        linha('Valid.', 'Pontos que passaram pelo Planning Poker e têm selo de validação.', pt.porSemanaValidado,
+          function (v, i) { return { cls: 'val', tit: 'Sprint ' + sprintCurto(M.J.sprints[i]) + ': ' + v + ' pt validados no Planning Poker.' }; }) +
+        linha('S/plan', 'Pontos na sprint que NÃO passaram pelo Planning Poker — estimados por fora da reunião.', pt.porSemanaSemSelo,
+          function (v, i) { return { cls: 'sval', tit: 'Sprint ' + sprintCurto(M.J.sprints[i]) + ': ' + v + ' pt sem passar pela planning.' }; }) +
+        linha('Exec.', 'Pontos entregues pelo dev na sprint.', pt.feito, function (v, i) {
+          var fim = fimDa(i);
+          var x = execDaSprint(pt.porSemana[i] || 0, v || 0, !!fim && fim < M.hoje, CAP);
+          return { cls: x.cls, tit: x.rot };
+        }) + '</div>';
+    }
+    if (pt && pt.semPontuar) h += '<span class="nt wn" title="Demandas alocadas a esta pessoa sem pontuação no Planning Poker: o planejado dela está menor do que é. Pontue para o cruzamento fechar.">◐ ' + pt.semPontuar + ' sem pontuar</span>';
+    if (l.her.n) h += '<span class="nt" title="Demandas que atravessaram o início da janela sem concluir. O prazo delas NÃO foi movido — continuam combinadas para a data original e contando atraso. Estes pontos ficam FORA do planejado da janela.">⇥ ' +
+      l.her.n + ' de ' + (l.her.meses.map(function (x) { return MES_C[+x.slice(5, 7) - 1]; }).join(', ') || 'antes') + (l.her.pts ? ' · ' + l.her.pts + ' pt' : '') + '</span>';
+    if (l.rolou.total) h += '<span class="nt" title="Demandas remarcadas de uma sprint para outra (avanço líquido do prazo, descontados os dias de pausa).">⤼ ' + l.rolou.total + ' ' + (l.rolou.total === 1 ? 'rolou de sprint' : 'rolaram de sprint') + '</span>';
+    if (l.rolou.alerta.length) h += '<span class="nt wn" title="' + esc('Empurradas mais de ' + CAP.SPRINTS_PARA_ALERTA + ' sprints. Duas é tolerância de replanejamento; da terceira em diante a demanda está sendo adiada.') + '">' + ico('alert') + ' ' +
+      esc(l.rolou.alerta.map(function (r) { return r.codigo + ' (+' + r.sprints + ')'; }).join(', ')) + '</span>';
+    return h + '</div>';
+  }
+
+  /** OS CHIPS DE ETAPA, COM A CONTAGEM (a barra de indicadores do gantt.html):
+   *  clicar filtra o quadro e a fila; de novo, limpa. */
+  var ETAPAS_CHIP = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'atrasado'];
+  function htmlChips(D, M) {
+    var A = raiz.ABERTURA, ini = M.J.ini, hoje = M.hoje, HR = herdam();
+    var c = contaEtapas(H.visiveis(), {
+      etapaDe: H.etapaDe, pausada: H.pausada,
+      herdada: function (m) { return herdadaNaJanela(m, etapaGravada(m), ini, hoje, HR); },
+      viaApi: A ? A.viaEndpoint : null, viaPainel: A ? A.viaPainelDev : null
+    });
+    var ch = function (k, rot, n, cor, tit) {
+      var on = F.etapa === k;
+      return '<button type="button" class="pl-ch' + (on ? ' on' : '') + '" data-pl-etapa="' + k + '" aria-pressed="' + on + '"' + (tit ? ' title="' + esc(tit) + '"' : '') + '>' +
+        '<i style="background:' + cor + '"></i>' + esc(rot) + ' <b>' + n + '</b></button>';
+    };
+    var h = ch('', 'Todos', c.todos, 'var(--tx3)', 'Todas as etapas');
+    ETAPAS_CHIP.forEach(function (k) { var e = H.ETAPA_POR_ID[k] || { rotulo: k, dot: 'var(--tx4)' }; h += ch(k, e.rotulo, c.etapas[k], e.dot); });
+    var p = c.paralelos;
+    if (p.__pausada__) h += ch('__pausada__', 'Pausada', p.__pausada__, 'var(--mg, var(--pu))', 'Prazo suspenso. A entrega fica oculta e volta empurrada pelos dias parados.');
+    if (p.__herdada__) h += ch('__herdada__', '⇥ Veio de antes', p.__herdada__, 'var(--tx2)', 'Ainda na esteira, com o prazo antes do início do período. O prazo NÃO foi movido.');
+    if (p.__api__) h += ch('__api__', 'Inclusão via API', p.__api__, 'var(--wn)', 'Nasceram pelo endpoint da API — script ou integração. Conta procedência.');
+    if (p.__painel__) h += ch('__painel__', 'Aberta no Painel Dev', p.__painel__, 'var(--in)', 'O próprio dev abriu no Painel Dev. Conta procedência.');
+    return '<div class="pl-chs" role="group" aria-label="Etapas">' + h + '</div>';
   }
 
   function htmlQuadro(D, M) {
@@ -737,25 +1090,10 @@
 
     var meus = H.meusNomes().map(norm);
     var perfil = D.devs_perfil || {};
-    var P = raiz.PIPELINES;
     var corpo = M.linhas.map(function (l) {
-      var nr = Math.max(2, l.nf + (l.conflito ? 1 : 0) > 2 ? Math.max(l.nf, 3) : Math.max(l.nf, 2));
-      var pc = l.cap.capacidade ? Math.round(l.cap.alocado / l.cap.capacidade * 100) : 0;
-      var cor = pc > 100 ? 'var(--dg-t)' : pc >= 85 ? 'var(--wn-t)' : 'var(--ok-t)';
-      var corBar = pc > 100 ? 'var(--dg)' : pc >= 85 ? 'var(--wn)' : 'var(--ok)';
-      var ausTxt = l.aus.map(function (x) {
-        return (AUS[x.tipo] || AUS.outro).rot.toLowerCase() + ' ' + H.dm(x.inicio) + (x.fim && x.fim !== x.inicio ? '–' + H.dm(x.fim) : '');
-      }).join(' · ');
-      var nota = l.livres + ' de ' + l.disp + ' dias livres' + (ausTxt ? ' · ' + ausTxt : (P ? ' · ' + (P.doDev(l.nome, D.devs_perfil) || '') : ''));
+      var nr = Math.max(2, l.nf);
       var h = '<div class="pl-ln' + (criaNoDia() ? ' cria' : '') + '" data-pl-dev="' + esc(l.nome) + '" style="' + vars + ';--nr:' + nr + '">' +
-        '<div class="pl-lb"><span class="nm"><b' + (meus.indexOf(l.k) >= 0 ? ' style="color:var(--ac-t)"' : '') + ' title="' + esc(l.nome) + '">' + esc(l.nome) + '</b>' +
-        ((perfil[l.nome] || {}).axcred ? chip('AXCred', 'wn', 'DEV-AXCred: aparece primeiro') : '') + '</span>' +
-        '<span class="cp" style="color:' + cor + '" title="Pontos das demandas que o PM/PO pôs nas sprints da janela, contra 30 por sprint">' +
-        H.num(l.cap.alocado) + ' / ' + l.cap.capacidade + ' pts</span>' +
-        '<span class="pl-tr"><i style="width:' + Math.min(100, pc) + '%;background:' + corBar + '"></i></span>' +
-        '<span class="nt" title="' + esc(nota) + '">' + esc(nota) + '</span>' +
-        (l.conflito ? '<span class="nt wn" title="Há demanda planejada em dia de ausência: considere realocar">' + ico('alert') + ' ' + H.plural(l.conflito, 'dia', 'dias') + ' em conflito</span>' : '') +
-        '</div>';
+        htmlRotulo(D, M, l, meus.indexOf(l.k) >= 0, !!(perfil[l.nome] || {}).axcred);
       J.dias.forEach(function (dd, i) {
         var au = l.ausD[i];
         var cls = 'pl-c' + (dd.fe ? ' fe' : au ? ' au' : '') + (dd.d === hoje ? ' hj' : '');
@@ -859,46 +1197,174 @@
     grava(r.patches, r.msg);
   }
 
+  /** No celular (o app ate 760 px, a container query `app` do nucleo) o
+   *  Planejamento e a AGENDA: a regua de dias nao cabe num telefone. */
+  function celular() {
+    if (typeof document === 'undefined') return false;
+    var a = document.querySelector('.axa .app');
+    var w = a && a.clientWidth ? a.clientWidth : (raiz.innerWidth || 1440);
+    return w <= 760;
+  }
+
+  /** O prazo no cartao da agenda, do jeito que o dev pergunta. */
+  function prazoDoCartao(m, x, hoje) {
+    var e = H.etapaDe(m);
+    if (e === 'concluido') return { txt: 'concluída', cls: 'ok' };
+    if (H.pausada(m)) return { txt: 'pausada' + (m.pausa_motivo ? ': ' + m.pausa_motivo : ''), cls: 'mg' };
+    if (e === 'atrasado') {
+      var at = H.atrasoDe(m);
+      return { txt: at ? 'vencida há ' + H.plural(at, 'dia', 'dias') : 'vencida', cls: 'dg' };
+    }
+    if (e === 'validacao' || e === 'validacao_area') return { txt: 'entregue · ' + ((H.ETAPA_POR_ID[e] || {}).rotulo || e).toLowerCase(), cls: 'wn' };
+    var pz = x.b;   // o prazo do dev, o fim da barra
+    if (!pz) return null;
+    var n = Math.round((dUTC(pz) - dUTC(hoje)) / 864e5);
+    return n < 0 ? { txt: 'prazo ' + H.dm(pz), cls: 'dg' } : n === 0 ? { txt: 'vence hoje', cls: 'wn' }
+      : { txt: 'vence em ' + H.plural(n, 'dia', 'dias') + ' (' + H.dm(pz) + ')', cls: n <= 2 ? 'wn' : '' };
+  }
+
+  /** O cartao da agenda: toque abre a demanda na gaveta; "Mover" e o seletor
+   *  unico de etapa (`etapasDoSeletor`, o mesmo do Quadro e do Item). */
+  function cartaoAgenda(M, x, comDev) {
+    var m = x.m;
+    var js = EST.juntar ? EST.juntar.sel.indexOf(m.id) : -1;
+    var mover = !EST.juntar && !EST.apresentar && podeMover(m)
+      ? raiz.AXIS_ACOES.botao('moverPara', m, 'Mover', 'btns pl-agm', { ico: 'board', titulo: 'Mover ' + (m.codigo || '') + ' para outra etapa' }) : '';
+    var pz = prazoDoCartao(m, x, M.hoje);
+    var datas = x.derivada ? 'D0: cobre as quebras' : x.her ? 'veio de antes · prazo ' + H.dm(x.b) : H.dm(x.a) + ' → ' + H.dm(x.b);
+    return '<div class="pl-agc k-' + corDe(m) + (js === 0 ? ' jpri' : js > 0 ? ' jsel' : '') + '">' +
+      '<a class="pl-aga" href="' + H.hrefItem(m) + '" data-id="' + esc(m.id) + '" data-pl-card="1">' +
+        '<span class="r1"><span class="code">' + esc(m.codigo || '—') + '</span>' + H.chipEtapa(m) + (js === 0 ? '<span class="jtag">PRINCIPAL</span>' : '') + '</span>' +
+        '<b class="t">' + esc(m.titulo || '') + '</b>' +
+        '<span class="r2">' + esc(datas) + (comDev ? ' · ' + esc(x.nomes.join(' / ')) : '') + (pontuado(m) ? ' · ' + m.poker_pontos + ' pts' : '') + '</span>' +
+        (pz ? '<span class="pz' + (pz.cls ? ' ' + pz.cls : '') + '">' + esc(pz.txt) + '</span>' : '') +
+      '</a>' + (mover ? '<div class="pe">' + mover + '</div>' : '') + '</div>';
+  }
+
+  function ausChip(x, comNome) {
+    var t = AUS[x.tipo] || AUS.outro;
+    return chip(esc((comNome ? x.dev + ' · ' : '') + t.rot + ' ' + H.dm(x.inicio) + (x.fim && x.fim !== x.inicio ? '–' + H.dm(x.fim) : '')), t.cor, x.obs || '');
+  }
+
+  /** AGENDA POR PESSOA: o rotulo do gantt em cima (ocupacao, pontos,
+   *  ausencias) e as demandas dela por ordem de inicio. */
+  function agendaPessoa(D, M) {
+    var meus = H.meusNomes().map(norm), perfil = D.devs_perfil || {};
+    return M.linhas.map(function (l) {
+      var oc = l.oc, pt = l.pts, CAP = raiz.CAPACIDADE;
+      var bars = l.barras.slice().sort(function (x, y) { return (x.her ? 0 : 1) - (y.her ? 0 : 1) || x.s - y.s || x.e - y.e; });
+      return '<section class="pl-agp" data-pl-dev="' + esc(l.nome) + '"><header>' +
+        (raiz.RESUMODEV ? '<button type="button" class="pl-nmb" data-pl-resumo="' + esc(l.nome) + '"' + (meus.indexOf(l.k) >= 0 ? ' style="color:var(--ac-t)"' : '') + '>' + esc(l.nome) + '</button>' : '<b>' + esc(l.nome) + '</b>') +
+        ((perfil[l.nome] || {}).axcred ? chip('AXCred', 'wn') : '') + '<b class="pct">' + oc.pct + '%</b></header>' +
+        '<span class="pl-tr"><i style="width:' + Math.min(100, oc.pct) + '%;background:' + (oc.pct >= 85 ? 'var(--wn)' : 'var(--ok)') + '"></i></span>' +
+        '<span class="nt">' + H.plural(oc.livres, 'dia livre', 'dias livres') + ' / ' + oc.disp +
+          (pt && (pt.total || pt.totalFeito) ? ' · ' + pt.total + ' pt planejados · ' + pt.totalFeito + ' entregues (' + esc(CAP.rotulo(pt.total, pt.totalFeito)) + ')' : '') + '</span>' +
+        (l.aus.length ? '<div class="aus">' + l.aus.map(function (x) { return ausChip(x, false); }).join('') + '</div>' : '') +
+        (oc.conflitos ? '<span class="nt wn">' + ico('alert') + ' ' + H.plural(oc.conflitos, 'dia', 'dias') + ' com demanda em dia de ausência</span>' : '') +
+        (bars.length ? bars.map(function (x) { return cartaoAgenda(M, x, false); }).join('') : '<span class="note">Nada com data neste período.</span>') +
+        '</section>';
+    }).join('');
+  }
+
+  /** AGENDA POR DIA: o que comeca e o que vence em cada dia util da janela,
+   *  com o feriado e quem esta ausente; o que ja vinha de antes fica no topo. */
+  function agendaDia(D, M) {
+    var J = M.J, vistos = {}, todas = [];
+    M.linhas.forEach(function (l) {
+      l.barras.forEach(function (x) { if (x.derivada || vistos[x.m.id]) return; vistos[x.m.id] = true; todas.push(x); });
+    });
+    var antes = todas.filter(function (x) { return x.her || x.cs; }).sort(function (x, y) { return String(x.b).localeCompare(String(y.b)); });
+    var h = antes.length ? '<section class="pl-agd"><h3>Em curso desde antes do período <span class="note">' + antes.length + '</span></h3>' +
+      antes.map(function (x) { return cartaoAgenda(M, x, true); }).join('') + '</section>' : '';
+    J.dias.forEach(function (dd, i) {
+      var come = todas.filter(function (x) { return !x.her && !x.cs && x.s === i; });
+      var vence = todas.filter(function (x) { return !x.her && !x.ce && x.e === i && (x.cs || x.s !== i); });
+      var fora = [];
+      M.linhas.forEach(function (l) { l.aus.forEach(function (x) { if (dd.d >= iso(x.inicio) && dd.d <= iso(x.fim || x.inicio)) fora.push(x); }); });
+      var hj = dd.d === M.hoje;
+      var tit = DS[dow(dd.d)].charAt(0).toUpperCase() + DS[dow(dd.d)].slice(1) + ', ' + H.dm(dd.d);
+      h += '<section class="pl-agd' + (hj ? ' hj' : '') + '"' + (hj ? ' id="pl-hoje"' : '') + '><h3>' + esc(tit) +
+        (hj ? ' ' + chip('hoje', 'ac') : '') + (dd.fe ? ' ' + chip(esc('Feriado · ' + dd.fe), 'tl') : '') + '</h3>' +
+        (fora.length ? '<div class="aus">' + fora.map(function (x) { return ausChip(x, true); }).join('') + '</div>' : '') +
+        (come.length ? '<span class="lab">COMEÇAM</span>' + come.map(function (x) { return cartaoAgenda(M, x, true); }).join('') : '') +
+        (vence.length ? '<span class="lab">VENCEM</span>' + vence.map(function (x) { return cartaoAgenda(M, x, true); }).join('') : '') +
+        (!come.length && !vence.length && !fora.length && !dd.fe ? '<span class="note">Nada começa nem vence.</span>' : '') + '</section>';
+    });
+    return h;
+  }
+
+  function htmlAgenda(D, M) {
+    var modo = EST.modo === 'dia' ? 'dia' : 'pessoa';
+    var corpo = !M.linhas.length
+      ? H.vazio('calendar', nFiltros() ? 'Nada neste recorte' : 'Ninguém com demanda neste período',
+          nFiltros() ? 'Troque ou limpe os filtros.' : 'Abra um item da fila para escolher o dev e as datas.',
+          F.dev !== '__todos__' ? '<button type="button" class="btn" data-pl="todos">Mostrar todos os devs</button>' : '')
+      : modo === 'dia' ? agendaDia(D, M) : agendaPessoa(D, M);
+    return '<div class="pl-ag' + (EST.juntar ? ' juntando' : '') + '"><div class="pl-agmodo" role="group" aria-label="Agenda">' +
+      '<button type="button" class="btn' + (modo === 'pessoa' ? ' on' : '') + '" data-pl-modo="pessoa" aria-pressed="' + (modo === 'pessoa') + '">' + ico('users') + ' Por pessoa</button>' +
+      '<button type="button" class="btn' + (modo === 'dia' ? ' on' : '') + '" data-pl-modo="dia" aria-pressed="' + (modo === 'dia') + '">' + ico('calendar') + ' Por dia</button></div>' +
+      corpo + '</div>';
+  }
+
+  /** A fila "Pronto para Planning": ao lado do quadro no computador; no
+   *  celular, recolhida em cima da agenda, com a contagem a mostra. */
+  function htmlFila(fl, cel) {
+    var tit = fl.etapa ? esc(((H.ETAPA_POR_ID[fl.etapa] || {}).rotulo || fl.etapa).toUpperCase()) + ' FORA DO QUADRO' : 'PRONTO PARA PLANNING';
+    var dentro = '<input class="in" id="pl-q" type="search" autocomplete="off" placeholder="Código, título, sistema ou dev" aria-label="Buscar na fila" value="' + esc(F.q) + '">' +
+      '<div id="pl-fila" style="display:flex;flex-direction:column;gap:8px">' + fl.html + '</div>' +
+      '<span class="note" style="font-size:12px">' + (fl.etapa ? 'Sem pontos do Planning Poker, a demanda pode ser aberta mas não entra no quadro.'
+        : 'Só entra o que está em Planning com pontos do Poker e ainda não tem dev e data. Abra o item para escolher o dev e as datas ("Dev e datas").') + '</span>';
+    if (cel) {
+      return '<details class="pl-fila pl-filam" id="pl-filam"' + (EST.filaAberta ? ' open' : '') + '><summary><span class="lab" style="color:var(--pu-t)">' + tit + '</span>' +
+        '<span class="mono note" id="pl-fila-n">' + fl.total + '</span></summary>' + dentro + '</details>';
+    }
+    return '<aside class="pl-fila" aria-label="Fila da Planning"><div class="row" style="justify-content:space-between"><span class="lab" style="color:var(--pu-t)">' + tit + '</span>' +
+      '<span class="mono note" id="pl-fila-n">' + fl.total + '</span></div>' + dentro +
+      '<div class="pl-leg">' + [['in', 'planejado'], ['ac', 'em andamento'], ['wn', 'em validação'], ['ok', 'concluído'], ['dg', 'atrasado'], ['tl', 'planning']].map(function (c) {
+        return '<span><i style="background:rgba(var(--' + c[0] + '-rgb),.16);border:1px solid rgba(var(--' + c[0] + '-rgb),.45)"></i>' + c[1] + '</span>';
+      }).join('') + '<span><i style="background:repeating-linear-gradient(135deg,rgba(var(--tl-rgb),.2) 0 3px,transparent 3px 6px)"></i>ausência / feriado</span>' +
+      '<span>⇥ veio de antes, prazo mantido</span></div></aside>';
+  }
+
   function htmlTela(D, ctx) {
     var r1 = rotaSprint(ctx);
     var M = montar(D, r1);
     EST.M = M;
     if (!M) return H.vazio('calendar', 'Sprint sem dias úteis', 'Escolha outra sprint.', '<a class="btn" href="#planejamento">Voltar para hoje</a>');
+    var cel = EST.celular = celular();
     var J = M.J, ed = podeEditar();
     var antes = andar(r1, -EST.zoom), depois = andar(r1, EST.zoom);
     var atual = H.sprintAtual();
     var noHoje = J.ini <= M.hoje && M.hoje <= J.fim;
+    var acoes = '<button type="button" class="btn" data-pl="aus">' + ico('calendar') + ' Ausências</button>' +
+      (ehAdmin() ? '<button type="button" class="btn" data-pl="fer">' + ico('flag') + ' Feriados</button>' : '') +
+      (ed && !EST.apresentar ? '<button type="button" class="btn' + (EST.juntar ? ' on" style="border-color:rgba(var(--ac-rgb),.55)' : '') + '" data-pl="juntar" aria-pressed="' + !!EST.juntar + '"' +
+        ' title="Marque a principal e as que ficam dentro dela">' + ico('link') + ' Juntar demandas</button>' : '') +
+      '<button type="button" class="btn' + (EST.apresentar ? ' on" style="border-color:rgba(var(--ac-rgb),.55)' : '') + '" data-pl="apres" aria-pressed="' + EST.apresentar + '" title="Esconde filtros, fila e capacidade para projetar na reunião">' + ico('present') + ' ' + (EST.apresentar ? 'Sair da apresentação' : 'Apresentar') + '</button>';
+    var sub = cel
+      ? 'Toque num cartão para abrir a demanda: lá se move a etapa e se trocam as datas e o dev.'
+      : ed ? 'Arraste um item pontuado da fila para a linha do dev, no dia de início. Arraste a barra para mover (o prazo anda os mesmos dias corridos) e puxe as pontas para mudar início e prazo. Clique na barra para abrir a demanda; num dia vazio da linha, para criar uma já com o dev e a data.'
+      : 'Quem está com o quê em cada dia útil, pelas datas de início e prazo. Clique na barra para abrir a demanda. Mover e alocar é do PM/PO e do analista.';
     var h = '<header class="pl-hd"><div class="tt"><span class="note"><a href="#sprints/planejamento/' + esc(r1) + '">Sprints</a> › Planejamento</span>' +
-      '<h1 class="h1">Planejamento</h1>' +
-      '<span class="sub">' + (ed ? 'Arraste um item pontuado da fila para a linha do dev, no dia de início. Arraste a barra para mover e puxe as pontas para mudar início e prazo. Clique num dia vazio da linha para criar uma demanda já com o dev e a data.'
-        : 'Quem está com o quê em cada dia útil, pelas datas de início e prazo. Mover e alocar é do PM/PO e do analista.') + '</span></div>' +
+      '<h1 class="h1">Planejamento</h1><span class="sub">' + sub + '</span></div>' +
       '<div class="ac"><div class="pl-nav"><a href="#planejamento/' + esc(antes) + '" aria-label="Período anterior" title="Período anterior">‹</a>' +
       '<span>' + esc(H.dm(J.ini) + ' – ' + H.dm(J.fim)) + '</span>' +
       '<a href="#planejamento/' + esc(depois) + '" aria-label="Próximo período" title="Próximo período">›</a></div>' +
       (r1 !== atual ? '<a class="btn" href="#planejamento">Hoje</a>' : '') +
-      '<select class="pl-sel" id="pl-zoom" aria-label="Zoom da régua">' + ZOOMS.map(function (z) { return opt(z.n, z.rot, EST.zoom); }).join('') + '</select>' +
-      '<button type="button" class="btn" data-pl="aus">' + ico('calendar') + ' Ausências</button>' +
-      (ehAdmin() ? '<button type="button" class="btn" data-pl="fer">' + ico('flag') + ' Feriados</button>' : '') +
-      (ed && !EST.apresentar ? '<button type="button" class="btn' + (EST.juntar ? ' on" style="border-color:rgba(var(--ac-rgb),.55)' : '') + '" data-pl="juntar" aria-pressed="' + !!EST.juntar + '"' +
-        ' title="Marque a principal e as que ficam dentro dela">' + ico('link') + ' Juntar demandas</button>' : '') +
-      '<button type="button" class="btn' + (EST.apresentar ? ' on" style="border-color:rgba(var(--ac-rgb),.55)' : '') + '" data-pl="apres" aria-pressed="' + EST.apresentar + '" title="Esconde filtros, fila e capacidade para projetar na reunião">' + ico('present') + ' ' + (EST.apresentar ? 'Sair da apresentação' : 'Apresentar') + '</button>' +
+      '<select class="pl-sel" id="pl-zoom" aria-label="Tamanho do período">' + ZOOMS.map(function (z) { return opt(z.n, z.rot, EST.zoom); }).join('') + '</select>' +
+      // No celular os quatro botoes vao para o menu "…" (uma gaveta).
+      (cel ? '<button type="button" class="btn pl-mais" data-pl="menu" aria-label="Ausências, feriados, juntar e apresentar" title="Mais ações">⋯</button>' : acoes) +
       '</div></header>';
-    if (!EST.apresentar) h += htmlFiltros(D, M);
+    if (!EST.apresentar) h += htmlChips(D, M) + htmlFiltros(D, M);
     if (!EST.apresentar && noHoje) h += htmlLimbo(D, M);
     if (EST.juntar) h += htmlJuntar();
     var fl = EST.apresentar ? null : htmlFilaLista(D);
-    h += '<div class="pl-lay' + (EST.apresentar ? ' so' : '') + '"><div class="pl-gt' + (EST.juntar ? ' juntando' : '') + '" id="pl-gt" style="overflow-x: auto">' + htmlQuadro(D, M) + '</div>' +
-      (fl ? '<aside class="pl-fila" aria-label="Fila da Planning"><div class="row" style="justify-content:space-between"><span class="lab" style="color:var(--pu-t)">' +
-        (fl.etapa ? esc(((H.ETAPA_POR_ID[fl.etapa] || {}).rotulo || fl.etapa).toUpperCase()) + ' FORA DO QUADRO' : 'PRONTO PARA PLANNING') + '</span>' +
-        '<span class="mono note" id="pl-fila-n">' + fl.total + '</span></div>' +
-        '<input class="in" id="pl-q" type="search" autocomplete="off" placeholder="Código, título, sistema ou dev" aria-label="Buscar na fila" value="' + esc(F.q) + '">' +
-        '<div id="pl-fila" style="display:flex;flex-direction:column;gap:8px">' + fl.html + '</div>' +
-        '<span class="note" style="font-size:11.5px">' + (fl.etapa ? 'Sem pontos do Planning Poker, a demanda pode ser aberta mas não entra no quadro.'
-          : 'Só entra o que está em Planning com pontos do Poker e ainda não tem dev e data.') + '</span>' +
-        '<div class="pl-leg">' + [['in', 'planejado'], ['ac', 'em andamento'], ['wn', 'em validação'], ['ok', 'concluído'], ['dg', 'atrasado'], ['tl', 'planning']].map(function (c) {
-          return '<span><i style="background:rgba(var(--' + c[0] + '-rgb),.16);border:1px solid rgba(var(--' + c[0] + '-rgb),.45)"></i>' + c[1] + '</span>';
-        }).join('') + '<span><i style="background:repeating-linear-gradient(135deg,rgba(var(--tl-rgb),.2) 0 3px,transparent 3px 6px)"></i>ausência / feriado</span>' +
-        '<span>⇥ veio de antes, prazo mantido</span></div></aside>' : '') + '</div>';
+    if (cel) {
+      h += (fl ? htmlFila(fl, true) : '') + htmlAgenda(D, M);
+    } else {
+      h += '<div class="pl-lay' + (EST.apresentar ? ' so' : '') + '"><div class="pl-gt' + (EST.juntar ? ' juntando' : '') + '" id="pl-gt" style="overflow-x: auto">' + htmlQuadro(D, M) + '</div>' +
+        (fl ? htmlFila(fl, false) : '') + '</div>';
+    }
     if (!EST.apresentar) h += htmlCapacidade(D, M);
     return h;
   }
@@ -948,18 +1414,6 @@
     p.status_planejamento = 'planejado';
     p.status = 'estimada';   // spToStatus('planejado') do gantt.html
     return '';
-  }
-
-  /** Troca so o nome da linha de origem pelo da linha de destino: numa dupla,
-   *  o outro continua. (O gantt gravava `dev = destino` e desfazia a dupla.) */
-  function trocaDev(m, de, para) {
-    var out = [];
-    nomesDe(m).forEach(function (n) {
-      var v = norm(n) === norm(de) ? para : n;
-      if (!out.some(function (x) { return norm(x) === norm(v); })) out.push(v);
-    });
-    if (!out.length) out.push(para);
-    return out.join(' / ');
   }
 
   function ausenteEm(D, dev, a, b) {
@@ -1023,7 +1477,7 @@
     _arr = {
       modo: modo, el: alvo, m: m, x0: e.clientX, y0: e.clientY, ativo: false, c0: c0, J: J,
       i0: diaSob(e.clientX, c0, J), s: +(alvo.getAttribute('data-s') || 0), e: +(alvo.getAttribute('data-e') || 0),
-      ln: alvo.getAttribute('data-ln') || '', delta: 0, destLn: null, dia: -1, fant: null
+      ln: alvo.getAttribute('data-ln') || '', delta: 0, destLn: null, dia: -1, fant: null, cs: alvo.getAttribute('data-cs') === '1'
     };
     e.preventDefault();
     document.addEventListener('pointermove', moveArraste);
@@ -1087,14 +1541,12 @@
     if (!a) return null;
     if (b < a) b = a;
     if (A.modo === 'mover') {
-      if (!A.delta) return { ini: a, fim: b };
-      if (b < J.ini) {
-        // Herdada: a barra comeca no inicio da janela; o arraste a recoloca de
-        // la, com a mesma duracao em dias uteis.
-        var ni = J.dias[Math.max(0, Math.min(J.n - 1, A.s + A.delta))].d;
-        return { ini: ni, fim: maisUteis(ni, uteisEntre(a, b)) };
-      }
-      return { ini: maisUteis(a, A.delta), fim: maisUteis(b, A.delta) };
+      // O dia em que o inicio da barra caiu: a coluna dela na regua mais o que
+      // andou. A barra que comecava antes da janela anda os dias de semana do
+      // arraste a partir do inicio de verdade; sem arraste de lado, o inicio fica.
+      var dia = !A.delta ? a : A.cs ? maisUteis(a, A.delta) : J.dias[Math.max(0, Math.min(J.n - 1, A.s + A.delta))].d;
+      var p = soltarBarra(m, dia, '', true);
+      return { ini: p.inicio, fim: p.entrega };
     }
     if (A.modo === 'ini') return { ini: J.dias[Math.max(0, Math.min(A.e, A.s + A.delta))].d, fim: b };
     if (A.modo === 'fim') return { ini: a, fim: J.dias[Math.min(J.n - 1, Math.max(A.s, A.e + A.delta))].d };
@@ -1146,14 +1598,16 @@
     var pt = {};
     if (nd.ini !== iso(m.inicio)) pt.inicio = nd.ini;
     if (nd.fim !== iso(m.entrega)) pt.entrega = nd.fim;
-    if (destino && norm(destino) !== norm(A.ln)) pt.dev = trocaDev(m, A.ln, destino);
+    // Outra linha: o dev passa a ser so quem recebeu a barra (soltarBarra, como o gantt).
+    if (destino && norm(destino) !== norm(A.ln) && destino !== (m.dev || '')) pt.dev = soltarBarra(m, nd.ini, destino, false).dev;
     if (!Object.keys(pt).length) { repinta(); return; }
     if ((pt.inicio && J.ferSet[pt.inicio]) || (A.modo === 'fim' && pt.entrega && J.ferSet[pt.entrega])) {
       H.toast('Não é possível alocar em feriados.', 'erro'); repinta(); return;
     }
     var p3 = {}; p3[m.id] = pt;
+    var aa = pt.inicio || iso(m.inicio), bb = pt.entrega || iso(m.entrega);
     grava(p3, A.modo === 'mover' ? (pt.dev ? 'Movida para ' + destino + '.' : 'Datas atualizadas.') : A.modo === 'ini' ? 'Início atualizado.' : 'Prazo atualizado.',
-      avisoAusencia(D, destino, nd.ini, nd.fim));
+      avisoAusencia(D, destino, aa, bb));
   }
 
   // ── Dialogos ─────────────────────────────────────────────────────────
@@ -1176,6 +1630,11 @@
     if (aoMontar) aoMontar(d);
     setTimeout(function () { var p = ov.querySelector('.in:not([disabled]), .btnp'); if (p) p.focus(); }, 0);
     return d;
+  }
+  /** O seletor unico de etapa (`etapasDoSeletor`) tem destino para esta demanda? */
+  function podeMover(m) {
+    var AC = raiz.AXIS_ACOES;
+    return !!(AC && AC.GESTOS && AC.GESTOS.moverPara && AC.etapasDoSeletor && AC.contexto && AC.etapasDoSeletor(m, AC.contexto()).length);
   }
   async function confirma(titulo, texto, ok) {
     if (raiz.AXIS_ACOES && raiz.AXIS_ACOES.caixa) return !!(await raiz.AXIS_ACOES.caixa({ titulo: titulo, texto: texto, ok: ok, perigo: true }));
@@ -1218,11 +1677,14 @@
       '<div class="pl-er" id="plp-er" role="alert"></div>' +
       '<div class="pl-pe"><span class="esq"><a class="btns" href="' + H.hrefItem(m) + '" data-plx="1">Abrir item</a>' +
       (raiz.AXIS_FORM && raiz.AXIS_FORM.abrir ? '<button type="button" class="btns" id="plp-form">Mais campos</button>' : '') +
+      (podeMover(m) ? '<button type="button" class="btns" id="plp-mover">' + ico('board') + ' Mover para…</button>' : '') +
       (podeVoltar ? '<button type="button" class="btns" id="plp-volta">' + ico('undo') + ' Voltar ao backlog</button>' : '') +
       (String(m.parent_id || '') ? '<button type="button" class="btns" id="plp-solta" title="Volta a ser uma demanda solta">' + ico('link') + ' Tirar do grupo</button>' : '') + '</span>' +
       '<button type="button" class="btn" data-plx="1">Cancelar</button><button type="button" class="btnp" id="plp-ok">Salvar</button></div>';
     dialogo(html, function (d) {
       var erro = d.q('#plp-er');
+      var mv = d.q('#plp-mover');
+      if (mv) mv.addEventListener('click', function () { d.fecha(); raiz.AXIS_ACOES.GESTOS.moverPara(m0); });
       var form = d.q('#plp-form');
       if (form) form.addEventListener('click', function () { d.fecha(); raiz.AXIS_FORM.abrir(m0); });
       var solta = d.q('#plp-solta');
@@ -1484,6 +1946,58 @@
     });
   }
 
+  // ── A demanda por cima da tela e o menu do celular ────────────────────
+  /** A DEMANDA INTEIRA NA GAVETA — a do Quadro (`AXIS_QUADRO.abrirItem`, a
+   *  tela Item por cima): etapa ("Mover para…"), edicao, pausa, entrega. Para
+   *  quem planeja, o pe da gaveta ganha "Dev e datas": o dialogo curto com o
+   *  responsavel, o inicio, o prazo e a sprint, que agenda como o arraste. */
+  function abrirDemanda(m) {
+    var Q = raiz.AXIS_QUADRO;
+    if (!Q || !Q.abrirItem) { location.hash = H.hrefItem(m); return; }
+    Q.abrirItem(m);
+    if (!podeEditar() || EST.apresentar) return;
+    var gv = [].slice.call(document.querySelectorAll('.qd-gvi')).pop();
+    var pe = gv && gv.querySelector('.gv-pe');
+    if (!pe || pe.querySelector('[data-plg]')) return;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn';
+    b.setAttribute('data-plg', 'planejar');
+    b.innerHTML = ico('calendar') + ' Dev e datas';
+    b.title = 'Responsável, início, prazo e sprint — agenda como o arraste no quadro';
+    b.addEventListener('click', function () { var x = porId(m.id); if (x) abrirPlanejar(x); });
+    pe.insertBefore(b, pe.firstChild);
+  }
+
+  /** O "…" do celular: Ausencias, Feriados, Juntar e Apresentar numa gaveta. */
+  function abrirMenu() {
+    var ed = podeEditar();
+    var item = function (a, ic, rot) { return '<button type="button" class="btn" data-plm="' + a + '">' + ico(ic) + ' ' + rot + '</button>'; };
+    var g = H.gaveta({ titulo: 'Planejamento', html: '<div class="pl-menu">' +
+      item('aus', 'calendar', 'Ausências') + (ehAdmin() ? item('fer', 'flag', 'Feriados') : '') +
+      (ed && !EST.apresentar ? item('juntar', 'link', EST.juntar ? 'Sair do juntar' : 'Juntar demandas') : '') +
+      item('apres', 'present', EST.apresentar ? 'Sair da apresentação' : 'Apresentar') + '</div>' });
+    g.corpo.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-plm]');
+      if (!b) return;
+      var a = b.getAttribute('data-plm');
+      g.fechar();
+      if (a === 'aus') abrirAusencias();
+      else if (a === 'fer') abrirFeriados();
+      else if (a === 'juntar') { EST.juntar = EST.juntar ? null : { sel: [] }; repinta(); }
+      else if (a === 'apres') { EST.apresentar = !EST.apresentar; repinta(); }
+    });
+  }
+
+  // A agenda e o quadro trocam de lugar quando a largura cruza os 760 px.
+  var _rz = null;
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', function () {
+      clearTimeout(_rz);
+      _rz = setTimeout(function () { if (EST.el && EST.el.isConnected && AX.APP.rota.tela === 'planejamento' && celular() !== EST.celular) repinta(); }, 200);
+    });
+  }
+
   // ── Eventos (delegados no <div> da vista) ─────────────────────────────
   function ligar(el, ctx) {
     EST.el = el;
@@ -1495,7 +2009,7 @@
     el.addEventListener('click', function (e) {
       if (_suprime) { e.preventDefault(); e.stopPropagation(); return; }
       // JUNTAR: o clique na barra marca (a primeira e a principal) em vez de abrir.
-      var bj = EST.juntar && !e.ctrlKey && !e.metaKey ? e.target.closest('.pl-br[data-id]') : null;
+      var bj = EST.juntar && !e.ctrlKey && !e.metaKey ? e.target.closest('.pl-br[data-id], [data-pl-card]') : null;
       if (bj) {
         e.preventDefault();
         var sid = bj.getAttribute('data-id'), sel = EST.juntar.sel, i = sel.indexOf(sid);
@@ -1511,16 +2025,26 @@
         if (dd && !dd.fe) raiz.AXIS_FORM.abrir(null, { dev: lnC.getAttribute('data-pl-dev'), inicio: dd.d, entrega: dd.d });
         return;
       }
-      var br = e.target.closest('.pl-br[data-ed], .pl-fc[data-arr], .pl-lim .it');
-      if (br && podeEditar() && !e.ctrlKey && !e.metaKey) {
+      // A barra, o cartao da agenda, a fila e o "fora do quadro" abrem a
+      // demanda inteira na gaveta (o openModal do gantt). Ctrl/Cmd abre a pagina.
+      var br = e.target.closest('.pl-br[data-id], .pl-fc[data-id], .pl-lim .it, [data-pl-card]');
+      if (br) {
+        if (e.ctrlKey || e.metaKey) return;
         var m = porId(br.getAttribute('data-id'));
-        if (m) { e.preventDefault(); abrirPlanejar(m); }
+        if (m) { e.preventDefault(); abrirDemanda(m); }
         return;
       }
+      var rs = e.target.closest('[data-pl-resumo]');
+      if (rs) { if (raiz.RESUMODEV) raiz.RESUMODEV.abrir(AX.APP.D, rs.getAttribute('data-pl-resumo')); return; }
+      var ce = e.target.closest('[data-pl-etapa]');
+      if (ce) { var k0 = ce.getAttribute('data-pl-etapa'); F.etapa = F.etapa === k0 ? '' : k0; repinta(); return; }
+      var mo = e.target.closest('[data-pl-modo]');
+      if (mo) { EST.modo = mo.getAttribute('data-pl-modo'); poeLS('axis_plan_modo', EST.modo); repinta(); return; }
       var b = e.target.closest('[data-pl]');
       if (b) {
         var a = b.getAttribute('data-pl');
-        if (a === 'aus') abrirAusencias();
+        if (a === 'menu') abrirMenu();
+        else if (a === 'aus') abrirAusencias();
         else if (a === 'fer') abrirFeriados();
         else if (a === 'apres') { EST.apresentar = !EST.apresentar; repinta(); }
         else if (a === 'limpar') { Object.keys(F).forEach(function (k) { if (k !== 'q') F[k] = ''; }); repinta(); }
@@ -1540,7 +2064,10 @@
       if (t.id === 'pl-zoom') { EST.zoom = +t.value || 2; poeLS('axis_plan_zoom', String(EST.zoom)); EST.rolagem = 0; repinta(); return; }
       if (t.id === 'pl-cap-sel') { EST.capSel = t.value; poeLS('axis_plan_cap', '1'); repinta(); }
     });
-    el.addEventListener('toggle', function (e) { if (e.target && e.target.id === 'pl-cap') poeLS('axis_plan_cap', e.target.open ? '1' : ''); }, true);
+    el.addEventListener('toggle', function (e) {
+      if (e.target && e.target.id === 'pl-cap') poeLS('axis_plan_cap', e.target.open ? '1' : '');
+      if (e.target && e.target.id === 'pl-filam') EST.filaAberta = e.target.open;
+    }, true);
     var tq = null;
     el.addEventListener('input', function (e) {
       if (e.target.id !== 'pl-q') return;
@@ -1578,6 +2105,6 @@
       EST.el = el;
       el.innerHTML = htmlTela(ctx.D, ctx);
     },
-    depois: function (el, ctx) { ligar(el, ctx); }
+    depois: function (el, ctx) { ligar(el, ctx); if (raiz.AXIS_QUADRO && raiz.AXIS_QUADRO.pintaItem) raiz.AXIS_QUADRO.pintaItem(false); }
   });
 })();
