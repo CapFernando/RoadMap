@@ -406,6 +406,16 @@
        parte que nunca muda entre dois cards; no `title` ele volta, porque é lá
        que alguém vai conferir de qual outubro se está falando. */
     var curto = rotuloCurto(s);
+    /* LANCADO FORA DO PRAZO (06/11/2026): entrou na sprint depois de ela fechar,
+       pela unica porta que o Worker deixa aberta. O chip diz isso, para o numero
+       que mudou depois do fechamento nao parecer erro. */
+    var lf = (m || {}).lancado_fora_do_prazo;
+    if (lf && typeof lf === 'object' && txt(lf.sprint) === s) {
+      return '<span class="' + cls + ' sp-cor" style="' + estiloSprint(m) + '" title="Sprint ' + esc(s) +
+             ' — LANÇADO FORA DO PRAZO: registrado depois do fechamento' +
+             (txt(lf.em) ? ', em ' + esc(lf.em) : '') + (txt(lf.por) ? ', por ' + esc(lf.por) : '') +
+             '.">🏃 ' + esc(curto) + ' · lançado fora do prazo</span>';
+    }
     var n = pulos(m);
     if (!n) {
       return '<span class="' + cls + ' sp-cor" style="' + estiloSprint(m) + '" title="Sprint ' + esc(s) +

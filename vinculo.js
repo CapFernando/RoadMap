@@ -296,9 +296,19 @@
    *  é pré-requisito dela. Se esta função não filtrasse por `bloqueia`, pendurar
    *  vinte itens numa issue guarda-chuva travaria a issue guarda-chuva — que é
    *  o oposto do que ela existe para fazer. */
+  /* NEGADA NAO TRAVA (06/11/2026): "permita a conclusao mesmo quando a task
+     estiver negada". Uma dependencia negada nunca vai ser concluida; contá-la
+     como aberta prendia a principal para sempre. */
+  function negada(f) {
+    var e = (raiz.ETAPADEMANDA && raiz.ETAPADEMANDA.gravada)
+      ? raiz.ETAPADEMANDA.gravada(f)
+      : String((f || {}).status_planejamento || '');
+    return e === 'negada' || e === 'negado' || String((f || {}).status || '') === 'negada';
+  }
+
   function abertos(lista, id) {
     return filhosDe(lista, id).filter(function (f) {
-      return bloqueia(f) && !concluida(f);
+      return bloqueia(f) && !concluida(f) && !negada(f);
     });
   }
 
