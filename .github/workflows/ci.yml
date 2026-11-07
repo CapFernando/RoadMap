@@ -8,10 +8,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  # "Run workflow" na aba Actions: roda os testes e publica o Worker mesmo sem
+  # mudanca nele (para republicar depois de uma falha, por exemplo).
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Na main nao cancela: um push novo interrompendo o anterior podia deixar sem
+  # publicar uma mudanca do Worker que so o push cancelado trazia.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   invariantes:
@@ -55,7 +60,66 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      # Checagem estática, sem publicar nada: `wrangler deploy` de verdade fica
-      # para o dia em que o token da Cloudflare entrar como secret do repositório
-      # — decisão do Fernando, não deste workflow.
+      # Checagem estática; quem publica é o job `deploy-worker`, abaixo.
       - run: node --check cloudflare-worker/worker.js
+
+  # PUBLICA O WORKER, que o GitHub Pages nao publica. Antes era manual
+  # (`npx wrangler deploy`), e esquecer deixava as telas novas falando com o
+  # Worker velho: a troca de interface respondeu "op_invalida" ate o deploy.
+  #
+  # So roda na main (nunca em PR), so depois dos tres testes acima, e so quando
+  # o cloudflare-worker/ mudou naquele push — ou pelo "Run workflow", que
+  # publica sempre. Sem os secrets CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID
+  # o job avisa e sai sem falhar.
+  deploy-worker:
+    name: Publicar o Cloudflare Worker
+    needs: [invariantes, orfas, worker-sintaxe]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    # Dois deploys ao mesmo tempo nunca: o segundo espera o primeiro.
+    concurrency:
+      group: deploy-worker
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: O Worker mudou neste push?
+        id: mudou
+        run: |
+          antes="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "sim=sim" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # Sem o commit anterior (primeiro push, historico reescrito): publica.
+          if [ -z "$antes" ] || [ "$antes" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$antes^{commit}" 2>/dev/null; then
+            echo "sim=sim" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --quiet "$antes" "${{ github.sha }}" -- cloudflare-worker/; then
+            echo "O cloudflare-worker/ nao mudou neste push: nada a publicar."
+            echo "sim=nao" >> "$GITHUB_OUTPUT"
+          else
+            echo "sim=sim" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Os secrets da Cloudflare existem?
+        id: token
+        env:
+          TK: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CONTA: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$TK" ] && [ -n "$CONTA" ]; then
+            echo "tem=sim" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Worker NAO publicado: faltam os secrets CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID no repositorio. Publique a mao (ONBOARDING §4)."
+            echo "tem=nao" >> "$GITHUB_OUTPUT"
+          fi
+      - name: wrangler deploy
+        if: steps.mudou.outputs.sim == 'sim' && steps.token.outputs.tem == 'sim'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: cloudflare-worker
+          # A mesma versao usada nos deploys manuais; trocar de proposito.
+          wranglerVersion: '3.114.17'
+          command: deploy

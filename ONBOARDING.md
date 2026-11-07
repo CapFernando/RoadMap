@@ -111,16 +111,27 @@ invariantes passavam, e o defeito só aparecia no clique do botão.
 
 **As telas** — `git push origin main`. O GitHub Pages publica sozinho.
 
-**O Worker** — manual, de dentro de `cloudflare-worker/`:
+**O Worker** — publica sozinho pelo CI (job `deploy-worker` do `ci.yml`): no
+push à `main`, depois das invariantes, das órfãs e do `node --check`, e só quando
+o `cloudflare-worker/` mudou naquele push. Para republicar sem mudança (depois de
+uma falha, por exemplo): aba Actions › CI › **Run workflow** na `main`.
+
+Ele precisa de dois secrets no repositório (Settings › Secrets and variables ›
+Actions): `CLOUDFLARE_API_TOKEN`, um token do modelo "Edit Cloudflare Workers"
+restrito à conta do Worker, e `CLOUDFLARE_ACCOUNT_ID`. Sem eles, o job avisa e
+não publica.
+
+À mão, de dentro de `cloudflare-worker/` (conta com mais de uma organização: diga
+qual com `CLOUDFLARE_ACCOUNT_ID=...`):
 
 ```bash
 npx wrangler deploy
 ```
 
-> **O CI não publica nada.** Ele roda as invariantes, o scan de órfãs e
-> `node --check` no Worker. Subir o `worker.js` ao `main` **não** o coloca no
-> ar. Se você mudou o Worker e esqueceu o `wrangler deploy`, o site continua
-> rodando a versão anterior — e os sintomas disso são confusos.
+> **Confira que publicou.** `npx wrangler deployments list` mostra a versão no
+> ar. Se o Worker mudou e não foi publicado, o site continua rodando a versão
+> anterior — e os sintomas disso são confusos (ex.: `op_invalida` numa rota nova).
+> Para voltar uma versão: `npx wrangler rollback <id-da-versão>`.
 
 **Para diagnosticar o Worker em produção**, esta é a ferramenta que funciona:
 
