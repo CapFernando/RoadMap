@@ -1454,6 +1454,16 @@
     var r = txt(rotulo);
     var e = txt(etapa);
     if (!m || !r || e === 'negada') return null;
+    /* LANCADO FORA DO PRAZO CONTA SO NA SPRINT REGISTRADA (08/11/2026). A ida
+       para validacao dessas demandas foi carimbada no dia do lancamento, e a
+       regra acima a poria TAMBEM na sprint daquele dia — a mesma entrega em
+       duas sprints. O registro e a decisao explicita de onde ela conta. */
+    var lf = m.lancado_fora_do_prazo;
+    if (lf && typeof lf === 'object' && txt(lf.sprint)) {
+      if (txt(lf.sprint) !== r) return null;
+      return e === 'concluido' ? 'entregue'
+           : (e === 'validacao' || e === 'validacao_area') ? 'aguardando' : 'em_curso';
+    }
     var ida = sprintDaIdaValidacao(m, feriados);
     if (ida === r) {
       if (e === 'concluido') return 'entregue';
@@ -1477,7 +1487,13 @@
     return ((dados || {}).melhorias || []).filter(function (m) {
       if (!m || m.oculto || m.mesclado_em || !daTrilha(m, trilha)) return false;
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
-      return !!situacaoNaSprint(m, r, e, fer);
+      var sit = situacaoNaSprint(m, r, e, fer);
+      /* PAUSADA EM ABERTO NAO ENTRA NA CONTA (08/11/2026): "itens pausados
+         estao contando, nao deveria" — decisao: so as pausadas; quem rolou de
+         sprint sem entregar continua pesando. A pausada que ja foi entregue ou
+         esta em validacao segue contando como entrega. */
+      if (sit === 'em_curso' && iso(m.pausado_em)) return false;
+      return !!sit;
     });
   }
 

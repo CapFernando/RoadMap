@@ -29896,6 +29896,23 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!!fes && /PAUSA\.estaPausada/.test(fes) && /st === 'pausada'\) return false/.test(fes), 'pausada em aberto sai da conta da sprint');
   }
 
+  /* PLACAR SEM PAUSADA EM ABERTO, E LANCADO FORA DO PRAZO SO NA SPRINT
+     REGISTRADA (08/11/2026). */
+  {
+    const SPp = require('./sprint.js');
+    const base = { sprint_po: 'S1-11-2026', status_planejamento: 'em_andamento' };
+    const dd = { feriados: [], melhorias: [
+      Object.assign({ id: 'a', codigo: 'AX-A' }, base),
+      Object.assign({ id: 'b', codigo: 'AX-B', pausado_em: '2026-11-04' }, base),
+      { id: 'c', codigo: 'AX-C', sprint_po: 'S1-11-2026', status_planejamento: 'concluido', primeira_validacao_em: '2026-11-04' } ] };
+    const q = SPp.placarDaSprint(dd, 'S1-11-2026');
+    ok(q.total === 2 && q.pct === 50, 'pausada em aberto sai do placar da sprint', q.total + ' itens, ' + q.pct + '%');
+    const lf = { status_planejamento: 'concluido', sprint_po: 'S5-10-2026', primeira_validacao_em: '2026-11-06',
+                 lancado_fora_do_prazo: { sprint: 'S5-10-2026' } };
+    ok(SPp.situacaoNaSprint(lf, 'S5-10-2026', 'concluido', []) === 'entregue', 'lancado fora do prazo conta na sprint registrada');
+    ok(SPp.situacaoNaSprint(lf, 'S1-11-2026', 'concluido', []) === null, 'e nao conta de novo na sprint do dia do lancamento');
+  }
+
   Promise.all(pendentes).then(() => {
     console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
     process.exit(falhas ? 1 : 0);
