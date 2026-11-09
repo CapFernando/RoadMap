@@ -277,9 +277,30 @@
     return voltaram;
   }
 
+  /* A QUEDA DE REDE SE REPETE AQUI TAMBEM (09/11/2026): "nao esta tendo mais
+     redundancias para forcar a solucao desse erro". As telas antigas insistem
+     (`rede-repete.js`: 2s, 6s e 15s, com "tentando de novo (1 de 3)"); o app
+     mostrava "Failed to fetch" na primeira perda de pacote. Toda chamada ao
+     Worker passa por aqui. So a queda de rede se repete — erro HTTP (401, 409,
+     500) volta na hora, porque repetir nao o resolve. */
+  async function postar(corpo, replacer, extraFetch) {
+    var R = raiz.REDEREPETE, quedas = 0;
+    for (;;) {
+      try {
+        return await fetch(WORKER, Object.assign({ method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                   body: JSON.stringify(corpo, replacer) }, extraFetch || {}));
+      } catch (e) {
+        if (!R || !R.ehQueda(e) || !R.deveRepetir(quedas)) throw e;
+        try { toast(R.aviso(quedas), 'erro'); } catch (_) {}
+        await new Promise(function (ok) { setTimeout(ok, R.espera(quedas)); });
+        quedas += 1;
+      }
+    }
+  }
+
   async function api(action, extra) {
     var corpo = Object.assign({ action: action }, APP.token ? { token: APP.token } : {}, extra || {});
-    var r = await fetch(WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+    var r = await postar(corpo);
     var j = await r.json().catch(function () { return {}; });
     if (!r.ok) {
       var e = new Error(j.detail || j.error || ('HTTP ' + r.status));
@@ -352,8 +373,7 @@
         credenciais: APP.token ? { token: APP.token } : {},
         ler: function () { return api('dados'); },
         enviar: async function (corpo, replacer) {
-          var res = await fetch(WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify(corpo, replacer) });
+          var res = await postar(corpo, replacer);
           var j = await res.json().catch(function () { return {}; });
           return { status: res.status, corpo: j };
         }
@@ -1321,7 +1341,7 @@
     pontosDe: pontosDe, devsDe: devsDe, tema: tema, caminho: caminho, projeto: projeto, sprintAtual: sprintAtual,
     porCodigo: porCodigo, meusNomes: meusNomes, minha: minha, pode: pode, donoDaSprint: donoDaSprint, hidrata: hidrata,
     ico: ico, chip: chip, chipEtapa: chipEtapa, chipTipo: chipTipo, chipsReq: chipsReq, chipCasoUso: chipCasoUso, CASO_USO_COR: CASO_USO_COR, av: av, cod: cod, hrefItem: hrefItem,
-    prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, gravar: gravar, kpi: kpi, toast: toast, ir: ir, api: api, recarregar: function () { return carregar().then(desenhar); },
+    prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, gravar: gravar, kpi: kpi, toast: toast, ir: ir, api: api, postar: postar, recarregar: function () { return carregar().then(desenhar); },
     filtros: filtros, filtrosN: filtrosN, gaveta: gaveta, celula: celula, pintaFaixas: pintaFaixas, vincular: pedirVinculo
   };
 

@@ -1283,7 +1283,7 @@
         },
         enviar: async function (corpo, replacer) {
           if (sumiu) return { status: 200, corpo: { ja_excluida: true } };
-          var res = await fetch(AX.WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo, replacer) });
+          var res = await H.postar(corpo, replacer);
           return { status: res.status, corpo: await res.json().catch(function () { return {}; }) };
         }
       });
@@ -1892,8 +1892,7 @@
     var T = raiz.ANEXOTIPO;
     try {
       if (a.chave) {
-        var res = await fetch(AX.WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'anexo-baixar', chave: a.chave, token: AX.APP.token }) });
+        var res = await H.postar({ action: 'anexo-baixar', chave: a.chave, token: AX.APP.token });
         if (!res.ok) { H.toast('Não foi possível abrir o anexo: o servidor respondeu HTTP ' + res.status + '.', 'erro'); return; }
         var blob = await res.blob();
         if (T) T.entrega(blob, a.nome, a.tipo || blob.type, window);

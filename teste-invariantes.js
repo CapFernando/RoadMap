@@ -28221,9 +28221,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         let leituras = 0;
         const baseX = { atualizado_em: 'v1', melhorias: [{ id: 'x1', titulo: 'a' }, { id: 'x2', titulo: 'b' }, { id: 'x3', titulo: 'c' }] };
         const gx = (base) => new Function('raiz', 'H', 'AX', 'fetch', semSrc + '\n' + gxSrc + '\nreturn gravaExclusao;')(
-          { GRAVACAO: GR }, { api: async () => { leituras++; return copia(base); }, toast: () => {}, ir: () => {}, recarregar: async () => {} },
-          { APP: { papel: 'admin', token: 't' }, WORKER: 'w', desenhar: () => {} },
-          async (u, o) => { enviados.push(JSON.parse(o.body)); return enviados.length === 1 ? { status: 409, json: async () => ({ error: 'conflito' }) } : { status: 200, json: async () => ({}) }; });
+          { GRAVACAO: GR }, { api: async () => { leituras++; return copia(base); }, toast: () => {}, ir: () => {}, recarregar: async () => {},
+            postar: async (corpo, rep) => fx('w', { body: JSON.stringify(corpo, rep) }) },
+          { APP: { papel: 'admin', token: 't' }, WORKER: 'w', desenhar: () => {} }, fx);
+        const fx = async (u, o) => { enviados.push(JSON.parse(o.body)); return enviados.length === 1 ? { status: 409, json: async () => ({ error: 'conflito' }) } : { status: 200, json: async () => ({}) }; };
         const out = await gx(baseX)({ excluir: 'x2', msg: 'Demanda removida.' });
         ok(out.ok && leituras === 2 && enviados.length === 2 &&
            enviados.every((c) => c.action === 'publish' && c.base === 'v1' && c.token === 't' && c.data.melhorias.map((m) => m.id).join() === 'x1,x3'),
@@ -29985,6 +29986,32 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        '/RoadMap/admin (sem .html) leva quem tem a interface nova ao app');
     ok(AXI.nomeDaPagina('/RoadMap/admin.html') === 'admin.html' && AXI.nomeDaPagina('/RoadMap/') === 'index.html',
        'e o endereco com .html e a raiz seguem como antes');
+  }
+
+  /* O APP NOVO INSISTE QUANDO A REDE CAI (09/11/2026). */
+  {
+    const AXA = require('fs').readFileSync(__dirname + '/axis-app.js', 'utf8');
+    const fP = corpo(AXA, 'async function postar(corpo, replacer, extraFetch) {');
+    ok(!!fP, 'o app tem uma funcao unica que insiste quando a rede cai');
+    if (fP) {
+      let chamadas = 0, avisos = [];
+      const fetchFalso = async () => { chamadas++; if (chamadas < 3) throw new TypeError('Failed to fetch'); return { ok: true }; };
+      const raiz = { REDEREPETE: Object.assign({}, require('./rede-repete.js'), { espera: () => 0 }) };
+      const postar = new Function('raiz', 'fetch', 'WORKER', 'toast', fP + '\nreturn postar;')(raiz, fetchFalso, 'w', m => avisos.push(m));
+      pendentes.push(postar({ a: 1 }).then(r => {
+        ok(r && r.ok && chamadas === 3 && avisos.length === 2, 'duas quedas de rede e a terceira tentativa entra, avisando a cada uma',
+           chamadas + ' chamadas, ' + avisos.length + ' avisos');
+      }));
+      let c2 = 0;
+      const sempreCai = async () => { c2++; throw new TypeError('Failed to fetch'); };
+      const postar2 = new Function('raiz', 'fetch', 'WORKER', 'toast', fP + '\nreturn postar;')(raiz, sempreCai, 'w', () => {});
+      pendentes.push(postar2({}).then(() => ok(false, 'rede sempre caida termina em erro'), e => {
+        ok(c2 === 4, 'rede sempre caida: 1 tentativa + 3 repeticoes, e o erro sobe', c2 + ' chamadas');
+      }));
+    }
+    const AC = require('fs').readFileSync(__dirname + '/axis-acoes.js', 'utf8');
+    ok(!/fetch\((AX\.)?WORKER/.test(AXA.replace(fP || '', '')) && !/fetch\(AX\.WORKER/.test(AC),
+       'nenhuma chamada do app ao servidor fica de fora da repeticao');
   }
 
   Promise.all(pendentes).then(() => {
