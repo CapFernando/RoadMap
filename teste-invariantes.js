@@ -24494,7 +24494,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'o gerencial desenha, e as contas todas vem do modulo',
        'uma segunda conta aqui faria o gerencial discordar do fechamento');
     ok(/spr-so-risco/.test(gs), 'e ha o filtro de "so as que estao em risco"');
-    const si = semComentario(corpo(ADMIN, 'async function sprintIniciar() {') || '');
+    const si = semComentario(corpo(ADMIN, 'async function sprintIniciar(rotulo) {') || '');
     ok(/SPRINTPO\.iniciar\(/.test(si) && /state\.sprints = antes/.test(si),
        'iniciar passa pelo modulo e desfaz se a gravacao falhar');
     ok(/const ok = await confirmar\(\{/.test(si) && /if \(!ok\) return;/.test(si) &&
@@ -27209,7 +27209,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const comApp = (b, c) => GR.aplicar(b, c.patch, c.raiz);
 
     // ── Iniciar (sprintIniciar) ───────────────────────────────────────────
-    const iniSrc = corpo(ADMIN, 'async function sprintIniciar() {');
+    const iniSrc = corpo(ADMIN, 'async function sprintIniciar(rotulo) {');
     ok(!!iniSrc, 'sprintIniciar existe no admin para ser comparado');
     if (iniSrc) {
       const iniAdm = (state, r, saida) => new Function('state', 'SPRINTPO', 'PRAZO', 'saida', 'statusKey',
@@ -29916,6 +29916,16 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
                  lancado_fora_do_prazo: { sprint: 'S5-10-2026' } };
     ok(SPp.situacaoNaSprint(lf, 'S5-10-2026', 'concluido', []) === 'entregue', 'lancado fora do prazo conta na sprint registrada');
     ok(SPp.situacaoNaSprint(lf, 'S1-11-2026', 'concluido', []) === null, 'e nao conta de novo na sprint do dia do lancamento');
+  }
+
+  /* INICIAR A SPRINT PELA ABA ENTREGAS POR SPRINT (09/11/2026). */
+  {
+    const fe = corpo(ADMIN, 'function esEstadoRender(');
+    ok(!!fe && /sprintIniciar\('/.test(fe) && /sprintFecharAbrir\('/.test(fe) && /ainda não foi iniciada/.test(fe),
+       'a aba Entregas por sprint mostra o estado e os botoes de iniciar e fechar');
+    ok(/id="es-estado"/.test(ADMIN) && /esEstadoRender\(atual\)/.test(ADMIN), 'e a faixa e desenhada junto com a aba');
+    ok(/async function sprintIniciar\(rotulo\)/.test(ADMIN) && /const r = rotulo \|\| _sprSel;/.test(ADMIN),
+       'iniciar aceita a sprint de quem chama, sem depender da aba de Sprint');
   }
 
   Promise.all(pendentes).then(() => {

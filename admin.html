@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="fdbef4f50c">
+<html lang="pt-BR" data-build="4a34c8fc05">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -625,6 +625,11 @@
     .spr-acao:hover { border-color:var(--blue); color:var(--text); }
     .spr-acao.inicia { color:#07210F; background:var(--green-tx,#8FE0A8); border:none; }
     .spr-acao.inicia:hover { filter:brightness(1.1); }
+    .es-estado { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:4px 0 10px; }
+    .es-estado:empty { display:none; }
+    .es-estado .es-aviso { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:9px 12px; border-radius:8px;
+      background:var(--amber-bg,#3A2A0E); color:var(--amber-tx,#FFC470); font-size:12.5px; font-weight:600; }
+    .es-estado .spr-acao.inicia { font-size:13px; padding:6px 14px; }
     .spr-alerta { color:var(--amber-tx,#FFC470); font-weight:700; }
     .spr-ok { color:var(--green-tx,#8FE0A8); font-weight:700; }
     .spr-fechada { color:var(--text3); }
@@ -2220,6 +2225,10 @@
         </div>
         <span class="fb-count" id="es-resumo"></span>
       </div>
+      <!-- INICIAR / FECHAR A SPRINT AQUI (09/11/2026): "o botao de iniciar sprint
+           esta muito escondido. Reajustar para ele ir para aba Entregas por
+           sprint". O estado da sprint escolhida e o botao ficam a vista. -->
+      <div id="es-estado" class="es-estado"></div>
       <div id="es-esteiras" class="es-pessoas"></div>
       <div id="es-kpis" class="ger-summary" style="margin:6px 0 10px"></div>
       <div id="es-pessoas" class="es-pessoas"></div>
@@ -5273,6 +5282,40 @@ function esteiraDe(m) {
 function esEsteira(v) { _esEsteira = (_esEsteira === v ? '' : v); renderEntregasSprint(); }
 
 
+/* O ESTADO DA SPRINT E O BOTAO, NA ABA ENTREGAS (09/11/2026). Mostra a sprint
+   escolhida (montando / em curso / fechada) com Iniciar ou Fechar, e — se a
+   sprint ATUAL ainda nao foi iniciada e tem demandas — um aviso com o botao,
+   mesmo com outra sprint escolhida: e o caso em que o time nao ve nada. */
+function esEstadoRender(atual) {
+  const box = document.getElementById('es-estado');
+  if (!box || !window.SPRINTPO) return;
+  const hoje = PRAZO.hojeISO(), fer = state.feriados || [];
+  const dono = SPRINTPO.ehDonoDaSprint(_eu);
+  const qtd = r => SPRINTPO.demandasDaSprint(state, r).length;
+  const btnIni = r => dono && qtd(r) ? `<button type="button" class="spr-acao inicia" onclick="sprintIniciar('${esc(r)}')">▶ Iniciar ${esc(SPRINTPO.rotuloCurto(r))}</button>` : '';
+  const partes = [];
+  const r = _esSprint;
+  if (r) {
+    const sit = SPRINTPO.situacaoDaSprint(state, r);
+    if (sit === 'fechada') {
+      const f = SPRINTPO.fechamentoDe(state, r) || {};
+      partes.push(`<span class="spr-est fechada">🔒 ${esc(SPRINTPO.rotuloCurto(r))} fechada em ${esc(formatDate(f.em))}${f.por ? ' por ' + esc(f.por) : ''}</span>`);
+    } else if (sit === 'em_curso') {
+      const reg = SPRINTPO.registroDe(state, r) || {};
+      partes.push(`<span class="spr-est curso">▶ ${esc(SPRINTPO.rotuloCurto(r))} em curso desde ${esc(formatDate(reg.iniciada_em))}</span>` +
+        (dono && SPRINTPO.sprintVencida(r, hoje, fer)
+          ? `<button type="button" class="spr-acao" onclick="sprintFecharAbrir('${esc(r)}')">Fechar ${esc(SPRINTPO.rotuloCurto(r))}</button>` : ''));
+    } else {
+      partes.push(`<span class="es-aviso">✎ ${esc(SPRINTPO.rotuloCurto(r))} montando — o time ainda não vê as ${qtd(r)} demanda(s)${btnIni(r)}</span>`);
+    }
+  }
+  if (atual && atual !== r && SPRINTPO.situacaoDaSprint(state, atual) !== 'em_curso' &&
+      SPRINTPO.situacaoDaSprint(state, atual) !== 'fechada' && qtd(atual)) {
+    partes.push(`<span class="es-aviso">⚠ A sprint atual ${esc(SPRINTPO.rotuloCurto(atual))} ainda não foi iniciada — o time não vê as ${qtd(atual)} demanda(s)${btnIni(atual)}</span>`);
+  }
+  box.innerHTML = partes.join('');
+}
+
 function renderEntregasSprint() {
   const sel = document.getElementById('es-sprint');
   const box = document.getElementById('es-lista');
@@ -5286,6 +5329,7 @@ function renderEntregasSprint() {
   sel.innerHTML = opcoes.map(o =>
     `<option value="${esc(o.key)}"${o.key === _esSprint ? ' selected' : ''}>` +
     `${esc(o.label.replace(/^● /, ''))}${o.key === atual ? ' (atual)' : ''} (${o.n})</option>`).join('');
+  if (typeof esEstadoRender === 'function') esEstadoRender(atual);
 
   /* ═══ ENTREGUE SO APOS O PM/PO, NA SPRINT DA IDA PARA VALIDACAO (05/11/2026)
      "So conta entregue apos aprovacao PM/PO, para sprint deve considerar a
@@ -10638,9 +10682,9 @@ async function sprDirecionar(id, nome) {
  *  momento em que o PO descobre que esqueceu de alocar três — e descobrir isso
  *  depois, pelo dev perguntando, é o que esta confirmação evita. Não é um ato
  *  irreversível como o fechamento, mas é o que o time passa a ver. */
-async function sprintIniciar() {
+async function sprintIniciar(rotulo) {
   if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) inicia a sprint.', 'err'); return; }
-  const r = _sprSel;
+  const r = rotulo || _sprSel;
   if (!r) return;
   const dem = SPRINTPO.demandasDaSprint(state, r);
   const semDev = dem.filter(m => !String(m.dev || '').trim());
