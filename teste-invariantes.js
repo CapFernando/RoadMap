@@ -23384,7 +23384,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'worker=' + (mDias ? mDias[1] : '?') + ' telas=' + PZ.DIAS_UTEIS_NA_AREA);
     if (promove && feriadosFn && diasUteisFn && mDias) {
       const WAREA = new Function([
-        feriadosFn, diasUteisFn, promove,
+        feriadosFn, diasUteisFn, promove, corpo(W, 'function faltaHoras(m) {'),
         'const DIAS_UTEIS_NA_AREA = ' + mDias[1] + ';',
         'function hojeBR(){ return "2026-11-09"; }',
         'return promoveAreaVencida;',
@@ -23397,7 +23397,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       let divergiu = [];
       for (const desde of ['2026-11-02', '2026-11-03', '2026-11-05', '2026-11-06']) {
         for (const ref of ['2026-11-06', '2026-11-09', '2026-11-10', '2026-11-12', '2026-11-13']) {
-          const card = { id: 'c', status_planejamento: 'validacao_area',
+          const card = { id: 'c', status_planejamento: 'validacao_area', horas_realizadas: 2,
                          validacao_area_em: desde, entregue_em: desde + 'T10:00:00.000Z' };
           const daTela = PZ.areaVenceu(card, ref, []);
           const doWorker = WAREA({ feriados: [], melhorias: [card] }, ref).length > 0;
@@ -23411,7 +23411,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       /* A PROMOCAO NAO RECARIMBA A ENTREGA. Se carimbasse, o ponto cairia na
          sprint em que a AREA deixou o prazo estourar — o contrario exato da
          regra retroativa, e justamente contra quem entregou no dia. */
-      const antigo = { id: 'c', codigo: 'AX-9', status_planejamento: 'validacao_area',
+      const antigo = { id: 'c', codigo: 'AX-9', status_planejamento: 'validacao_area', horas_realizadas: 3,
                        validacao_area_em: '2026-11-02',
                        entregue_em: '2026-11-02T10:00:00.000Z' };
       const movidas = WAREA({ feriados: [], melhorias: [antigo] }, '2026-11-09');
@@ -23419,6 +23419,13 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'passados os cinco dias uteis a demanda vai sozinha para o PM/PO');
       ok(antigo.entregue_em === '2026-11-02T10:00:00.000Z',
          'e a data da entrega do dev NAO e recarimbada pela promocao');
+      /* SEM HORAS NAO SOBE (09/11/2026): a AX-610 e a AX-1148 chegaram ao PM/PO
+         assim, pela promocao. */
+      const semHoras = { id: 's', codigo: 'AX-8', status_planejamento: 'validacao_area',
+                         validacao_area_em: '2026-11-02', entregue_em: '2026-11-02T10:00:00.000Z' };
+      WAREA({ feriados: [], melhorias: [semHoras] }, '2026-11-09');
+      ok(semHoras.status_planejamento === 'validacao_area',
+         'sem horas lancadas a demanda NAO sobe sozinha para o PM/PO');
 
       /* QUEM NAO ESTA NA AREA NAO E TOCADO, e oculta tambem nao: uma demanda
          arquivada com carimbo velho reapareceria no PM/PO sem ninguem pedir. */
@@ -29926,6 +29933,49 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/id="es-estado"/.test(ADMIN) && /esEstadoRender\(atual\)/.test(ADMIN), 'e a faixa e desenhada junto com a aba');
     ok(/async function sprintIniciar\(rotulo\)/.test(ADMIN) && /const r = rotulo \|\| _sprSel;/.test(ADMIN),
        'iniciar aceita a sprint de quem chama, sem depender da aba de Sprint');
+  }
+
+  /* ENTRAR NA VALIDACAO SEM HORAS PELO ADMIN (09/11/2026). */
+  {
+    const fv = corpo(W, 'function entrandoEmValidacaoSemHoras(recebido, servidor) {');
+    const fh = corpo(W, 'function faltaHoras(m) {');
+    ok(!!fv && !!fh, 'existe a trava de horas para entrar na validacao pela rota do Admin');
+    if (fv && fh) {
+      const F = new Function(fh + '\n' + fv + '\nreturn entrandoEmValidacaoSemHoras;')();
+      const srv = { melhorias: [{ id: 'a', codigo: 'AX-A', status_planejamento: 'planejado' },
+                                { id: 'b', codigo: 'AX-B', status_planejamento: 'validacao_area' }] };
+      ok(F({ melhorias: [{ id: 'a', codigo: 'AX-A', status_planejamento: 'validacao_area' }] }, srv).length === 1,
+         'Planejado para a validacao da area sem horas e recusado');
+      ok(F({ melhorias: [{ id: 'b', codigo: 'AX-B', status_planejamento: 'validacao' }] }, srv).length === 1,
+         'e da area para o PM/PO sem horas tambem');
+      ok(!F({ melhorias: [{ id: 'a', codigo: 'AX-A', status_planejamento: 'validacao_area', horas_realizadas: 2 }] }, srv).length,
+         'com horas passa');
+    }
+    ok(/const semHorasValPub = entrandoEmValidacaoSemHoras\(data, antesPub\);/.test(W) && /if \(semHorasValPub\.length\) \{/.test(W),
+       'e a rota de publicacao do Admin chama a trava e recusa');
+  }
+
+  /* SALES OPS SEM TRAVAS, POR ENQUANTO (09/11/2026). */
+  {
+    const i0 = W.indexOf('const SALES_OPS_SEM_TRAVA'), i1 = W.indexOf('function faltaHoras(m) {');
+    ok(i0 > 0 && i1 > i0, 'a liberacao do Sales Ops existe no Worker');
+    if (i0 > 0 && i1 > i0) {
+      const T = new Function(W.slice(i0, i1) + '\nreturn { salesOpsForaDasTravas, ehSalesOpsLivre };')();
+      const d = { melhorias: [{ id: '1', dev: 'Josias Bueno' }, { id: '2', dev: 'Marina' }, { id: '3', dev: '', sales_ops: true }, { id: '4', dev: 'Josias Bueno' }] };
+      const sv = { melhorias: [{ id: '1', dev: 'Josias Bueno' }, { id: '2', dev: 'Marina' }, { id: '4', dev: 'Marina' }] };
+      const g = T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Josias Bueno' } });
+      ok(g.melhorias.map(m => m.id).join(',') === '2,4', 'as demandas do Sales Ops saem das travas, e a de outro time nao',
+         g.melhorias.map(m => m.id).join(','));
+      ok(T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Marina' } }) === d, 'e para quem nao e do Sales Ops nada muda');
+    }
+    const dp = W.slice(W.indexOf("body.action === 'dev-publish'"), W.indexOf('const voltaramDev = preservaChaves(data, antesDev);'));
+    const iT = dp.indexOf('data.melhorias = salesOpsForaDasTravas(data, antesDev, _ident).melhorias;');
+    const iD = dp.indexOf('const datasRevertidas = travaDatasComprometidas(data, antesDev);');
+    ok(iT > 0 && iT < iD && /data\.melhorias = _todasDev;/.test(W.slice(W.indexOf("body.action === 'dev-publish'"), W.indexOf('const voltaramDev = preservaChaves(data, antesDev);') + 60)),
+       'na rota do painel do dev as travas conferem sem o Sales Ops, e a lista volta inteira antes de gravar');
+    const DV = require('fs').readFileSync(__dirname + '/dev.html', 'utf8');
+    ok(/const SALES_OPS_SEM_TRAVA = true;/.test(DV) && /salesOpsLivre\(m\)\)\) \{ setTimeout\(\(\) => updateStatus\(id, colKey\), 0\); return; \}/.test(DV) &&
+       /id="ms-sprint-sel"/.test(DV), 'e a tela do dev libera o arraste e a escolha de sprint para eles');
   }
 
   Promise.all(pendentes).then(() => {

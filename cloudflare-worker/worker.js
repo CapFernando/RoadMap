@@ -1855,6 +1855,11 @@ function promoveAreaVencida(data, hoje) {
     if (seguinte > ref) continue;
     const n = diasUteis(seguinte, ref, feriados);
     if (n === null || n < DIAS_UTEIS_NA_AREA) continue;
+    /* SEM HORAS NAO SOBE PARA O PM/PO (09/11/2026): "esta chegando demanda para
+       validacao sem lancamento de horas". A AX-610 e a AX-1148 entraram na area
+       antes da trava e subiram sozinhas, sem horas. Fica na area ate o dev
+       lancar — e ai segue pela porta de sempre, que confere. */
+    if (faltaHoras(m)) continue;
     m.status_planejamento = 'validacao';
     movidas.push({ id: m.id, codigo: m.codigo || m.id, dias_uteis: n, desde: de });
   }
@@ -2621,6 +2626,53 @@ function saindoDeAndamentoSemHoras(recebido, servidor) {
     if (faltaHoras(m)) presos.push(m.codigo || m.id);
   }
   return presos;
+}
+
+/* ENTRAR NA VALIDACAO SEM HORAS, PELA ROTA DO ADMIN (09/11/2026). O painel do
+   dev ja recusava (`entrandoEmValidacaoSemEntrega`); o Admin nao — a AX-1141 foi
+   de Planejado para a Validacao da area por la, sem horas. Aqui so as horas: o
+   texto do que foi implementado continua cobrado de quem entrega. */
+function entrandoEmValidacaoSemHoras(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    const etapa = String((m && m.status_planejamento) || '');
+    if (!m || (etapa !== 'validacao' && etapa !== 'validacao_area')) continue;
+    const velha = antes.get(m.id);
+    if (!velha || String(velha.status_planejamento || '') === etapa) continue;
+    if (faltaHoras(m)) presos.push(m.codigo || m.id);
+  }
+  return presos;
+}
+
+/* ═══ SALES OPS SEM TRAVAS, POR ENQUANTO (09/11/2026) ════════════════════
+ * Josias Bueno e Rikelme Santos (Sales Ops) ficam fora das travas do painel do
+ * dev nas demandas deles: abrir task, definir sprint e mover no Kanban. Vale para
+ * a demanda cujo responsavel e um deles, ou sem responsavel e marcada Sales Ops.
+ * A espelho mora no `dev.html` (`salesOpsLivre`). Desligar: false aqui e la. */
+const SALES_OPS_SEM_TRAVA = true;
+const SALES_OPS_LIVRES = ['josias', 'rikelme'];
+function ehSalesOpsLivre(nome) {
+  const n = String(nome == null ? '' : nome).normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().trim().split(/\s+/)[0] || '';
+  return SALES_OPS_LIVRES.includes(n);
+}
+function demandaSalesOpsLivre(m) {
+  if (!m) return false;
+  const d = String(m.dev || '').trim();
+  return d ? d.split('/').map(x => x.trim()).filter(Boolean).every(ehSalesOpsLivre) : !!m.sales_ops;
+}
+function salesOpsForaDasTravas(data, servidor, ident) {
+  const quem = ident && ident.usuario ? (ident.usuario.nome || ident.usuario.login || '') : '';
+  if (!SALES_OPS_SEM_TRAVA || !ehSalesOpsLivre(quem) || !data || !Array.isArray(data.melhorias)) return data;
+  const antes = new Map(((servidor && servidor.melhorias) || []).map(v => [v && v.id, v]));
+  return Object.assign({}, data, { melhorias: data.melhorias.filter(m => {
+    const v = antes.get(m && m.id);
+    // A demanda tem de ser do Sales Ops antes E depois: nao vale "pegar" a de outro time.
+    return !(demandaSalesOpsLivre(m) && (!v || demandaSalesOpsLivre(v)));
+  }) });
 }
 
 function faltaHoras(m) {
@@ -8101,6 +8153,7 @@ async function rotear(request, env, _histFila) {
          E, se a base fosse o corpo, bastaria mandar tres inventadas. */
       preservaAssinaturasSpike(data, antesPub);
       const semHorasPub = entrandoEmConcluidoSemHoras(data, antesPub);
+      const semHorasValPub = entrandoEmValidacaoSemHoras(data, antesPub);
       const semHomologPub = entrandoSemHomologacao(data, antesPub);
       /* A MARCA DO COMITE e de PM/PO ou da lideranca. Reverte o que quem nao
          pode tentou mudar, e DIZ na resposta — silencio aqui faria a pessoa
@@ -8233,6 +8286,12 @@ async function rotear(request, env, _histFila) {
                       codigos: semHomologPub.map(x => x.codigo),
                       detail: semHomologPub.map(x => x.codigo + ': ' + x.motivo).join(' | ') },
                     400, headers);
+      }
+      if (semHorasValPub.length) {
+        return json({ error: 'horas_obrigatorias',
+                      codigos: semHorasValPub,
+                      detail: 'Informe as horas de desenvolvimento antes de mandar para a validacao: ' +
+                              semHorasValPub.join(', ') + '.' }, 400, headers);
       }
       if (semHorasPub.length) {
         return json({ error: 'horas_obrigatorias',
@@ -8395,6 +8454,9 @@ async function rotear(request, env, _histFila) {
       // gravacao inteira: o dev costuma estar salvando OUTRA coisa (horas, texto,
       // anexo) e derrubar tudo por causa de um campo que ele talvez nem tenha
       // tocado seria perder o trabalho dele por um erro que nao e dele.
+      // Sales Ops sem travas por enquanto (09/11/2026) — ver `salesOpsForaDasTravas`.
+      const _todasDev = data.melhorias;
+      data.melhorias = salesOpsForaDasTravas(data, antesDev, _ident).melhorias;
       const datasRevertidas = travaDatasComprometidas(data, antesDev);
       /* A etapa tambem volta, e pelo mesmo motivo. So para o papel `dev`: analista
          e admin entram por esta rota e para eles mover para Planning e trabalho. */
@@ -8579,6 +8641,7 @@ async function rotear(request, env, _histFila) {
       // e a automatica seria um dado que muda sozinho sem deixar rastro.
       // ANTES de limpaDevs, que LE `devs_removidos`: se a chave nao voltou
       // primeiro, a limpeza decide sem saber quem ja tinha saido do time.
+      data.melhorias = _todasDev;   // volta a lista inteira — as do Sales Ops so pularam as travas
       const voltaramDev = preservaChaves(data, antesDev);
       const devsForaDev = await limpaDevs(env, data);
       carimbaMeses(data, antesDev, false);

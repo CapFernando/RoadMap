@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="d6035e108d">
+<html lang="pt-BR" data-build="f626daeb30">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -4130,6 +4130,21 @@ async function verificarSenha() {
 // A comparacao ignora acento e caixa porque a base tem as duas grafias da mesma
 // pessoa ("Jhonantan", "JHONANTAN") — e um vinculo que falha por causa de um
 // acento devolve a pessoa para a grade sem ela entender por que.
+/* SALES OPS SEM TRAVAS, POR ENQUANTO (09/11/2026): "Time de SALES OPS podera
+   abrir task, definir sprint e movimentar Kanban sem travas por enquanto.
+   Ajustar essa permissao apenas para Sales Ops (estavam fora do processo); ao
+   ajustar voltamos as travas padrao." Josias Bueno e Rikelme Santos, nas
+   demandas deles (ou sem dono e marcadas Sales Ops). Espelho do Worker
+   (`salesOpsForaDasTravas`). Desligar: false aqui e la. */
+const SALES_OPS_SEM_TRAVA = true;
+const SALES_OPS_LIVRES = ['josias', 'rikelme'];
+function ehSalesOpsLivre(nome) { return SALES_OPS_LIVRES.includes(normNome(nome).split(' ')[0] || ''); }
+function salesOpsLivre(m) {
+  if (!SALES_OPS_SEM_TRAVA || !ehSalesOpsLivre(currentDev) || !m) return false;
+  const d = String(m.dev || '').trim();
+  return d ? d.split('/').map(x => x.trim()).filter(Boolean).every(ehSalesOpsLivre) : !!m.sales_ops;
+}
+
 function normNome(s) {
   return String(s == null ? '' : s)
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -4690,7 +4705,7 @@ function getFiltered() {
        faria o quadro do dev mudar de forma sozinho várias vezes por dia.
        Fora de sprint nunca se esconde — é o backlog dele, e é onde Sustentação
        vive. */
-    if (window.SPRINTPO && SPRINTPO.escondidaDoTime(state, m)) return false;
+    if (window.SPRINTPO && SPRINTPO.escondidaDoTime(state, m) && !(typeof salesOpsLivre === 'function' && salesOpsLivre(m))) return false;
     /* ═══ E O QUE NÃO TEM DONO FICA DISPONÍVEL PARA TODOS ══════════════════
        "O que não estiver com nome alocado ficará disponível no backlog dos
         devs." É trabalho já combinado para a semana que ninguém pegou — some
@@ -5219,7 +5234,9 @@ function onDragOver(e, colKey) {
      sprint (Sustentação passa) — deixar a coluna acender e recusar no solta
      ensinaria a regra pelo erro, que é exatamente o que o comentário acima diz
      para não fazer. A regra mora em `sprint.js`; aqui só se pergunta. */
-  const podeSoltar = ETAPAS_DO_DEV.includes(colKey) && !travaSprintBarra(dragId, colKey);
+  const mArr = state.melhorias.find(x => String(x.id) === String(dragId));
+  const podeSoltar = (typeof salesOpsLivre === 'function' && salesOpsLivre(mArr)) ||
+    (ETAPAS_DO_DEV.includes(colKey) && !travaSprintBarra(dragId, colKey));
   e.dataTransfer.dropEffect = podeSoltar ? 'move' : 'none';
   const col = document.getElementById('col-'+colKey);
   if (col && !col.classList.contains(podeSoltar ? 'drag-over' : 'drag-block')) {
@@ -5251,6 +5268,8 @@ function onDrop(e, colKey) {
   const curSk = getStatusKey(m);
   const col = COLUMNS.find(c => c.key === colKey);
   if (!col || col.maps.includes(curSk)) return; // mesma coluna
+  // Sales Ops sem travas: qualquer coluna, sem as conferencias abaixo.
+  if ((typeof salesOpsLivre === 'function' && salesOpsLivre(m))) { setTimeout(() => updateStatus(id, colKey), 0); return; }
   /* O ARRASTE OBEDECE A MESMA REGRA DO SELECT. Antes ele era a porta dos fundos:
      as opcoes da lista nao incluiam Planning, e soltar o card na coluna Planning
      funcionava. Pior no caso de Concluido, que nao existe como opcao — a lista
@@ -5945,15 +5964,39 @@ function msSolicitanteRender(m) {
 
 /* A SPRINT DO CARD, só leitura — o chip é o mesmo do quadro (`SPRINTPO.badge`),
    para a pessoa reconhecer o que já vê nos cards. Vazia, diz a quem pedir. */
+let _msSprintMexido = false;
 function msSprintRender(m) {
   const el = document.getElementById('ms-sprint');
   if (!el || !window.SPRINTPO) return;
+  _msSprintMexido = false;
+  /* Sales Ops sem travas: escolhe a sprint aqui mesmo. */
+  if ((typeof salesOpsLivre === 'function' && salesOpsLivre(m))) {
+    const atual = SPRINTPO.doPO(m || {});
+    const ops = SPRINTPO.proximasSprints(PRAZO.hojeISO(), 5, state.feriados || [],
+      SPRINTPO.rotulosFechados ? SPRINTPO.rotulosFechados(state) : []).map(x => x.rotulo);
+    if (atual && !ops.includes(atual)) ops.unshift(atual);
+    el.innerHTML = '<select id="ms-sprint-sel" class="filter-select" onchange="msSprintEscolhe(this.value)">' +
+      '<option value="">— fora da sprint —</option>' +
+      ops.map(r => '<option value="' + escAttr(r) + '"' + (r === atual ? ' selected' : '') + '>' +
+        escAttr(SPRINTPO.rotuloCurto(r)) + '</option>').join('') + '</select>';
+    return;
+  }
   const s = SPRINTPO.doPO(m || {});
   el.innerHTML = SPRINTPO.badge(m || {}, 'kcard-sprint') +
     (s ? (m.sprint_po_por ? ' <span style="color:var(--text3)">— repassada por ' +
                             escAttr(m.sprint_po_por) + '</span>' : '')
        : ' <span style="color:var(--text3)">— peça ao PM/PO: depois da Planning a ' +
          'sprint é obrigatória.</span>');
+}
+
+function msSprintEscolhe(r) {
+  const m = state.melhorias.find(x => String(x.id) === String((document.getElementById('ms-id') || {}).value || ''));
+  if (!m) return;
+  m.sprint_po = r || '';
+  m.sprint_po_em = PRAZO.hojeISO();
+  m.sprint_po_por = currentDev || '';
+  if (r) m.sprint_po_historico = (m.sprint_po_historico || []).concat([{ sprint: r, em: m.sprint_po_em, por: m.sprint_po_por }]);
+  _msSprintMexido = true;
 }
 
 function msProjetoRender(m) {
@@ -6455,7 +6498,7 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
      foi assim que a AX-179 entrou em Validação sem horas, pelo arraste,
      enquanto o select exigia. Antes da atualização otimista, senão o card pula
      para a coluna e volta sozinho. */
-  const barrado = travaSprintBarra(id, colKey);
+  const barrado = (typeof salesOpsLivre === 'function' && salesOpsLivre(m)) ? '' : travaSprintBarra(id, colKey);
   if (barrado) { toast('🔒 ' + barrado, 'err'); return; }
   const spAnterior = m.status_planejamento;
   const stAnterior = m.status;
@@ -6534,6 +6577,10 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   // Vinculo de projeto entra no patch so se mexeu: mandar sempre sobrescreveria
   // um vinculo feito no Admin entre a leitura desta tela e a gravacao.
   if (_msProjetoMexido) campos.projeto_id = m.projeto_id || '';
+  if (typeof _msSprintMexido !== 'undefined' && _msSprintMexido) {
+    campos.sprint_po = m.sprint_po || ''; campos.sprint_po_em = m.sprint_po_em || '';
+    campos.sprint_po_por = m.sprint_po_por || ''; campos.sprint_po_historico = m.sprint_po_historico || [];
+  }
   /* QUEM PEDIU entra pela MESMA regra: so se mexeu nesta tela. Mandar sempre
      sobrescreveria o nome que o PM/PO tivesse acabado de preencher no Admin —
      e como o campo nasce vazio em 119 demandas antigas, "sempre" significaria
