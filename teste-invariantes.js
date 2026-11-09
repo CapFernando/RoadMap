@@ -29893,7 +29893,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(SPw.sprintDaIdaValidacao({ validacao_area_em: '2026-11-09' }, []) === 'S2-11-2026', 'segunda-feira continua na sprint nova');
     ok(SPw.rotuloDeData('2026-11-07', []) === 'S2-11-2026', 'e o rotulo de datas de prazo no fim de semana nao mudou');
     const fes = corpo(ADMIN, 'function renderEntregasSprint(');
-    ok(!!fes && /PAUSA\.estaPausada/.test(fes) && /st === 'pausada'\) return false/.test(fes), 'pausada em aberto sai da conta da sprint');
+    ok(!!fes && /PAUSA\.estaPausada/.test(fes) && /lPausadas/.test(fes) && /concat\(lAguardando, lPausadas\)/.test(fes),
+       'pausada em aberto soma nas entregas da tela da sprint');
   }
 
   /* PLACAR SEM PAUSADA EM ABERTO, E LANCADO FORA DO PRAZO SO NA SPRINT
@@ -29906,7 +29907,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       Object.assign({ id: 'b', codigo: 'AX-B', pausado_em: '2026-11-04' }, base),
       { id: 'c', codigo: 'AX-C', sprint_po: 'S1-11-2026', status_planejamento: 'concluido', primeira_validacao_em: '2026-11-04' } ] };
     const q = SPp.placarDaSprint(dd, 'S1-11-2026');
-    ok(q.total === 2 && q.pct === 50, 'pausada em aberto sai do placar da sprint', q.total + ' itens, ' + q.pct + '%');
+    ok(q.total === 3 && q.pausadas === 1 && q.entregues === 2 && q.pct === 67,
+       'pausada conta como entregue no placar (pausada = entregue)', q.total + ' itens, ' + q.entregues + ' entregues, ' + q.pct + '%');
+    const rkP = SPp.rankingDaSprint({ feriados: [], melhorias: [Object.assign({ id: 'p', codigo: 'AX-P', dev: 'Ana', pausado_em: '2026-11-04' }, base),
+                                                               Object.assign({ id: 'q', codigo: 'AX-Q', dev: 'Ana' }, base)] }, 'S1-11-2026');
+    ok(rkP[0] && rkP[0].pct === 50 && rkP[0].entregues === 1, 'e no ranking por pessoa tambem');
     const lf = { status_planejamento: 'concluido', sprint_po: 'S5-10-2026', primeira_validacao_em: '2026-11-06',
                  lancado_fora_do_prazo: { sprint: 'S5-10-2026' } };
     ok(SPp.situacaoNaSprint(lf, 'S5-10-2026', 'concluido', []) === 'entregue', 'lancado fora do prazo conta na sprint registrada');

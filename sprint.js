@@ -1482,17 +1482,20 @@
 
   /** As demandas que contam nesta sprint pela regra nova — as que estiveram
    *  nela e as que foram para validação nela, vindas de onde for. */
+  /* PAUSADA CONTA COMO ENTREGUE (08/11/2026): "pausada (=entregue)". A
+     demanda pausada ainda em aberto sai da coluna do que falta e entra na das
+     entregas da sprint — quem pausou nao pode pesar contra o cumprimento. */
+  function situacaoComPausa(m, rotulo, etapa, feriados) {
+    var sit = situacaoNaSprint(m, rotulo, etapa, feriados);
+    return sit === 'em_curso' && iso((m || {}).pausado_em) ? 'pausada' : sit;
+  }
+
   function demandasDaSprintPorEntrega(dados, rotulo, trilha, etapaDe) {
     var r = txt(rotulo), fer = (dados || {}).feriados || [];
     return ((dados || {}).melhorias || []).filter(function (m) {
       if (!m || m.oculto || m.mesclado_em || !daTrilha(m, trilha)) return false;
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
       var sit = situacaoNaSprint(m, r, e, fer);
-      /* PAUSADA EM ABERTO NAO ENTRA NA CONTA (08/11/2026): "itens pausados
-         estao contando, nao deveria" — decisao: so as pausadas; quem rolou de
-         sprint sem entregar continua pesando. A pausada que ja foi entregue ou
-         esta em validacao segue contando como entrega. */
-      if (sit === 'em_curso' && iso(m.pausado_em)) return false;
       return !!sit;
     });
   }
@@ -1502,18 +1505,19 @@
     var r = txt(rotulo);
     if (sprintNoRegimeDeEntrega(r, (dados || {}).feriados)) {
       var fer = (dados || {}).feriados || [];
-      var q = { rotulo: r, trilha: txt(trilha), total: 0, validados: 0, aguardando: 0, emCurso: 0, saiu: 0, naArea: 0,
+      var q = { rotulo: r, trilha: txt(trilha), total: 0, validados: 0, aguardando: 0, pausadas: 0, emCurso: 0, saiu: 0, naArea: 0,
                 pontosTotal: 0, pontosValidados: 0, pontosAguardando: 0,
                 semPontuacao: 0, pct: 0, pctPontos: null, regraEntrega: true,
-                itens: { validados: [], aguardando: [], emCurso: [], saiu: [] } };
+                itens: { validados: [], aguardando: [], pausadas: [], emCurso: [], saiu: [] } };
       demandasDaSprintPorEntrega(dados, r, trilha, etapaDe).forEach(function (m) {
         var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
-        var sit = situacaoNaSprint(m, r, e, fer);
+        var sit = situacaoComPausa(m, r, e, fer);
         var pts = pontosDe(m);
         q.total += 1; q.pontosTotal += pts;
         if (!pts) q.semPontuacao += 1;
         if (sit === 'entregue') { q.validados += 1; q.pontosValidados += pts; q.itens.validados.push(m); }
         else if (sit === 'aguardando') { q.aguardando += 1; q.pontosAguardando += pts; q.itens.aguardando.push(m); }
+        else if (sit === 'pausada') { q.pausadas += 1; q.itens.pausadas.push(m); }
         else if (sit === 'em_curso') { q.emCurso += 1; q.itens.emCurso.push(m); }
         else { q.saiu += 1; q.itens.saiu.push(m); }
       });
@@ -1522,7 +1526,7 @@
          da área ou validação PM/PO, deve contar como uma entrega da sprint."
          10 itens, 5 fechados, 3 em validação → 80%. `validados` continua sendo
          só o que o PM/PO fechou; `entregues` soma os dois. */
-      q.entregues = q.validados + q.aguardando;
+      q.entregues = q.validados + q.aguardando + q.pausadas;   // pausada = entregue (08/11)
       q.pontosEntregues = q.pontosValidados + q.pontosAguardando;
       q.pct = q.total ? Math.round(q.entregues / q.total * 100) : 0;
       q.pctPontos = q.pontosTotal ? Math.round(q.pontosEntregues / q.pontosTotal * 100) : null;
@@ -1588,7 +1592,7 @@
     var acc = {};
     var pega = function (nome) {
       if (!acc[nome]) {
-        acc[nome] = { nome: nome, total: 0, validados: 0, aguardando: 0,
+        acc[nome] = { nome: nome, total: 0, validados: 0, aguardando: 0, pausadas: 0,
                       emCurso: 0, saiu: 0, pontos: 0, pontosTotal: 0 };
       }
       return acc[nome];
@@ -1597,7 +1601,7 @@
     var ferR = (dados || {}).feriados || [];
     (regraNova ? demandasDaSprintPorEntrega(dados, r, trilha, etapaDe) : []).forEach(function (m) {
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
-      var sit = situacaoNaSprint(m, r, e, ferR);
+      var sit = situacaoComPausa(m, r, e, ferR);
       var nomes = txt(m.dev).split('/').map(function (x) { return x.trim(); }).filter(Boolean);
       if (!nomes.length) nomes = ['(sem dev)'];
       var qn = nomes.length, pts = pontosDe(m);
@@ -1606,6 +1610,7 @@
         a.total += 1; a.pontosTotal += pts / qn;
         if (sit === 'entregue') { a.validados += 1; a.pontos += pts / qn; }
         else if (sit === 'aguardando') a.aguardando += 1;
+        else if (sit === 'pausada') a.pausadas += 1;
         else if (sit === 'em_curso') a.emCurso += 1;
         else a.saiu += 1;
         if (qn > 1) a.dupla = true;
@@ -1637,9 +1642,9 @@
        fechadas + em validacao. Pontos continuam so do que o PM/PO fechou. */
     return Object.keys(acc).map(function (n) {
       var a = acc[n];
-      var ent = regraNova ? a.validados + a.aguardando : a.validados;
+      var ent = regraNova ? a.validados + a.aguardando + (a.pausadas || 0) : a.validados;   // pausada = entregue (08/11)
       var o = { nome: a.nome, total: a.total, validados: a.validados,
-               aguardando: a.aguardando, emCurso: a.emCurso,
+               aguardando: a.aguardando, pausadas: a.pausadas || 0, emCurso: a.emCurso,
                saiu: a.saiu, pontos: Math.round(a.pontos),
                pontosTotal: Math.round(a.pontosTotal), dupla: !!a.dupla,
                pct: a.total ? Math.round(ent / a.total * 100) : 0 };
@@ -1964,6 +1969,7 @@
     sprintDaIdaValidacao: sprintDaIdaValidacao,
     sprintNoRegimeDeEntrega: sprintNoRegimeDeEntrega,
     situacaoNaSprint: situacaoNaSprint,
+    situacaoComPausa: situacaoComPausa,
     demandasDaSprintPorEntrega: demandasDaSprintPorEntrega,
     naArea: naArea,
     saiuPelaArea: saiuPelaArea,

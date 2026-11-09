@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="7f074436e1">
+<html lang="pt-BR" data-build="fdbef4f50c">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1681,7 +1681,7 @@
 <script src="selo-validacao.js?v=0b6fdb5439"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=a926280932"></script>
+<script src="sprint.js?v=3f8fcf416d"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -5297,10 +5297,9 @@ function renderEntregasSprint() {
      la, e sai daqui. Sprint anterior a regra: a conta antiga. */
   const ferEs = state.feriados || [];
   const regraEs = !!(SPRINTPO.sprintNoRegimeDeEntrega && SPRINTPO.sprintNoRegimeDeEntrega(_esSprint, ferEs));
-  /* PAUSADA NAO CONTA (08/11/2026): "itens pausados estao contando, nao
-     deveria". A pausada que ainda esta em aberto sai da conta da sprint — nem
-     no total, nem no faltando — e aparece so como nota no cartao. A que ja foi
-     entregue ou esta em validacao continua contando como entrega. */
+  /* PAUSADA = ENTREGUE (08/11/2026): "pausada (=entregue)". A pausada que
+     ainda esta em aberto sai do faltando e soma nas entregas da sprint — a
+     mesma regra do placar (`SPRINTPO.situacaoComPausa`). */
   const pausadaEs = m => !!(window.PAUSA && PAUSA.estaPausada && PAUSA.estaPausada(m));
   const sitEs = m => { const r = sitEs0(m); return r === 'aberta' && pausadaEs(m) ? 'pausada' : r; };
   const sitEs0 = m => {
@@ -5316,11 +5315,9 @@ function renderEntregasSprint() {
     if (ehMesclada(m)) return false;
     if (!regraEs) return SPRINTPO.naSprint(m, _esSprint);
     const st = sitEs(m);
-    if (st === 'pausada') return false;
     return st === 'negada' ? SPRINTPO.naSprint(m, _esSprint) : !!st;
   });
-  const pausadasEs = (state.melhorias || []).filter(m => !ehMesclada(m) && sitEs(m) === 'pausada' &&
-    (regraEs || SPRINTPO.naSprint(m, _esSprint)) && (!_esEsteira || esteiraDe(m) === _esEsteira));
+
   /* O ANDAMENTO POR ESTEIRA — uma linha antes dos cartoes, sempre sobre a
      sprint inteira; clicar filtra (o mesmo que o seletor). */
   const selE = document.getElementById('es-esteira');
@@ -5333,7 +5330,7 @@ function renderEntregasSprint() {
     boxE.innerHTML = '<span class="rot">Andamento por esteira:</span>' + ES_ESTEIRAS.map(([k, rot]) => {
       const l = msTodas.filter(m => esteiraDe(m) === k && sitEs(m) !== 'negada');
       const agu = l.filter(m => sitEs(m) === 'aguardando').length;
-      const ent = l.filter(m => sitEs(m) === 'entregue').length + agu;
+      const ent = l.filter(m => sitEs(m) === 'entregue' || sitEs(m) === 'pausada').length + agu;
       const pct = l.length ? Math.round(ent / l.length * 100) : 0;
       return `<span class="es-pessoa${_esEsteira === k ? ' ativo' : ''}" onclick="esEsteira('${k}')" ` +
              `title="Clique para ver só esta esteira">${rot} <b>${ent}/${l.length}</b> entregues · ${pct}%` +
@@ -5377,7 +5374,8 @@ function renderEntregasSprint() {
      sprint." 10 itens, 5 fechados, 3 em validacao → 8 entregues, 80%. */
   const lFechadas = ms.filter(m => sitEs(m) === 'entregue');
   const lAguardando = ms.filter(m => sitEs(m) === 'aguardando');
-  const lEntregues = lFechadas.concat(lAguardando);
+  const lPausadas = ms.filter(m => sitEs(m) === 'pausada');
+  const lEntregues = lFechadas.concat(lAguardando, lPausadas);
   const lFaltaCom = ms.filter(m => aberta(m) && temDono(m));
   const lFaltaSem = ms.filter(m => aberta(m) && !temDono(m));
   const validas = ms.length - negadas;
@@ -5391,9 +5389,8 @@ function renderEntregasSprint() {
     `<div class="es-kpi-sub">${sub}</div>${extra || ''}</div>`;
   const vencCom = lFaltaCom.filter(vencida).length;
   document.getElementById('es-kpis').innerHTML = ms.length ? (
-    kpiEs('todas', ms.length, 'Na sprint', `${ms.length} task(s)` + (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${comProj} em projeto` +
-    (pausadasEs.length ? ` · <span title="${esc(pausadasEs.map(m => m.codigo).join(', '))}">${pausadasEs.length} pausada(s) fora da conta</span>` : '')) +
-    kpiEs('entregues', lEntregues.length, 'Entregues', `${lFechadas.length} fechada(s) + ${lAguardando.length} em validação · ${pctEnt}% da sprint`, 'var(--green)',
+    kpiEs('todas', ms.length, 'Na sprint', `${ms.length} task(s)` + (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${comProj} em projeto`) +
+    kpiEs('entregues', lEntregues.length, 'Entregues', `${lFechadas.length} fechada(s) + ${lAguardando.length} em validação` + (lPausadas.length ? ` + <span title="${esc(lPausadas.map(m => m.codigo).join(', '))}">${lPausadas.length} pausada(s)</span>` : '') + ` · ${pctEnt}% da sprint`, 'var(--green)',
           `<div class="es-barra"><i style="width:${pctEnt}%"></i></div>`) +
     kpiEs('falta_com', lFaltaCom.length, 'Faltando · com responsável', `${pctDe(lFaltaCom.length)}% das tasks` +
           (vencCom ? ` · <span style="color:var(--red-tx,#F9A0A0);font-weight:600">${vencCom} com entrega vencida</span>` : ''),
