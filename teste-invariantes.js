@@ -29978,6 +29978,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        /id="ms-sprint-sel"/.test(DV), 'e a tela do dev libera o arraste e a escolha de sprint para eles');
   }
 
+  /* O ENDERECO SEM ".html" TAMBEM LEVA AO APP (09/11/2026). */
+  {
+    const AXI = require('./axis-interface.js');
+    ok(AXI.nomeDaPagina('/RoadMap/admin') === 'admin.html' && AXI.rotaNova(AXI.nomeDaPagina('/RoadMap/admin'), '', '') === 'inicio',
+       '/RoadMap/admin (sem .html) leva quem tem a interface nova ao app');
+    ok(AXI.nomeDaPagina('/RoadMap/admin.html') === 'admin.html' && AXI.nomeDaPagina('/RoadMap/') === 'index.html',
+       'e o endereco com .html e a raiz seguem como antes');
+  }
+
   Promise.all(pendentes).then(() => {
     console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
     process.exit(falhas ? 1 : 0);

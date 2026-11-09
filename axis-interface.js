@@ -65,7 +65,14 @@
     return papel === 'admin' ? 'admin.html' : papel === 'consulta' ? 'index.html' : 'dev.html';
   }
 
-  function pagina() { return (location.pathname.split('/').pop() || 'index.html').toLowerCase(); }
+  /* O ENDERECO SEM ".html" TAMBEM (09/11/2026): o GitHub Pages abre
+     /RoadMap/admin igual a /RoadMap/admin.html, e quem entrava pelo primeiro
+     nunca era levado ao app — "o link muda, nao deveria". */
+  function nomeDaPagina(caminho) {
+    var p = (String(caminho || '').split('/').pop() || 'index.html').toLowerCase();
+    return /\.html?$/.test(p) ? p : p + '.html';
+  }
+  function pagina() { return nomeDaPagina(location.pathname); }
   function eu() { try { return JSON.parse(sessionStorage.getItem('rm_eu') || 'null'); } catch (_) { return null; } }
   function querAntiga() { try { return sessionStorage.getItem('rm_ui_antiga') === '1'; } catch (_) { return false; } }
   function token() {
@@ -114,7 +121,7 @@
     }, 800);
   }
 
-  var api = { nova: nova, rotaNova: rotaNova, destinoAntigo: destinoAntigo, atualizar: atualizar, ROTA_NOVA: ROTA_NOVA };
+  var api = { nova: nova, nomeDaPagina: nomeDaPagina, rotaNova: rotaNova, destinoAntigo: destinoAntigo, atualizar: atualizar, ROTA_NOVA: ROTA_NOVA };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     raiz.AXIS_INTERFACE = api;
