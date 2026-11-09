@@ -1413,7 +1413,26 @@
   function sprintDaIdaValidacao(m, feriados) {
     var d = primeiraIdaValidacao(m);
     if (!d || d < REGRA_ENTREGA_DESDE) return '';
-    return rotuloDeData(d, feriados);
+    return rotuloDeData(diaUtilAteHoje(d, feriados), feriados);
+  }
+
+  /* IDA PARA VALIDAÇÃO NO FIM DE SEMANA OU FERIADO É DA SEMANA TRABALHADA
+     (08/11/2026): "validação da área não deveria contar como entrega faltando
+     para sprint". Três demandas foram para a validação no sábado e no domingo
+     depois do fim da S1-11 e caíam na S2-11 — na S1-11 viravam "faltando".
+     A entrega é do trabalho da semana que acabou: recua para o último dia útil.
+     Só a âncora da entrega muda; `rotuloDeData` segue jogando datas de prazo
+     no fim de semana para a sprint seguinte, como no gantt. */
+  function diaUtilAteHoje(d, feriados) {
+    var fer = {};
+    (feriados || []).forEach(function (f) { fer[iso(f && typeof f === 'object' ? f.data : f)] = true; });
+    var dt = new Date(d + 'T12:00:00Z');
+    for (var i = 0; i < 10; i++) {
+      var dow = dt.getUTCDay(), s = dt.toISOString().slice(0, 10);
+      if (dow !== 0 && dow !== 6 && !fer[s]) return s;
+      dt.setUTCDate(dt.getUTCDate() - 1);
+    }
+    return d;
   }
 
   /** A regra nova vale para esta sprint? Pelo último dia dela. */

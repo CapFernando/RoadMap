@@ -29883,6 +29883,19 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(VINCULO.abertos(L, 'q').length === 1, 'dependencia aberta continua travando');
   }
 
+  /* IDA PARA VALIDACAO NO FIM DE SEMANA E DA SEMANA TRABALHADA, E PAUSADA EM
+     ABERTO NAO CONTA NA TELA DE ENTREGAS DA SPRINT (08/11/2026). */
+  {
+    const SPw = require('./sprint.js');
+    const sab = { status_planejamento: 'validacao_area', validacao_area_em: '2026-11-07', entregue_em: '2026-11-07T16:00:00Z', sprint_po: 'S1-11-2026' };
+    ok(SPw.sprintDaIdaValidacao(sab, []) === 'S1-11-2026', 'ida para validacao no sabado conta na sprint da semana trabalhada');
+    ok(SPw.situacaoNaSprint(sab, 'S1-11-2026', 'validacao_area', []) === 'aguardando', 'e na S1-11 ela e entrega em validacao, e nao faltando');
+    ok(SPw.sprintDaIdaValidacao({ validacao_area_em: '2026-11-09' }, []) === 'S2-11-2026', 'segunda-feira continua na sprint nova');
+    ok(SPw.rotuloDeData('2026-11-07', []) === 'S2-11-2026', 'e o rotulo de datas de prazo no fim de semana nao mudou');
+    const fes = corpo(ADMIN, 'function renderEntregasSprint(');
+    ok(!!fes && /PAUSA\.estaPausada/.test(fes) && /st === 'pausada'\) return false/.test(fes), 'pausada em aberto sai da conta da sprint');
+  }
+
   Promise.all(pendentes).then(() => {
     console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
     process.exit(falhas ? 1 : 0);

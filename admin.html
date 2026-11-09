@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="df4f06f755">
+<html lang="pt-BR" data-build="2585ec031e">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1681,7 +1681,7 @@
 <script src="selo-validacao.js?v=0b6fdb5439"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=d54f0f863a"></script>
+<script src="sprint.js?v=d8ead63358"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -5297,7 +5297,13 @@ function renderEntregasSprint() {
      la, e sai daqui. Sprint anterior a regra: a conta antiga. */
   const ferEs = state.feriados || [];
   const regraEs = !!(SPRINTPO.sprintNoRegimeDeEntrega && SPRINTPO.sprintNoRegimeDeEntrega(_esSprint, ferEs));
-  const sitEs = m => {
+  /* PAUSADA NAO CONTA (08/11/2026): "itens pausados estao contando, nao
+     deveria". A pausada que ainda esta em aberto sai da conta da sprint — nem
+     no total, nem no faltando — e aparece so como nota no cartao. A que ja foi
+     entregue ou esta em validacao continua contando como entrega. */
+  const pausadaEs = m => !!(window.PAUSA && PAUSA.estaPausada && PAUSA.estaPausada(m));
+  const sitEs = m => { const r = sitEs0(m); return r === 'aberta' && pausadaEs(m) ? 'pausada' : r; };
+  const sitEs0 = m => {
     const sk = statusKey(m);
     if (sk === 'negada') return 'negada';
     if (!regraEs) return sk === 'concluido' ? 'entregue' : 'aberta';
@@ -5310,8 +5316,11 @@ function renderEntregasSprint() {
     if (ehMesclada(m)) return false;
     if (!regraEs) return SPRINTPO.naSprint(m, _esSprint);
     const st = sitEs(m);
+    if (st === 'pausada') return false;
     return st === 'negada' ? SPRINTPO.naSprint(m, _esSprint) : !!st;
   });
+  const pausadasEs = (state.melhorias || []).filter(m => !ehMesclada(m) && sitEs(m) === 'pausada' &&
+    (regraEs || SPRINTPO.naSprint(m, _esSprint)) && (!_esEsteira || esteiraDe(m) === _esEsteira));
   /* O ANDAMENTO POR ESTEIRA — uma linha antes dos cartoes, sempre sobre a
      sprint inteira; clicar filtra (o mesmo que o seletor). */
   const selE = document.getElementById('es-esteira');
@@ -5382,7 +5391,8 @@ function renderEntregasSprint() {
     `<div class="es-kpi-sub">${sub}</div>${extra || ''}</div>`;
   const vencCom = lFaltaCom.filter(vencida).length;
   document.getElementById('es-kpis').innerHTML = ms.length ? (
-    kpiEs('todas', ms.length, 'Na sprint', `${ms.length} task(s)` + (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${comProj} em projeto`) +
+    kpiEs('todas', ms.length, 'Na sprint', `${ms.length} task(s)` + (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${comProj} em projeto` +
+    (pausadasEs.length ? ` · <span title="${esc(pausadasEs.map(m => m.codigo).join(', '))}">${pausadasEs.length} pausada(s) fora da conta</span>` : '')) +
     kpiEs('entregues', lEntregues.length, 'Entregues', `${lFechadas.length} fechada(s) + ${lAguardando.length} em validação · ${pctEnt}% da sprint`, 'var(--green)',
           `<div class="es-barra"><i style="width:${pctEnt}%"></i></div>`) +
     kpiEs('falta_com', lFaltaCom.length, 'Faltando · com responsável', `${pctDe(lFaltaCom.length)}% das tasks` +
