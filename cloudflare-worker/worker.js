@@ -2021,7 +2021,8 @@ async function colaboradoresWorkos(env) {
  * Quem NAO e dono: cria demanda sempre no backlog e fora de sprint; nao repassa,
  * nao tira, nao marca prioritaria e nao inicia/fecha sprint. As tentativas sao
  * REVERTIDAS (o resto da gravacao segue) e a resposta diz o que voltou. */
-const SPRINT_DONOS = ['fernando'];
+// 10/11/2026: "usuario do Mateus.viana deve conseguir movimentar as tasks igual o Fernando".
+const SPRINT_DONOS = ['fernando', 'mateus.viana'];
 
 function ehDonoDaSprint(ident) {
   if (!ident || String(ident.papel || '') !== 'admin') return false;

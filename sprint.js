@@ -1794,7 +1794,8 @@
    * (login), e não pelo papel admin, que é de oito pessoas. `eu` ausente é a
    * senha administrativa compartilhada. A trava de verdade é do servidor; aqui
    * é a cortesia de não oferecer o gesto a quem não pode. */
-  var SPRINT_DONOS = ['fernando'];
+  // 10/11/2026: Mateus Viana movimenta as tasks igual o Fernando (espelho do Worker).
+  var SPRINT_DONOS = ['fernando', 'mateus.viana'];
   function ehDonoDaSprint(eu) {
     if (!eu) return true;
     if (txt(eu.papel) !== 'admin') return false;
