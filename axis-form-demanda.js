@@ -305,6 +305,8 @@
         impacto: nivel('impacto', f.impacto, c), urgencia: nivel('urgencia', f.urgencia, c),
         estimativa: '', motivo_negacao: '', criado_em: c.agora
       };
+      // Conta liberada (Sales Ops): a sprint escolhida entra ja na criacao.
+      if (dono(c) && txt(f.sprint)) { var es = aplicaSprint(obj, f.sprint, c); if (es) return es; }
     } else {
       if (sp === 'negada') return falha('Demanda nova não nasce negada.', 'etapa');
       obj = {
@@ -537,7 +539,9 @@
   }
 
   function quem() { return AX.APP.papel === 'dev' ? (H.meusNomes()[0] || (AX.APP.eu || {}).nome || '') : ((AX.APP.eu || {}).nome || (AX.APP.eu || {}).login || 'admin'); }
-  function contexto(id) { return { papel: AX.APP.papel, quem: quem(), hoje: H.hoje(), agora: new Date().toISOString(), id: id, D: D(), dono: H.donoDaSprint() }; }
+  /* Sales Ops sem travas (Josias e Rikelme, 10/11/2026): escolhem etapa e sprint como o PM/PO. */
+  function contaLivre() { var A = raiz.AXIS_ACOES; return !!(A && A.contaLivre && A.contaLivre({ papel: AX.APP.papel, quem: quem() })); }
+  function contexto(id) { return { papel: AX.APP.papel, quem: quem(), hoje: H.hoje(), agora: new Date().toISOString(), id: id, D: D(), dono: H.donoDaSprint() || contaLivre() }; }
   /** O select de impacto ou urgencia (`REQUISITOS.opcoes`). */
   function opcoesNivel(qual, atual) {
     var R = raiz.REQUISITOS;
@@ -622,7 +626,7 @@
   var EST = null;   // { m, anexos, enviando, inicial, ov, bis, refs, grill, pokerNaMao, grupos }
 
   function html(m) {
-    var papel = AX.APP.papel, dev = papel === 'dev', po = H.donoDaSprint();
+    var papel = AX.APP.papel, dev = papel === 'dev', livre = contaLivre(), po = H.donoDaSprint() || livre;
     var c = contexto('');
     var trava = datasTravadas(m, c);
     var tipoTravado = dev && m && m.tipo;
@@ -672,7 +676,7 @@
       h += campo('axf-etapa', 'Etapa inicial', '<select class="in" id="axf-etapa"' + (!po ? ' disabled' : '') + '>' + etapas.map(function (e) { return opt(e, (H.ETAPA_POR_ID[e] || {}).rotulo || e, 'backlog'); }).join('') + '</select>',
         { nota: !po ? 'Demanda nova nasce no Backlog: só o PM/PO coloca em outra etapa e na sprint.' : '' });
     }
-    if (!dev) {
+    if (!dev || livre) {
       var os = opcoesSprint(m && raiz.SPRINTPO ? raiz.SPRINTPO.doPO(m) : '');
       h += campo('axf-sprint', 'Sprint', '<select class="in" id="axf-sprint"' + (!po || os.fechada ? ' disabled' : '') + '>' + os.html + '</select>' +
         '<span class="note" id="axf-sprint-semana" aria-live="polite"></span>',
@@ -828,6 +832,8 @@
         if (!EST.m || EST.grillMexido) f.grill = EST.grill;
       }
     }
+    // Conta liberada (Sales Ops): o campo de sprint aparece para ela e e lido aqui.
+    if (dev) { var sl = el('axf-sprint'); if (sl && !sl.disabled) f.sprint = sl.value; }
     if (f.tema_id === '__novo__') f.tema_novo = val('axf-tema-novo');
     if (EST.m && !EST.anexosMexidos) delete f.anexos;
     return f;

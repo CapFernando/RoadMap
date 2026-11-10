@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="963db06e10">
+<html lang="pt-BR" data-build="f84a8220e0">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -4141,8 +4141,7 @@ const SALES_OPS_LIVRES = ['josias', 'rikelme'];
 function ehSalesOpsLivre(nome) { return SALES_OPS_LIVRES.includes(normNome(nome).split(' ')[0] || ''); }
 function salesOpsLivre(m) {
   if (!SALES_OPS_SEM_TRAVA || !ehSalesOpsLivre(currentDev) || !m) return false;
-  const d = String(m.dev || '').trim();
-  return d ? d.split('/').map(x => x.trim()).filter(Boolean).every(ehSalesOpsLivre) : !!m.sales_ops;
+  return m.dados_bi !== true;   // 10/11/2026: todo o kanban de dev/sales, menos Dados/BI
 }
 
 function normNome(s) {

@@ -2660,10 +2660,11 @@ function ehSalesOpsLivre(nome) {
     .toLowerCase().trim().split(/\s+/)[0] || '';
   return SALES_OPS_LIVRES.includes(n);
 }
+/* 10/11/2026: "reveja os acessos do Rikelme e Josias para movimentarem todo o
+   kanban sem bloqueios (dev/sales)". Vale para QUALQUER demanda das frentes
+   Desenvolvimento e Sales Ops; so a de Dados/BI fica de fora. */
 function demandaSalesOpsLivre(m) {
-  if (!m) return false;
-  const d = String(m.dev || '').trim();
-  return d ? d.split('/').map(x => x.trim()).filter(Boolean).every(ehSalesOpsLivre) : !!m.sales_ops;
+  return !!m && m.dados_bi !== true;
 }
 function salesOpsForaDasTravas(data, servidor, ident) {
   const quem = ident && ident.usuario ? (ident.usuario.nome || ident.usuario.login || '') : '';

@@ -96,10 +96,12 @@
     var n = txt(nome).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/\s+/)[0] || '';
     return SALES_OPS_LIVRES.indexOf(n) >= 0;
   }
+  /** A CONTA e uma das liberadas (Josias, Rikelme)? */
+  function contaLivre(c) { return SALES_OPS_SEM_TRAVA && ehDev(c) && ehSalesOpsLivre((c || {}).quem); }
+  /* 10/11/2026: "movimentarem todo o kanban sem bloqueios (dev/sales)" — qualquer
+     demanda de Desenvolvimento ou Sales Ops; so a de Dados/BI fica de fora. */
   function salesOpsLivre(m, c) {
-    if (!SALES_OPS_SEM_TRAVA || !m || !ehDev(c) || !ehSalesOpsLivre((c || {}).quem)) return false;
-    var d = txt(m.dev);
-    return d ? d.split('/').map(function (x) { return x.trim(); }).filter(Boolean).every(ehSalesOpsLivre) : !!m.sales_ops;
+    return !!m && contaLivre(c) && m.dados_bi !== true;
   }
 
   /* COPIA DE `gestoSemDev` (admin.html): planejado, em andamento e validacoes
@@ -746,6 +748,7 @@
   function arrastavel(m, c) {
     var papel = txt((c || {}).papel);
     if (papel === 'admin' || papel === 'analista') return !!m;
+    if (salesOpsLivre(m, c)) return true;
     return ehDev(c) && mostraNoPainel(m, c, '');
   }
   function soltarEm(m, destino, c, junto) {
@@ -779,7 +782,7 @@
   /* A DEMANDA DE OUTRA PESSOA ABRE EM LEITURA (`msModoLeitura`, dev.html): o
      dev mexe no que esta no nome dele ou no que ainda nao tem dono. */
   function soLeitura(m, c) {
-    if (!ehDev(c) || !txt((m || {}).dev) || ehMeu(m, c)) return null;
+    if (!ehDev(c) || !txt((m || {}).dev) || ehMeu(m, c) || salesOpsLivre(m, c)) return null;
     return falha('Demanda de ' + txt(m.dev) + ' — aberta para leitura.');
   }
 
@@ -1137,7 +1140,7 @@
                        devsParaVincular: devsParaVincular, pessoasDaConversa: pessoasDaConversa,
                        sugestoesArroba: sugestoesArroba, escolheArroba: escolheArroba });
   Object.assign(api, { soltarEm: soltarEm, podeSoltar: podeSoltar, arrastavel: arrastavel, COLUNAS_BLOQUEADAS_MSG: COLUNAS_BLOQUEADAS_MSG,
-                       salesOpsLivre: salesOpsLivre });
+                       salesOpsLivre: salesOpsLivre, contaLivre: contaLivre });
   Object.assign(api, { soLeitura: soLeitura });
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 

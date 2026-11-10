@@ -29966,10 +29966,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(i0 > 0 && i1 > i0, 'a liberacao do Sales Ops existe no Worker');
     if (i0 > 0 && i1 > i0) {
       const T = new Function(W.slice(i0, i1) + '\nreturn { salesOpsForaDasTravas, ehSalesOpsLivre };')();
-      const d = { melhorias: [{ id: '1', dev: 'Josias Bueno' }, { id: '2', dev: 'Marina' }, { id: '3', dev: '', sales_ops: true }, { id: '4', dev: 'Josias Bueno' }] };
-      const sv = { melhorias: [{ id: '1', dev: 'Josias Bueno' }, { id: '2', dev: 'Marina' }, { id: '4', dev: 'Marina' }] };
+      /* 10/11/2026: todo o kanban de dev/sales sai das travas; so Dados/BI fica. */
+      const d = { melhorias: [{ id: '1', dev: 'Josias Bueno' }, { id: '2', dev: 'Marina', dados_bi: true }, { id: '3', dev: '', sales_ops: true }, { id: '4', dev: 'Hugo' }, { id: '5', dev: 'Ana', dados_bi: false }] };
+      const sv = { melhorias: [{ id: '1', dev: 'Josias Bueno' }, { id: '2', dev: 'Marina', dados_bi: true }, { id: '4', dev: 'Hugo' }, { id: '5', dev: 'Ana', dados_bi: true }] };
       const g = T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Josias Bueno' } });
-      ok(g.melhorias.map(m => m.id).join(',') === '2,4', 'as demandas do Sales Ops saem das travas, e a de outro time nao',
+      ok(g.melhorias.map(m => m.id).join(',') === '2,5', 'todo o kanban de dev/sales sai das travas para eles; a de Dados/BI (antes ou depois) nao',
          g.melhorias.map(m => m.id).join(','));
       ok(T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Marina' } }) === d, 'e para quem nao e do Sales Ops nada muda');
     }
