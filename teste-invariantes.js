@@ -30033,8 +30033,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'o campo que a alteracao APAGA (undefined) sobrevive a ida e volta pelo JSON da fila', JSON.stringify(volta));
     }
     const fG = corpo(AXA, 'async function gravarAgora(patch, o) {') || '';
-    ok(fG.includes('if (!calado && filaLer().length) return enfileira(patch, o);'),
-       'com alteracao na fila, a nova entra ATRAS dela: a antiga nunca sobrescreve a nova');
+    ok(fG.includes('if (!calado && (filaLer().length || !o.raiz)) return enfileira(patch, o);'),
+       'alteracao de demanda aparece na hora e grava pela fila; com fila, tudo entra ATRAS dela (a antiga nunca sobrescreve a nova)');
     ok(fG.includes('if (!r.ok && r.queda && !calado) return enfileira(patch, o);') && fG.includes('[502, 503, 504]'),
        'queda de rede ou servidor estourado (503) guarda a alteracao em vez de mostrar erro');
     const fP2 = corpo(AXA, 'async function filaProcessa() {') || '';

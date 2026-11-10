@@ -361,7 +361,7 @@
              raiz: raizTopo || null, ok: okMsg || '', em: new Date().toISOString(), tent: 0 });
     filaSalvar(l);
     filaPinta();
-    setTimeout(filaProcessa, 5000);
+    setTimeout(filaProcessa, 0);
   }
   function filaPinta() {
     if (typeof document === 'undefined') return;
@@ -392,14 +392,19 @@
         var i = l.findIndex(function (x) { return x.uid === it.uid; });
         if (r && r.ok) {
           if (i >= 0) { l.splice(i, 1); filaSalvar(l); }
+          try { if (raiz.AXIS_ACOES && raiz.AXIS_ACOES.avisaRevertidos) raiz.AXIS_ACOES.avisaRevertidos(r); } catch (_) {}
           if (!l.length) {
             try { await carregar(); desenhar(true); } catch (_) {}
-            toast('Alterações salvas no servidor.');
+            // So avisa quando demorou: no caminho normal o "Salvo." ja saiu na hora.
+            if (it.tent) toast('Alterações salvas no servidor.');
           }
           continue;
         }
         if (r && (r.queda || r.status === 401)) {
-          if (i >= 0) { l[i].tent = (l[i].tent || 0) + 1; filaSalvar(l); }
+          var tent = 1;
+          if (i >= 0) { tent = l[i].tent = (l[i].tent || 0) + 1; filaSalvar(l); }
+          // Reenvio rapido e crescente (2 s, 4 s ... ate 15 s); o intervalo de 20 s fica de reserva.
+          if (r.queda) setTimeout(filaProcessa, Math.min(2000 * tent, 15000));
           break;
         }
         // Recusa de regra: repetir nao resolve. Sai da fila, a tela volta ao servidor e a pessoa e avisada.
@@ -484,7 +489,13 @@
     var calado = !!o.daFila;
     /* JA HA ALTERACAO NA FILA: a nova entra atras dela. Gravar a nova direto e
        a antiga depois deixaria a antiga por cima da nova no mesmo campo. */
-    if (!calado && filaLer().length) return enfileira(patch, o);
+    /* RESPOSTA NA HORA (10/11/2026, "as movimentacoes front p back estao com muito
+       delay"): a alteracao de demanda aparece na tela no clique e grava em
+       segundo plano pela fila. Gravar direto levava ler 3,4 MB + enviar 3,4 MB
+       (5 a 8 s) e, com o servidor no limite, ate 4 tentativas antes de mostrar.
+       Troca de chave do topo (`o.raiz`: temas, projetos, ausencias) segue
+       direta, salvo se ja houver fila — ai entra atras, para manter a ordem. */
+    if (!calado && (filaLer().length || !o.raiz)) return enfileira(patch, o);
     var R = raiz.REDEREPETE;
     var r;
     try {
