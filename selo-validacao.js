@@ -64,8 +64,9 @@
      nascimento" são a mesma pessoa, e o nome de exibição já apareceu das duas
      formas na base. Exigir a grafia exata faria o selo sumir por causa de um
      acento digitado diferente — e sumir em silêncio, que é o pior jeito. */
-  var LOGINS = ['fernando'];
-  var NOMES = ['fernando nascimento', 'fernando morais'];
+  // 10/11/2026: Mateus Viana tambem conduz a planning ("pode incluir").
+  var LOGINS = ['fernando', 'mateus.viana'];
+  var NOMES = ['fernando nascimento', 'fernando morais', 'mateus viana'];
 
   function texto(v) {
     return String(v == null ? '' : v).trim();
