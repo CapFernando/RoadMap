@@ -60,7 +60,10 @@
      ruim que passa de ~25s ganha um minuto inteiro para se desfazer antes da
      nova rodada de 2s, 6s e 15s. */
   var PAUSA_ENTRE_RODADAS = 60000;
-  var RODADA = [2000, 6000, 15000];
+  /* RODADA CURTA E MAIS LONGA (10/11/2026): a falha de hoje e o Worker
+     estourando o limite de CPU (Error 1102), e cada tentativa e independente
+     — esperar muito entre elas nao ajuda; tentar mais vezes, sim. */
+  var RODADA = [1000, 2000, 3000, 4000, 5000, 6000];
   var ESPERAS = RODADA.concat([PAUSA_ENTRE_RODADAS], RODADA);
 
   /** ISTO FOI QUEDA DE REDE, e nao erro do servidor?
@@ -102,11 +105,10 @@
   function aviso(quedas) {
     var n = Number(quedas || 0) + 1;
     if (ESPERAS[n - 1] === PAUSA_ENTRE_RODADAS) {
-      return 'Falha de rede — pausa de 1 min e nova rodada de tentativas (' + n + ' de ' +
+      return 'Servidor ocupado — salvando em instantes (' + n + ' de ' +
              ESPERAS.length + ')…';
     }
-    return 'Falha de rede — tentando de novo (' + n + ' de ' +
-           ESPERAS.length + ')…';
+    return 'Salvando… (' + n + ' de ' + ESPERAS.length + ')';
   }
 
   var api = { ESPERAS: ESPERAS, RODADA: RODADA, PAUSA_ENTRE_RODADAS: PAUSA_ENTRE_RODADAS, ehQueda: ehQueda, deveRepetir: deveRepetir,

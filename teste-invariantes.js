@@ -29228,7 +29228,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         const deu = [];
         const APP = { token: 'tk', D: { atualizado_em: tela } };
         const f = new Function('api', 'hidrata', 'desenhar', 'avisaNovo', 'telaOcupada', 'APP', 'document',
-          'var _relendo = false, _naFila = 0, _sessaoCaiu = false, _novoNoServidor = false, _noVinculo = false;\n' + dre + '\n' + csv + '\nreturn conferirServidor;')(
+          'var _relendo = false, _naFila = 0, _sessaoCaiu = false, _novoNoServidor = false, _noVinculo = false; var comFila = function (d) { return d; };\n' + dre + '\n' + csv + '\nreturn conferirServidor;')(
           async () => ({ atualizado_em: srv }), async (j) => j, () => deu.push('rele'), (m) => deu.push(m ? 'aviso' : 'nada'),
           () => aberto, APP, { visibilityState: 'visible' });
         await f();
@@ -29995,7 +29995,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
   /* O APP NOVO INSISTE QUANDO A REDE CAI (09/11/2026). */
   {
     const AXA = require('fs').readFileSync(__dirname + '/axis-app.js', 'utf8');
-    const fP = corpo(AXA, 'async function postar(corpo, replacer, extraFetch) {');
+    const fP = corpo(AXA, 'async function postar(corpo, replacer, extraFetch, lim) {');
     ok(!!fP, 'o app tem uma funcao unica que insiste quando a rede cai');
     if (fP) {
       let chamadas = 0, avisos = [];
@@ -30016,6 +30016,31 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const AC = require('fs').readFileSync(__dirname + '/axis-acoes.js', 'utf8');
     ok(!/fetch\((AX\.)?WORKER/.test(AXA.replace(fP || '', '')) && !/fetch\(AX\.WORKER/.test(AC),
        'nenhuma chamada do app ao servidor fica de fora da repeticao');
+  }
+
+  /* A FILA DE GRAVACOES PENDENTES (10/11/2026): o que nao entra nas tentativas
+     rapidas fica guardado e e reenviado sozinho, sem a pessoa ver erro. */
+  {
+    const AXA = require('fs').readFileSync(__dirname + '/axis-app.js', 'utf8');
+    const fC = corpo(AXA, 'function filaCodifica(patch) {');
+    const fD = corpo(AXA, 'function filaDecodifica(patch) {');
+    ok(!!fC && !!fD, 'o app codifica e decodifica a alteracao guardada na fila');
+    if (fC && fD) {
+      const [cod, dec] = new Function("var APAGA = '__axis_apaga__';\n" + fC + '\n' + fD + '\nreturn [filaCodifica, filaDecodifica];')();
+      const volta = dec(JSON.parse(JSON.stringify(cod({ a: { status_planejamento: 'planning', inicio: undefined, anexos: [{ nome: 'x' }] } }))));
+      ok(volta.a.status_planejamento === 'planning' && 'inicio' in volta.a && volta.a.inicio === undefined && volta.a.anexos[0].nome === 'x',
+         'o campo que a alteracao APAGA (undefined) sobrevive a ida e volta pelo JSON da fila', JSON.stringify(volta));
+    }
+    const fG = corpo(AXA, 'async function gravarAgora(patch, o) {') || '';
+    ok(fG.includes('if (!calado && filaLer().length) return enfileira(patch, o);'),
+       'com alteracao na fila, a nova entra ATRAS dela: a antiga nunca sobrescreve a nova');
+    ok(fG.includes('if (!r.ok && r.queda && !calado) return enfileira(patch, o);') && fG.includes('[502, 503, 504]'),
+       'queda de rede ou servidor estourado (503) guarda a alteracao em vez de mostrar erro');
+    const fP2 = corpo(AXA, 'async function filaProcessa() {') || '';
+    ok(fP2.includes('r.queda || r.status === 401') && fP2.includes('pôde ser salva'),
+       'a fila insiste so na queda; recusa de regra sai da fila e e avisada');
+    ok(AXA.includes('setInterval(filaProcessa, FILA_INTERVALO)') && AXA.includes('APP.D = comFila('),
+       'a fila roda sozinha e a releitura mantem na tela o que ainda esta na fila');
   }
 
   Promise.all(pendentes).then(() => {

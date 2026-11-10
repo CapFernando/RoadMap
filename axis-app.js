@@ -283,18 +283,133 @@
      mostrava "Failed to fetch" na primeira perda de pacote. Toda chamada ao
      Worker passa por aqui. So a queda de rede se repete — erro HTTP (401, 409,
      500) volta na hora, porque repetir nao o resolve. */
-  async function postar(corpo, replacer, extraFetch) {
+  /* `lim` (opcional): { max, calado }. A gravacao passa `max` curto e, se a
+     rede/servidor nao responder, a alteracao vai para a FILA (abaixo) em vez de
+     prender a pessoa esperando. `calado`: sem aviso nenhum (reenvio da fila). */
+  async function postar(corpo, replacer, extraFetch, lim) {
     var R = raiz.REDEREPETE, quedas = 0;
+    var max = lim && lim.max != null ? lim.max : null;
     for (;;) {
       try {
         return await fetch(WORKER, Object.assign({ method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                    body: JSON.stringify(corpo, replacer) }, extraFetch || {}));
       } catch (e) {
-        if (!R || !R.ehQueda(e) || !R.deveRepetir(quedas)) throw e;
-        try { toast(R.aviso(quedas), 'erro'); } catch (_) {}
+        if (!R || !R.ehQueda(e) || !R.deveRepetir(quedas) || (max != null && quedas >= max)) throw e;
+        if (!(lim && lim.calado)) { try { toast(R.aviso(quedas)); } catch (_) {} }
         await new Promise(function (ok) { setTimeout(ok, R.espera(quedas)); });
         quedas += 1;
       }
+    }
+  }
+
+  /* ═══ A FILA DE GRAVACOES PENDENTES (10/11/2026) ══════════════════════════
+     "trate de forma preventiva para evitar que o usuario perceba o erro e
+     force a gravacao". O Worker esta no plano Free (10 ms de CPU) e a base tem
+     3,4 MB: em 10/11 a maioria das gravacoes voltava "Error 1102 — Worker
+     exceeded resource limits", sem CORS, que a tela le como queda de rede.
+     Cada tentativa e independente (umas passam, outras nao), entao insistir
+     resolve — mas nao com a pessoa olhando.
+
+     Quando a gravacao nao entra nas tentativas rapidas, a ALTERACAO (o patch,
+     nunca a base inteira) vai para uma fila no navegador, por conta. A tela ja
+     mostra a mudanca (aplicada por cima da base lida), um selo discreto diz
+     "Salvando…", e a fila reenvia sozinha a cada 20 s e ao reabrir o app.
+     Reenviar e seguro: cada envio rele a base do servidor e reaplica so o
+     patch (`GRAVACAO.gravar`); se a anterior tinha entrado, vira no-op.
+     Recusa de REGRA (409, 400) nao e repetida: sai da fila e e avisada. */
+  var FILA_PREF = 'axis_fila_v1:';
+  var APAGA = '__axis_apaga__';
+  var FILA_INTERVALO = 20000;
+  var _filaRodando = false;
+  function filaChave() { return FILA_PREF + (((APP.eu || {}).login) || '_'); }
+  function filaLer() {
+    try { var v = JSON.parse(localStorage.getItem(filaChave()) || '[]'); return Array.isArray(v) ? v : []; }
+    catch (_) { return []; }
+  }
+  function filaSalvar(l) {
+    try { if (l.length) localStorage.setItem(filaChave(), JSON.stringify(l)); else localStorage.removeItem(filaChave()); }
+    catch (_) {}
+  }
+  // `undefined` no patch APAGA o campo; o JSON o perderia, entao vira marcador.
+  function filaCodifica(patch) {
+    return JSON.parse(JSON.stringify(patch || {}, function (k, v) { return v === undefined ? APAGA : v; }));
+  }
+  function filaDecodifica(patch) {
+    var p = {};
+    Object.keys(patch || {}).forEach(function (id) {
+      var n = patch[id];
+      if (n && typeof n === 'object' && !Array.isArray(n)) {
+        var o = {};
+        Object.keys(n).forEach(function (k) { o[k] = n[k] === APAGA ? undefined : n[k]; });
+        p[id] = o;
+      } else p[id] = n;
+    });
+    return p;
+  }
+  /** A base com as alteracoes ainda na fila por cima: a tela nao "desfaz". */
+  function comFila(D) {
+    var l = filaLer();
+    if (!l.length || !D || !raiz.GRAVACAO || !raiz.GRAVACAO.aplicar) return D;
+    l.forEach(function (it) {
+      try { D = raiz.GRAVACAO.aplicar(D, filaDecodifica(it.patch), it.raiz); } catch (_) {}
+    });
+    return D;
+  }
+  function filaEntra(patch, raizTopo, okMsg) {
+    var l = filaLer();
+    l.push({ uid: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), patch: filaCodifica(patch),
+             raiz: raizTopo || null, ok: okMsg || '', em: new Date().toISOString(), tent: 0 });
+    filaSalvar(l);
+    filaPinta();
+    setTimeout(filaProcessa, 5000);
+  }
+  function filaPinta() {
+    if (typeof document === 'undefined') return;
+    var n = APP.token ? filaLer().length : 0;
+    var el = document.getElementById('axfila');
+    if (!n) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'axfila';
+      el.setAttribute('role', 'status');
+      el.style.cssText = 'position:fixed;left:16px;bottom:16px;z-index:60;padding:6px 12px;border-radius:999px;' +
+        'font-size:12.5px;background:var(--sf2,#1e2633);color:var(--tx2,#c9d1dc);border:1px solid var(--bd,rgba(255,255,255,.12));' +
+        'box-shadow:0 2px 8px rgba(0,0,0,.2)';
+      document.body.appendChild(el);
+    }
+    el.textContent = '⟳ Salvando ' + n + (n === 1 ? ' alteração…' : ' alterações…');
+  }
+  async function filaProcessa() {
+    if (_filaRodando || !APP.token || _sessaoCaiu) return;
+    var l = filaLer();
+    if (!l.length) { filaPinta(); return; }
+    _filaRodando = true;
+    try {
+      while (l.length) {
+        var it = l[0];
+        var r = await gravar(filaDecodifica(it.patch), { raiz: it.raiz || undefined, daFila: true });
+        l = filaLer();
+        var i = l.findIndex(function (x) { return x.uid === it.uid; });
+        if (r && r.ok) {
+          if (i >= 0) { l.splice(i, 1); filaSalvar(l); }
+          if (!l.length) {
+            try { await carregar(); desenhar(true); } catch (_) {}
+            toast('Alterações salvas no servidor.');
+          }
+          continue;
+        }
+        if (r && (r.queda || r.status === 401)) {
+          if (i >= 0) { l[i].tent = (l[i].tent || 0) + 1; filaSalvar(l); }
+          break;
+        }
+        // Recusa de regra: repetir nao resolve. Sai da fila, a tela volta ao servidor e a pessoa e avisada.
+        if (i >= 0) { l.splice(i, 1); filaSalvar(l); }
+        toast('Uma alteração não pôde ser salva: ' + ((r && r.erro) || 'recusada pelo servidor') + '.', 'erro');
+        try { await carregar(); desenhar(true); } catch (_) {}
+      }
+    } finally {
+      _filaRodando = false;
+      filaPinta();
     }
   }
 
@@ -338,9 +453,9 @@
 
   async function carregar() {
     var j = await hidrata(await api('dados'));
-    APP.D = j;
+    APP.D = comFila(j);
     APP.carregadoEm = Date.now();
-    return j;
+    return APP.D;
   }
 
   // ── Gravar (gravacao.js) ──────────────────────────────────────────────
@@ -366,6 +481,11 @@
   async function gravarAgora(patch, o) {
     if (!raiz.GRAVACAO) throw new Error('gravacao.js nao carregado');
     if (['admin', 'analista', 'dev'].indexOf(APP.papel) < 0) { toast('Seu perfil é só de leitura.', 'erro'); return { ok: false }; }
+    var calado = !!o.daFila;
+    /* JA HA ALTERACAO NA FILA: a nova entra atras dela. Gravar a nova direto e
+       a antiga depois deixaria a antiga por cima da nova no mesmo campo. */
+    if (!calado && filaLer().length) return enfileira(patch, o);
+    var R = raiz.REDEREPETE;
     var r;
     try {
       r = await raiz.GRAVACAO.gravar({
@@ -373,15 +493,19 @@
         credenciais: APP.token ? { token: APP.token } : {},
         ler: function () { return api('dados'); },
         enviar: async function (corpo, replacer) {
-          var res = await postar(corpo, replacer);
+          // Tentativas rapidas e caladas; o que nao entrar vai para a fila.
+          var res = await postar(corpo, replacer, null, { max: calado ? 2 : 4, calado: true });
           var j = await res.json().catch(function () { return {}; });
           return { status: res.status, corpo: j };
         }
       });
+      if (r && !r.ok && [502, 503, 504].indexOf(Number(r.status)) >= 0) r.queda = true;
     } catch (e) {
       r = e.status === 401 ? { ok: false, status: 401, erro: MSG_SESSAO }
-        : { ok: false, erro: 'Sem conexão com o servidor: ' + (e.message || e) };
+        : { ok: false, queda: !R || R.ehQueda(e), erro: 'Sem conexão com o servidor: ' + (e.message || e) };
     }
+    if (!r.ok && r.queda && !calado) return enfileira(patch, o);
+    if (calado) return r;
     if (r.ok) {
       APP.D = r.base;
       try { await carregar(); } catch (_) {}
@@ -397,6 +521,17 @@
       toast(msg, 'erro');
     }
     return r;
+  }
+
+  /** Guarda a alteracao na fila e ja a mostra na tela, como se tivesse gravado. */
+  function enfileira(patch, o) {
+    filaEntra(patch, o.raiz, typeof o.ok === 'string' ? o.ok : '');
+    try {
+      if (APP.D && raiz.GRAVACAO && raiz.GRAVACAO.aplicar) APP.D = raiz.GRAVACAO.aplicar(APP.D, patch, o.raiz);
+    } catch (_) {}
+    desenhar(true);
+    if (o.ok !== false) toast(o.ok || 'Salvo.');
+    return { ok: true, enfileirado: true, base: APP.D, resp: {} };
   }
 
   // ── Leituras sobre a base (todas pelos modulos de regra) ──────────────
@@ -1159,7 +1294,7 @@
       var j = await api('dados');
       var d = decisaoDaReleitura((APP.D || {}).atualizado_em, j.atualizado_em, telaOcupada());
       if (d === 'rele' && !_naFila && APP.token) {
-        APP.D = await hidrata(j);
+        APP.D = comFila(await hidrata(j));
         APP.carregadoEm = Date.now();
         _novoNoServidor = false;
         desenhar(true);
@@ -1278,6 +1413,8 @@
         vazio('alert', 'Não foi possível ler os dados', String(e.message || e), '<button class="btnp" type="button" onclick="location.reload()">Tentar de novo</button>'));
     }
     if (APP.token) voltaDaSessao();
+    filaPinta();
+    if (APP.token) setTimeout(filaProcessa, 3000);
   }
 
   function ligar() {
@@ -1325,6 +1462,8 @@
     window.addEventListener('hashchange', function () { fecharGavetas(); desenhar(); });
     // A releitura de 30 s e a da volta para a aba (`adminCheckUpdates`).
     setInterval(conferirServidor, RELEITURA_MS);
+    setInterval(filaProcessa, FILA_INTERVALO);
+    window.addEventListener('online', function () { filaProcessa(); });
     document.addEventListener('pointerdown', function () { _arrastando = true; }, true);
     ['pointerup', 'pointercancel'].forEach(function (t) { document.addEventListener(t, function () { _arrastando = false; }, true); });
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') conferirServidor(); });
@@ -1341,7 +1480,7 @@
     pontosDe: pontosDe, devsDe: devsDe, tema: tema, caminho: caminho, projeto: projeto, sprintAtual: sprintAtual,
     porCodigo: porCodigo, meusNomes: meusNomes, minha: minha, pode: pode, donoDaSprint: donoDaSprint, hidrata: hidrata,
     ico: ico, chip: chip, chipEtapa: chipEtapa, chipTipo: chipTipo, chipsReq: chipsReq, chipCasoUso: chipCasoUso, CASO_USO_COR: CASO_USO_COR, av: av, cod: cod, hrefItem: hrefItem,
-    prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, gravar: gravar, kpi: kpi, toast: toast, ir: ir, api: api, postar: postar, recarregar: function () { return carregar().then(desenhar); },
+    prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, gravar: gravar, kpi: kpi, toast: toast, ir: ir, api: api, postar: postar, fila: { ler: filaLer, codifica: filaCodifica, decodifica: filaDecodifica, comFila: comFila, processa: filaProcessa }, recarregar: function () { return carregar().then(desenhar); },
     filtros: filtros, filtrosN: filtrosN, gaveta: gaveta, celula: celula, pintaFaixas: pintaFaixas, vincular: pedirVinculo
   };
 
