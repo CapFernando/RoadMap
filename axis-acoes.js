@@ -85,6 +85,23 @@
   /** admin e analista tem a caneta do PM/PO para etapa; o dev, so a dele. */
   function ehDev(c) { return txt((c || {}).papel) === 'dev'; }
 
+  /* SALES OPS SEM TRAVAS, POR ENQUANTO (10/11/2026) — espelho do `salesOpsLivre`
+     do dev.html e do `salesOpsForaDasTravas` do Worker: "Rikelme deveria
+     conseguir" movimentar o Kanban na interface nova. Josias e Rikelme, nas
+     demandas deles (ou sem dono e marcadas Sales Ops). Desligar: false aqui,
+     no dev.html e no Worker. */
+  var SALES_OPS_SEM_TRAVA = true;
+  var SALES_OPS_LIVRES = ['josias', 'rikelme'];
+  function ehSalesOpsLivre(nome) {
+    var n = txt(nome).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/\s+/)[0] || '';
+    return SALES_OPS_LIVRES.indexOf(n) >= 0;
+  }
+  function salesOpsLivre(m, c) {
+    if (!SALES_OPS_SEM_TRAVA || !m || !ehDev(c) || !ehSalesOpsLivre((c || {}).quem)) return false;
+    var d = txt(m.dev);
+    return d ? d.split('/').map(function (x) { return x.trim(); }).filter(Boolean).every(ehSalesOpsLivre) : !!m.sales_ops;
+  }
+
   /* COPIA DE `gestoSemDev` (admin.html): planejado, em andamento e validacoes
      por ESTADO; concluido por TRANSICAO, como o servidor. Planejado com sprint
      marcada fica sem dono de proposito (`SPRINTPO.dispensaDev`). */
@@ -205,6 +222,18 @@
     if (ETAPAS_VALIDAS.indexOf(destino) < 0) return falha('Etapa desconhecida: ' + destino + '.');
     if (destino === etapa(m)) return falha('A demanda já está em ' + rotulo(destino) + '.');
     if (destino === 'negada') return falha('Negar pede o motivo: use "Negar".');
+    if (salesOpsLivre(m, c)) {
+      var pl = { status_planejamento: destino, status: STATUS_DEV[destino] || m.status };
+      Object.assign(pl, marcaConclusao(m, destino, c.hoje));
+      Object.assign(pl, tiraInicioDoBacklog(Object.assign({}, m, pl)));
+      var assumiuL = assumeAoComecar(m, destino, c);
+      if (assumiuL) pl.dev = assumiuL;
+      if (ETAPAS_DO_DEV.indexOf(destino) >= 0 || destino === 'concluido') {
+        var entL = carimboDeEntrega(m, destino, c.agora);
+        if (entL) pl.entregue_em = entL;
+      }
+      return { ok: true, patch: pl, msg: 'Movida para ' + rotulo(destino) + '.' };
+    }
     if (ehDev(c)) {
       // As barreiras do `saveStatus`, na ordem de la.
       if (['validacao', 'concluido'].indexOf(etapa(m)) >= 0) return falha('Esta demanda está com o PM/PO e não pode ser alterada aqui.');
@@ -642,7 +671,7 @@
   function mostraNoPainel(m, c, filtro) {
     if (!m || txt(m.mesclado_em)) return false;
     var SP = mod(c, 'SPRINTPO');
-    if (SP && SP.escondidaDoTime((c || {}).D || {}, m)) return false;
+    if (SP && SP.escondidaDoTime((c || {}).D || {}, m) && !salesOpsLivre(m, c)) return false;
     if (etapaGravada(m, c) === 'negada') return false;
     var d = donoDoCard(m, c);
     if (!d) return false;
@@ -710,6 +739,7 @@
   /** A coluna acende para receber? (`onDragOver` do dev.html; no admin, sempre.) */
   function podeSoltar(m, destino, c) {
     if (!ehDev(c)) return true;
+    if (salesOpsLivre(m, c)) return destino !== 'negada';
     return ETAPAS_DO_DEV.indexOf(destino) >= 0 && !travaSprintDoDev(m, destino, c);
   }
   /** O card arrasta? O admin arrasta todos; o dev, os do painel dele. */
@@ -723,6 +753,12 @@
     var ja = Array.isArray(junto) && junto.length ? junto : [destino];
     if (!m || ja.indexOf(etapaGravada(m, c)) >= 0) return { via: 'nada' };
     if (!ehDev(c)) return { via: destino === 'negada' ? 'negar' : 'mover', destino: destino };
+    /* Sales Ops livre: move para qualquer coluna; nas validacoes continua
+       pedindo as horas e o que foi feito, porque e a entrega que as registra. */
+    if (salesOpsLivre(m, c)) {
+      if (destino === 'negada') return falhaVia('Negar é do PM/PO.', '');
+      return { via: (destino === 'validacao' || destino === 'validacao_area') ? 'entregar' : 'mover', destino: destino };
+    }
     if (ETAPAS_DO_DEV.indexOf(destino) < 0) {
       return falhaVia(COLUNAS_BLOQUEADAS_MSG[destino] || 'Esta coluna não é movida pelo Painel Dev.', '');
     }
@@ -1100,7 +1136,8 @@
                        sprintsDoPainel: sprintsDoPainel, casaSprintDoPainel: casaSprintDoPainel,
                        devsParaVincular: devsParaVincular, pessoasDaConversa: pessoasDaConversa,
                        sugestoesArroba: sugestoesArroba, escolheArroba: escolheArroba });
-  Object.assign(api, { soltarEm: soltarEm, podeSoltar: podeSoltar, arrastavel: arrastavel, COLUNAS_BLOQUEADAS_MSG: COLUNAS_BLOQUEADAS_MSG });
+  Object.assign(api, { soltarEm: soltarEm, podeSoltar: podeSoltar, arrastavel: arrastavel, COLUNAS_BLOQUEADAS_MSG: COLUNAS_BLOQUEADAS_MSG,
+                       salesOpsLivre: salesOpsLivre });
   Object.assign(api, { soLeitura: soLeitura });
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
