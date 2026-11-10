@@ -55,7 +55,13 @@
   /* Em milissegundos, uma por queda ja sofrida. O tamanho da lista E o numero
      de repeticoes: nao ha um segundo lugar dizendo "tente 3 vezes" para
      divergir deste. */
-  var ESPERAS = [2000, 6000, 15000];
+  /* A SEGUNDA RODADA (10/11/2026): "aumente a redundancia. Apos as 3
+     tentativas, da uma pausa maior de 1 min, refaca + 3 tentativas". A janela
+     ruim que passa de ~25s ganha um minuto inteiro para se desfazer antes da
+     nova rodada de 2s, 6s e 15s. */
+  var PAUSA_ENTRE_RODADAS = 60000;
+  var RODADA = [2000, 6000, 15000];
+  var ESPERAS = RODADA.concat([PAUSA_ENTRE_RODADAS], RODADA);
 
   /** ISTO FOI QUEDA DE REDE, e nao erro do servidor?
    *
@@ -95,11 +101,15 @@
    *  que algo anda, e sabe quanto falta. */
   function aviso(quedas) {
     var n = Number(quedas || 0) + 1;
+    if (ESPERAS[n - 1] === PAUSA_ENTRE_RODADAS) {
+      return 'Falha de rede — pausa de 1 min e nova rodada de tentativas (' + n + ' de ' +
+             ESPERAS.length + ')…';
+    }
     return 'Falha de rede — tentando de novo (' + n + ' de ' +
            ESPERAS.length + ')…';
   }
 
-  var api = { ESPERAS: ESPERAS, ehQueda: ehQueda, deveRepetir: deveRepetir,
+  var api = { ESPERAS: ESPERAS, RODADA: RODADA, PAUSA_ENTRE_RODADAS: PAUSA_ENTRE_RODADAS, ehQueda: ehQueda, deveRepetir: deveRepetir,
               espera: espera, aviso: aviso };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

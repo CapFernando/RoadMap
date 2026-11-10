@@ -4321,8 +4321,12 @@ sec('Rede caida: a politica de repetir e uma so');
      Uma repeticao 2s depois nao cobria a janela de 28/10, que durou minutos. */
   ok(R.ESPERAS.length >= 3, 'a cota e de ao menos tres tentativas',
      R.ESPERAS.length + ' tentativas');
-  ok(R.ESPERAS.every((v, i) => i === 0 || v > R.ESPERAS[i - 1]),
-     'e a espera CRESCE a cada queda — insistir no mesmo ritmo cai na mesma janela',
+  ok(R.RODADA.every((v, i) => i === 0 || v > R.RODADA[i - 1]),
+     'e a espera CRESCE a cada queda dentro da rodada — insistir no mesmo ritmo cai na mesma janela',
+     R.RODADA.join('ms, ') + 'ms');
+  ok(R.ESPERAS.length === R.RODADA.length * 2 + 1 && R.ESPERAS[R.RODADA.length] >= 60000 &&
+     R.ESPERAS[R.RODADA.length] > Math.max.apply(null, R.RODADA),
+     'depois da primeira rodada, pausa de 1 min e uma segunda rodada (10/11/2026)',
      R.ESPERAS.join('ms, ') + 'ms');
   ok(R.deveRepetir(0) && R.deveRepetir(R.ESPERAS.length - 1),
      'dentro da cota, repete');
@@ -30006,7 +30010,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       const sempreCai = async () => { c2++; throw new TypeError('Failed to fetch'); };
       const postar2 = new Function('raiz', 'fetch', 'WORKER', 'toast', fP + '\nreturn postar;')(raiz, sempreCai, 'w', () => {});
       pendentes.push(postar2({}).then(() => ok(false, 'rede sempre caida termina em erro'), e => {
-        ok(c2 === 4, 'rede sempre caida: 1 tentativa + 3 repeticoes, e o erro sobe', c2 + ' chamadas');
+        ok(c2 === require('./rede-repete.js').ESPERAS.length + 1, 'rede sempre caida: 1 tentativa + todas as repeticoes (duas rodadas e a pausa), e o erro sobe', c2 + ' chamadas');
       }));
     }
     const AC = require('fs').readFileSync(__dirname + '/axis-acoes.js', 'utf8');
