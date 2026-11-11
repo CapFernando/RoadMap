@@ -1078,7 +1078,7 @@
     var dono = H.donoDaSprint();
     var fechaBtn = function (r) {
       // So o dono da sprint fecha (`sprintFecharAbrir`, admin.html, 02/11/2026).
-      if (!dono) return '<span class="note">Só o Fernando (PM/PO) fecha a sprint.</span>';
+      if (!dono) return '<span class="note">Só a área de produto fecha a sprint.</span>';
       var falta = fechFaltam(D, r);
       return '<button type="button" class="btnp perigo" data-sp-ciclo="fechar" data-r="' + esc(r) + '"' + (falta ? ' disabled' : '') + '>' +
         ico('lock') + ' <span data-fech-rot="' + esc(r) + '">' + esc(rotuloFechar(falta)) + '</span></button>';
@@ -1978,7 +1978,7 @@
   /* INICIAR (`sprintIniciar`): CONFIRMA ANTES, dizendo quantas vao e quantas
      estao sem dono — e o momento em que o PO descobre que esqueceu de alocar. */
   async function iniciarSprint(r) {
-    if (!H.donoDaSprint()) { H.toast('Só o Fernando (PM/PO) inicia a sprint.', 'erro'); return; }
+    if (!H.donoDaSprint()) { H.toast('Só a área de produto inicia a sprint.', 'erro'); return; }
     var t = cicloTextoIniciar(SP(), AX.APP.D, r, H.hoje(), optsIniciar());
     if (!(await caixa({ titulo: t.titulo, texto: t.texto, ok: 'Iniciar' }))) return;
     var base = await baseFresca();
@@ -2007,7 +2007,7 @@
     if (t) t.textContent = rotuloFechar(falta);
   }
   async function fecharSprint(r) {
-    if (!H.donoDaSprint()) { H.toast('Só o Fernando (PM/PO) fecha a sprint.', 'erro'); return; }
+    if (!H.donoDaSprint()) { H.toast('Só a área de produto fecha a sprint.', 'erro'); return; }
     var D = AX.APP.D, dec = fechDecisoes(D, r);
     var bal = SP().balancoDaSprint(D, r, H.colunaDe);
     var pts = function (l) { return l.reduce(function (t, m) { return t + (Number(m.poker_pontos) || 0); }, 0); };
@@ -2034,7 +2034,7 @@
      marcar dez, digitar na busca e perder as dez seria o jeito mais rapido de
      desistir do lote. O contador diz o total marcado, inclusive o escondido. */
   function abrirLote(rPadrao) {
-    if (!H.donoDaSprint()) { H.toast('Só o Fernando (PM/PO) repassa demandas para a sprint.', 'erro'); return; }
+    if (!H.donoDaSprint()) { H.toast('Só a área de produto repassa demandas para a sprint.', 'erro'); return; }
     var D = AX.APP.D, F = fer(D);
     var ops = SP().proximasSprints(H.hoje(), 5, F, SP().rotulosFechados(D));
     var agora = H.sprintAtual();

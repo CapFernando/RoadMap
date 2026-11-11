@@ -2013,22 +2013,22 @@ async function colaboradoresWorkos(env) {
  *  ter controle do que entra e sai da sprint."
  *
  * POR CONTA, E NAO POR PAPEL. O papel `admin` hoje e de oito pessoas — varios
- * sao devs. "Somente eu" nao cabe nele. O dono e a CONTA do Fernando (login
- * `fernando`) e a senha administrativa compartilhada, que nao tem pessoa por
- * tras e e o caminho das automacoes do PM/PO. Nova pessoa com esse poder entra
- * nesta lista, de proposito, e nao por ganhar um papel.
+ * sao devs. "Somente eu" nao cabe nele. O dono e quem tem a marca AREA DE
+ * PRODUTO na conta (`usuario.area_produto`, ligada em Usuarios) e a senha
+ * administrativa compartilhada, que nao tem pessoa por tras e e o caminho das
+ * automacoes do PM/PO.
+ *
+ * 11/11/2026: era uma lista fixa de logins (Fernando e Mateus Viana). "Nao
+ * deixamos amarrado a so o Fernando fazer": quem entra e sai da area de produto
+ * se resolve na tela, como o aprovador de spike, sem mexer no codigo.
  *
  * Quem NAO e dono: cria demanda sempre no backlog e fora de sprint; nao repassa,
  * nao tira, nao marca prioritaria e nao inicia/fecha sprint. As tentativas sao
  * REVERTIDAS (o resto da gravacao segue) e a resposta diz o que voltou. */
-// 10/11/2026: "usuario do Mateus.viana deve conseguir movimentar as tasks igual o Fernando".
-const SPRINT_DONOS = ['fernando', 'mateus.viana'];
-
 function ehDonoDaSprint(ident) {
   if (!ident || String(ident.papel || '') !== 'admin') return false;
   if (!ident.usuario) return true;                 // senha administrativa
-  const l = String(ident.usuario.login || '').trim().toLowerCase();
-  return !!l && SPRINT_DONOS.includes(l);
+  return !!ident.usuario.area_produto;
 }
 
 /* QUEM NAO E DONO SO ABRE NO BACKLOG. Demanda que o servidor nunca viu, vinda
@@ -3697,6 +3697,18 @@ async function contasMigrarAgora(db) {
      login e no quem-sou, e e por ela que as telas mandam cada pessoa para a
      interface certa. Padrao 0: no dia do deploy ninguem muda de tela. */
   await colunaSeFaltar(db, 'usuario', 'interface_nova', 'INTEGER NOT NULL DEFAULT 0');
+  /* AREA DE PRODUTO. Quem tem a marca faz o que antes era so do Fernando: a
+     sprint da demanda, prioritaria, iniciar e fechar a sprint, abrir demanda
+     fora do backlog e o selo da planning (`ehDonoDaSprint`).
+     A PRIMEIRA CARGA reproduz a lista fixa que existia (Fernando e Mateus
+     Viana), e so enquanto ninguem tem a marca: no dia do deploy ninguem perde
+     nem ganha poder, e depois disso quem decide e a tela. */
+  await colunaSeFaltar(db, 'usuario', 'area_produto', 'INTEGER NOT NULL DEFAULT 0');
+  try {
+    await db.prepare(`UPDATE usuario SET area_produto = 1
+                       WHERE login IN ('fernando', 'mateus.viana')
+                         AND NOT EXISTS (SELECT 1 FROM usuario WHERE area_produto = 1)`).run();
+  } catch (_) {}
   // E-mail unico, mas so entre quem tem e-mail (contas antigas ficam com NULL).
   try { await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_usuario_email ON usuario(email) WHERE email IS NOT NULL').run(); } catch (_) {}
 }
@@ -3759,7 +3771,8 @@ async function identifica(env, body) {
         return { papel: r.papel, usuario: { id: r.id, login: r.login, nome: r.nome,
                                            email: r.email || '',
                                            nome_demandas: r.nome_demandas || '',
-                                           interface_nova: !!r.interface_nova } };
+                                           interface_nova: !!r.interface_nova,
+                                           area_produto: !!r.area_produto } };
       }
     } catch (_) {}
   }
@@ -4929,10 +4942,14 @@ async function rotear(request, env, _histFila) {
           alvo.poker_validado_por = null;
           alvo.poker_validado_login = null;
           alvo.poker_validado_em = null;
+          alvo.poker_validado_produto = null;
         } else if (_uP) {
           alvo.poker_validado_por = String(_uP.nome_demandas || _uP.nome || '').trim() || null;
           alvo.poker_validado_login = String(_uP.login || '').trim() || null;
           alvo.poker_validado_em = iso;
+          // Se quem fechou era da area de produto NAQUELE DIA: e isso que da o
+          // selo (`selo-validacao.js`), e nao uma lista de nomes no codigo.
+          alvo.poker_validado_produto = !!_uP.area_produto;
         }
         // QUEM VOTOU O QUE. Antes so a media sobrevivia a reuniao, e a media
         // esconde justamente o que interessa: um 3 e um 34 na mesma demanda dizem
@@ -7363,7 +7380,8 @@ async function rotear(request, env, _histFila) {
       return json({ ok: true, token, expira_em: expira, senha_redefinida_em: avisoReset,
                     usuario: { login: u.login, nome: u.nome, papel: u.papel,
                                nome_demandas: u.nome_demandas || '',
-                               interface_nova: !!u.interface_nova } }, 200, headers);
+                               interface_nova: !!u.interface_nova,
+                               area_produto: !!u.area_produto } }, 200, headers);
     }
 
     // ── Meu vinculo: o nome que EU uso nas demandas ─────────────────
@@ -7807,7 +7825,7 @@ async function rotear(request, env, _histFila) {
         // nenhuma, nao havia nada certo para escolher.
         const r = await env.POKER_DB.prepare(
           `SELECT id, login, nome, email, papel, ativo, pendente, criado_em, ultimo_acesso,
-                  nome_demandas, reset_em, aprova_spike, interface_nova
+                  nome_demandas, reset_em, aprova_spike, interface_nova, area_produto
              FROM usuario ORDER BY pendente DESC, nome`).all();
         // Pedidos de senha em aberto, para o admin resolver na mesma tela.
         const p = await env.POKER_DB.prepare(
@@ -7996,6 +8014,36 @@ async function rotear(request, env, _histFila) {
         if (!uI) return json({ error: 'nao_encontrado' }, 404, headers);
         await env.POKER_DB.prepare('UPDATE usuario SET interface_nova = ? WHERE id = ?').bind(liga, uI.id).run();
         return json({ ok: true, login: loginI, nova: !!liga }, 200, headers);
+      }
+
+      /* A MARCA DE AREA DE PRODUTO. Qualquer admin liga ou desliga (11/11/2026:
+         "o admin pode alterar isso, nao so o Fernando"), como as outras marcas
+         da conta. Liga so em conta admin ativa, porque e o papel que a regra
+         exige (`ehDonoDaSprint`) — marcar um dev nao daria poder nenhum e
+         pareceria que deu. E nunca desliga a ultima: sem ninguem na area,
+         nenhuma sprint inicia nem fecha. */
+      if (op === 'area-produto') {
+        const loginP = String(body.login || '').trim().toLowerCase();
+        const uP = await env.POKER_DB.prepare(
+          'SELECT id, papel, ativo, area_produto FROM usuario WHERE login = ?').bind(loginP).first();
+        if (!uP) return json({ error: 'nao_encontrado' }, 404, headers);
+        const ligaP = body.produto ? 1 : 0;
+        if (ligaP && (uP.papel !== 'admin' || !uP.ativo)) {
+          return json({ error: 'so_admin',
+                        detail: 'A área de produto vale só para conta admin ativa. Mude o papel da conta para admin antes.' }, 400, headers);
+        }
+        if (!ligaP && uP.area_produto) {
+          const restam = await env.POKER_DB.prepare(
+            'SELECT COUNT(*) AS n FROM usuario WHERE area_produto = 1 AND ativo = 1 AND id <> ?').bind(uP.id).first();
+          if (!restam || !restam.n) {
+            return json({ error: 'ultima_area_produto',
+                          detail: 'É a última pessoa da área de produto: sem ninguém, nenhuma sprint inicia nem fecha. Marque outra pessoa antes.' }, 409, headers);
+          }
+        }
+        await env.POKER_DB.prepare('UPDATE usuario SET area_produto = ? WHERE id = ?').bind(ligaP, uP.id).run();
+        const qP = await env.POKER_DB.prepare(
+          'SELECT COUNT(*) AS n FROM usuario WHERE area_produto = 1 AND ativo = 1').first();
+        return json({ ok: true, login: loginP, produto: !!ligaP, area_produto: (qP && qP.n) || 0 }, 200, headers);
       }
 
       if (op === 'aprova-spike') {

@@ -11391,6 +11391,31 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
                              em: '2026-08-06T14:00:00Z' }] }),
      'o nome e comparado sem caixa');
 
+  /* AREA DE PRODUTO CARIMBADA (11/11/2026). Com o carimbo do Worker, ele decide
+     — quem entrou na area sela sem o nome estar em lista nenhuma, e quem nao
+     era da area no dia nao sela mesmo que o login esteja na lista antiga. */
+  ok(!!SL.de({ poker_validado_por: 'Ana Produto', poker_validado_login: 'ana.produto',
+               poker_validado_produto: true, poker_validado_em: '2026-11-11T10:00:00Z' }) &&
+     !SL.de({ poker_validado_por: 'Fernando Morais', poker_validado_login: 'fernando',
+              poker_validado_produto: false, poker_validado_em: '2026-11-11T10:00:00Z' }),
+     'com o carimbo da area de produto, ele decide o selo — e nao a lista de nomes');
+  {
+    const WS = lerTela('cloudflare-worker/worker.js');
+    ok(/alvo\.poker_validado_produto = !!_uP\.area_produto;/.test(WS) &&
+       /alvo\.poker_validado_produto = null;/.test(WS),
+       'o Worker carimba a area de produto de quem fechou a pontuacao, e apaga junto com ela');
+    ok(/colunaSeFaltar\(db, 'usuario', 'area_produto'/.test(WS) &&
+       /WHERE login IN \('fernando', 'mateus\.viana'\)\s+AND NOT EXISTS \(SELECT 1 FROM usuario WHERE area_produto = 1\)/.test(WS),
+       'a primeira carga da area de produto reproduz a lista antiga, e so enquanto ninguem tem a marca');
+    const opP = (WS.match(/if \(op === 'area-produto'\) \{[\s\S]*?\n      \}\n/) || [''])[0];
+    ok(!!opP && !/so_area_produto/.test(opP) && /exigePapel\(env, body, \['admin'\], headers\)/.test(WS),
+       'qualquer admin liga ou desliga a marca (a rota usuarios ja exige admin)');
+    ok(/uP\.papel !== 'admin' \|\| !uP\.ativo/.test(opP) && /ultima_area_produto/.test(opP),
+       'liga so em admin ativo, e nunca desliga a ultima pessoa da area');
+    ok(/area_produto: !!r\.area_produto/.test(WS) && /area_produto: !!u\.area_produto/.test(WS),
+       'a marca vem na sessao (identifica/quem-sou) e no login');
+  }
+
   /* O LOGIN TEM PRIORIDADE sobre o nome: e ele que sobrevive a alguem trocar o
      nome de exibicao. E por isso que o selo do Worker pode dizer "Fernando
      Morais" mesmo com o cadastro em outro nome. */
@@ -24907,12 +24932,18 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     {
       const WD = WKS.replace(/export default \{[\s\S]*$/, '');
       const fd = new Function(WD + '; return { ehDonoDaSprint, nascendoForaDoBacklog, travaSprintDoPO };')();
-      const fern = { papel: 'admin', usuario: { login: 'fernando' } };
+      const fern = { papel: 'admin', usuario: { login: 'fernando', area_produto: true } };
       const joao = { papel: 'admin', usuario: { login: 'joao.siqueira' } };
       const dev = { papel: 'dev', usuario: { login: 'lucas' } };
       ok(fd.ehDonoDaSprint(fern) && fd.ehDonoDaSprint({ papel: 'admin', usuario: null }) &&
          !fd.ehDonoDaSprint(joao) && !fd.ehDonoDaSprint(dev),
-         'o dono da sprint e a CONTA do Fernando (e a senha administrativa), nao o papel admin');
+         'o dono da sprint e quem tem a AREA DE PRODUTO na conta (e a senha administrativa), nao o papel admin');
+      // 11/11/2026: pela marca, e nao pelo login. Sem lista fixa no codigo.
+      ok(fd.ehDonoDaSprint({ papel: 'admin', usuario: { login: 'qualquer.um', area_produto: true } }) &&
+         !fd.ehDonoDaSprint({ papel: 'admin', usuario: { login: 'fernando' } }) &&
+         !fd.ehDonoDaSprint({ papel: 'dev', usuario: { login: 'x', area_produto: true } }) &&
+         !/SPRINT_DONOS/.test(WKS) && !/SPRINT_DONOS/.test(lerTela('sprint.js')),
+         'a area de produto vem da marca da conta: login nenhum no codigo, e dev marcado nao vira dono');
       const servD = { melhorias: [{ id: 'v', codigo: 'AX-1', sprint_po: '' }] };
       const recD = () => ({ melhorias: [
         { id: 'v', codigo: 'AX-1', sprint_po: 'S1-11-2026', sprint_po_historico: [{ sprint: 'S1-11-2026' }] },
@@ -24933,7 +24964,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'o painel do dev tambem');
       ok(/const sp = \(semDono \|\| !donoNova\) \? 'backlog' : spPedido;/.test(WKS),
          'e a API de criacao abre no Backlog para quem nao e dono');
-      ok(SP.ehDonoDaSprint({ papel: 'admin', login: 'fernando' }) && !SP.ehDonoDaSprint({ papel: 'admin', login: 'joao.siqueira' }) &&
+      ok(SP.ehDonoDaSprint({ papel: 'admin', login: 'fernando', area_produto: true }) && !SP.ehDonoDaSprint({ papel: 'admin', login: 'joao.siqueira' }) &&
          /SPRINTPO\.ehDonoDaSprint\(_eu\)/.test(ADMIN) && /SPRINTPO\.ehDonoDaSprint\(/.test(GANTT) &&
          /pkDonoDaSprint\(\)/.test(lerTela('poker.html')),
          'as telas usam a mesma regra para oferecer (ou nao) o gesto de sprint');
@@ -25781,7 +25812,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'o analista (dev-publish) nao poe em validacao sem o texto do dev — o servidor recusaria');
 
     // ── e55f057: so o dono da sprint marca sprint; quem nao e abre no Backlog
-    ok(SPm.ehDonoDaSprint({ papel: 'admin', login: 'fernando' }) && !SPm.ehDonoDaSprint({ papel: 'admin', login: 'paula' }) && SPm.ehDonoDaSprint(null),
+    ok(SPm.ehDonoDaSprint({ papel: 'admin', login: 'fernando', area_produto: true }) && !SPm.ehDonoDaSprint({ papel: 'admin', login: 'paula' }) && SPm.ehDonoDaSprint(null),
        'o dono e por conta (sprint.js), e a senha administrativa conta como dono');
     let divN = [];
     [true, false].forEach(dn => ['admin', 'analista', 'dev'].forEach(pp => ['backlog', 'planning', 'planejado', 'em_andamento'].forEach(et => {
@@ -27224,7 +27255,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!!iniSrc, 'sprintIniciar existe no admin para ser comparado');
     if (iniSrc) {
       const iniAdm = (state, r, saida) => new Function('state', 'SPRINTPO', 'PRAZO', 'saida', 'statusKey',
-        'const window = { PRAZO: PRAZO }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin" }; let _sprSel = saida.r;\n' +
+        'const window = { PRAZO: PRAZO }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin", area_produto: true }; let _sprSel = saida.r;\n' +
         'const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false; const renderAll = () => {}; const saveViaProxy = async () => true;\n' +
         'const avisaFalha = (t) => { saida.falha = t; }; const toast = (t, k) => { saida.toast = t; saida.tipo = k; };\n' +
         'const confirmar = async (o) => { saida.conf = o; return true; };\n' + iniSrc + '\nreturn sprintIniciar;')(state, SP, PRAZO_, Object.assign(saida, { r }), statusKey)();
@@ -27257,7 +27288,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!!(candSrc && aplSrc && gruposSrc), 'sprintLoteCandidatas, sprintLoteAplicar e LOTE_GRUPOS existem no admin para serem comparados');
     if (candSrc && aplSrc && gruposSrc) {
       const loteAdm = (state, f, saida) => new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', 'ORDEMKB', 'ENTREGAUSU', 'statusKey', 'estaPausado', 'saida', 'f',
-        'const window = { ENTREGAUSU: ENTREGAUSU }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin" };\n' +
+        'const window = { ENTREGAUSU: ENTREGAUSU }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin", area_produto: true };\n' +
         linhaAdm(/^const mescladaEm = .*$/m) + '\n' + linhaAdm(/^const ehMesclada = .*$/m) + '\n' +
         'let _loteSel = new Set(f.sel || []); let _loteBusca = f.q || ""; let _loteSoFora = !!f.soFora; let _loteGrupos = new Set(f.grupos || []);\n' +
         'const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false; const renderAll = () => {}; const saveViaProxy = async () => true;\n' +
@@ -27313,7 +27344,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         const el = () => ({ innerHTML: '', textContent: '', disabled: false, style: {}, onclick: null, addEventListener() {}, querySelector: () => el(), remove() {} });
         const document = { getElementById: () => el(), createElement: () => el(), body: { appendChild() {} } };
         return new Function('state', 'SPRINTPO', 'PRAZO', 'statusKey', 'estaPausado', 'saida', 'document',
-          'const window = { PRAZO: PRAZO }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin" };\n' +
+          'const window = { PRAZO: PRAZO }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin", area_produto: true };\n' +
           linhaAdm(/^function esc\(s\) \{.*$/m) + '\nlet _fechDecisoes = {}; let _fechRotulo = "";\n' +
           'const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false; const renderAll = () => {}; const saveViaProxy = async () => true;\n' +
           'const avisaFalha = (t) => { saida.falha = t; }; const toast = (t, k) => { saida.toast = t; saida.tipo = k; };\n' +
@@ -27405,8 +27436,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!/admin\.html/.test(SPC) && !/data-sp-admin-aba|linkAntigo/.test(SPC), 'Sprints nao manda mais para o admin: iniciar, repassar e fechar gravam do app');
     ok(/H\.gravar\(c\.patch, \{ raiz: c\.raiz, ok: c\.msg \}\)/.test(SPC) && (SPC.match(/var base = await baseFresca\(\);/g) || []).length === 3 && /await baseFresca\(\);[\s\S]{0,200}cicloRepassar\(SP\(\), base,/.test(SPC),
        'iniciar, fechar e repassar rodam sobre a base FRESCA do servidor, e iniciar e fechar levam a lista `sprints` na raiz');
-    ok(/H\.donoDaSprint\(\)\) \{ H\.toast\('Só o Fernando \(PM\/PO\) inicia a sprint\.'/.test(SPC) && /H\.donoDaSprint\(\)\) \{ H\.toast\('Só o Fernando \(PM\/PO\) fecha a sprint\.'/.test(SPC) &&
-       /H\.donoDaSprint\(\)\) \{ H\.toast\('Só o Fernando \(PM\/PO\) repassa demandas para a sprint\.'/.test(SPC),
+    ok(/H\.donoDaSprint\(\)\) \{ H\.toast\('Só a área de produto inicia a sprint\.'/.test(SPC) && /H\.donoDaSprint\(\)\) \{ H\.toast\('Só a área de produto fecha a sprint\.'/.test(SPC) &&
+       /H\.donoDaSprint\(\)\) \{ H\.toast\('Só a área de produto repassa demandas para a sprint\.'/.test(SPC),
        'so o dono da sprint inicia, fecha e repassa em lote (a mesma frase do admin)');
   })();
 
@@ -29548,7 +29579,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       registra((async () => {
         const divS = [];
         for (const [m0, esc] of casos) {
-          const dono = { login: 'fernando', nome: 'Fernando', papel: 'admin' };
+          const dono = { login: 'fernando', nome: 'Fernando', papel: 'admin', area_produto: true };
           const o = await escolhe(m0, esc, dono, true), f = await escolhe(m0, esc, dono, false), n = await escolhe(m0, esc, { login: 'ana', nome: 'Ana', papel: 'admin' }, true);
           const antes = JSON.stringify(m0);
           const r = AC.REGRAS.sprint(m0, { sprint: esc }, cx());

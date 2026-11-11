@@ -1082,7 +1082,7 @@
   function sprint(m, a, c) {
     var SP = mod(c, 'SPRINTPO');
     if (!SP) return falha('sprint.js não carregado');
-    if (!c.dono) return falha('Só o Fernando (PM/PO) repassa demandas para a sprint.');
+    if (!c.dono) return falha('Só a área de produto repassa demandas para a sprint.');
     var alvo = txt((a || {}).sprint);
     var x = copia(m);
     var opts = { dados: c.D || { melhorias: c.lista || [] } };
@@ -1845,7 +1845,7 @@
      fechada, a mesma sprint) e o aviso do pulo ("entrou ATRASADA") no fim. */
   GESTOS.sprint = async function (m) {
     var c = contexto();
-    if (!c.dono) { H.toast('Só o Fernando (PM/PO) repassa demandas para a sprint.', 'erro'); return; }
+    if (!c.dono) { H.toast('Só a área de produto repassa demandas para a sprint.', 'erro'); return; }
     var ops = sprintOpcoes(m, c);
     var atual = raiz.SPRINTPO ? raiz.SPRINTPO.doPO(m) : '';
     var marcada = ops.some(function (o) { return o.valor === atual; }) ? atual : (ops[0] || {}).valor;

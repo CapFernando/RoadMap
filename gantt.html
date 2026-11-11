@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="82d4b162e1">
+<html lang="pt-BR" data-build="5fb9fe1b7b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -13,7 +13,7 @@
   <script src="config.js"></script>
 <!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
 <script src="axis.js?v=1eb606be26"></script>
-<script src="axis-interface.js?v=92ad121542"></script>
+<script src="axis-interface.js?v=450f254ec1"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1200,9 +1200,9 @@
 <script src="links-github.js?v=5ebb0e63ab"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=2b19b49af3"></script>
-<script src="selo-validacao.js?v=fe18aaf504"></script>
+<script src="selo-validacao.js?v=b4a6779519"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=e63906aa30"></script>
+<script src="sprint.js?v=9868d1955e"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -1729,6 +1729,11 @@ window.addEventListener('rm-token-novo', (e) => { _ganttToken = e.detail || _gan
 
 let _gEu = null;
 try { _gEu = JSON.parse(sessionStorage.getItem('rm_eu') || 'null'); } catch (_) {}
+// A area de produto pode mudar sem novo login: o quem-sou (axis-interface.js) avisa.
+window.addEventListener('axis:eu', function (ev) {
+  const e = ev && ev.detail;
+  if (_gEu && e && e.login === _gEu.login) _gEu.area_produto = !!e.area_produto;
+});
 function credGantt() {
   const c = {};
   if (_ganttToken) c.token = _ganttToken;
@@ -4591,7 +4596,7 @@ function gSprintRender(m) {
   // So o dono da sprint escolhe (`SPRINTPO.ehDonoDaSprint`, 02/11/2026).
   const donoSp = SPRINTPO.ehDonoDaSprint(typeof _gEu !== 'undefined' ? _gEu : null);
   sel.disabled = fechada || !donoSp;
-  sel.title = !donoSp ? 'Só o Fernando (PM/PO) escolhe a sprint.' : '';
+  sel.title = !donoSp ? 'Só a área de produto escolhe a sprint.' : '';
   sel.title = fechada ? 'Sprint fechada — a demanda não sai mais dela.' : '';
   gSprintAviso();
 }
