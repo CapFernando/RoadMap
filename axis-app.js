@@ -1411,7 +1411,15 @@
     if (!interfaceCerta()) return;
     // Voltando de sessao vencida com OUTRA conta: a base da anterior nao e desenhada.
     if (_sessaoCaiu && _caiuDe && ((APP.eu || {}).login || '') !== _caiuDe) APP.D = null;
-    if (raiz.AXIS_INTERFACE) raiz.AXIS_INTERFACE.atualizar().then(function (e) { if (e) interfaceCerta(); });
+    if (raiz.AXIS_INTERFACE) {
+      var produtoAntes = !!(APP.eu && APP.eu.area_produto);
+      raiz.AXIS_INTERFACE.atualizar().then(function (e) {
+        if (!e || !interfaceCerta()) return;
+        // A area de produto mudou desde o login: os gestos de sprint aparecem
+        // (ou somem) sem pedir novo login.
+        if (!!(APP.eu && APP.eu.area_produto) !== produtoAntes) desenhar();
+      });
+    }
     desenhar();
     try {
       await carregar();

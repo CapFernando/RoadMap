@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="69572a8fbf">
+<html lang="pt-BR" data-build="ad3fe084eb">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -13,7 +13,7 @@
   <script src="config.js"></script>
 <!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
 <script src="axis.js?v=1eb606be26"></script>
-<script src="axis-interface.js?v=92ad121542"></script>
+<script src="axis-interface.js?v=450f254ec1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
   <style>
@@ -1683,10 +1683,10 @@
 <script src="links-github.js?v=5ebb0e63ab"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=2b19b49af3"></script>
-<script src="selo-validacao.js?v=fe18aaf504"></script>
+<script src="selo-validacao.js?v=b4a6779519"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=e63906aa30"></script>
+<script src="sprint.js?v=9868d1955e"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -3175,6 +3175,11 @@ let _adminToken = sessionStorage.getItem('rm_admin_token') || '';
 window.addEventListener('rm-token-novo', (e) => { _adminToken = e.detail || _adminToken; });
 
 let _eu = null; // { login, nome, papel } quando entrou por conta
+// A area de produto pode mudar sem novo login: o quem-sou (axis-interface.js) avisa.
+window.addEventListener('axis:eu', function (ev) {
+  const e = ev && ev.detail;
+  if (_eu && e && e.login === _eu.login) _eu.area_produto = !!e.area_produto;
+});
 // Credencial para as rotas que exigem admin. Manda o que existir.
 function credAdmin() {
   const c = {};
@@ -9850,7 +9855,7 @@ function sprintOpcoes(atual) {
 
 async function sprintEscolher(ev, id) {
   if (ev) { ev.stopPropagation(); ev.preventDefault(); }
-  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) repassa demandas para a sprint.', 'err'); return; }
+  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só a área de produto repassa demandas para a sprint.', 'err'); return; }
   const m = (state.melhorias || []).find(x => String(x.id) === String(id));
   if (!m) return;
   const atual = SPRINTPO.doPO(m);
@@ -9977,7 +9982,7 @@ function sprintLoteCandidatas() {
 }
 
 function sprintLoteAbrir() {
-  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) repassa demandas para a sprint.', 'err'); return; }
+  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só a área de produto repassa demandas para a sprint.', 'err'); return; }
   _loteSel = new Set();
   _loteBusca = '';
   _loteSoFora = true;
@@ -10167,7 +10172,7 @@ let _fechDecisoes = {};
 let _fechRotulo = '';
 
 function sprintFecharAbrir(rotulo) {
-  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) fecha a sprint.', 'err'); return; }
+  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só a área de produto fecha a sprint.', 'err'); return; }
   _fechRotulo = String(rotulo || '');
   _fechDecisoes = {};
   /* A PAUSADA JÁ VEM DECIDIDA: transborda para a sprint seguinte, com a pausa
@@ -10683,7 +10688,7 @@ async function sprDirecionar(id, nome) {
  *  depois, pelo dev perguntando, é o que esta confirmação evita. Não é um ato
  *  irreversível como o fechamento, mas é o que o time passa a ver. */
 async function sprintIniciar(rotulo) {
-  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) inicia a sprint.', 'err'); return; }
+  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só a área de produto inicia a sprint.', 'err'); return; }
   const r = rotulo || _sprSel;
   if (!r) return;
   const dem = SPRINTPO.demandasDaSprint(state, r);
@@ -14344,7 +14349,7 @@ function mSprintRender(m) {
   // Sprint fechada não entra nem sai: o campo mostra, e não deixa mexer.
   sel.disabled = !souPO || fechada;
   sel.title = fechada ? 'Sprint fechada — a demanda não sai mais dela.'
-            : !souPO ? 'Só o Fernando (PM/PO) escolhe a sprint.' : '';
+            : !souPO ? 'Só a área de produto escolhe a sprint.' : '';
   mSprintAviso();
 }
 
@@ -15946,6 +15951,7 @@ function uLinhaAtiva(u) {
       '<label class="us-spike" title="Usa o app AXIS (axis.html); desmarcado, segue nestas telas">' +
         '<input type="checkbox"' + (u.interface_nova ? ' checked' : '') +
         ' onchange="uInterfaceNova(\'' + l + '\', this.checked)"> interface nova</label>' +
+      uMarcaAreaProduto(u, l) +
       '</td>' +
     '<td>' + uCelulaNomeDemandas(u) + '</td>' +
     uCelulaPerfil(u) +
@@ -16109,6 +16115,26 @@ async function uInterfaceTodosAdmins() {
     await renderUsuarios();
     toast('Interface nova ligada para todos os admins.', 'ok');
   } catch (e) { toast(e.message, 'err'); }
+}
+
+/* A AREA DE PRODUTO. Quem tem a marca faz o que era so do Fernando: a sprint
+   da demanda, prioritaria, iniciar e fechar a sprint, abrir fora do backlog e o
+   selo da planning (`ehDonoDaSprint`, no Worker). So aparece em conta admin,
+   que e o papel que a regra exige; qualquer admin muda a marca. */
+function uMarcaAreaProduto(u, l) {
+  if (u.papel !== 'admin') return '';
+  return '<label class="us-spike" title="Área de produto: escolhe a sprint, marca prioritária, inicia e fecha a sprint e sela a planning">' +
+    '<input type="checkbox"' + (u.area_produto ? ' checked' : '') +
+    ' onchange="uAreaProduto(\'' + l + '\', this.checked)"> área de produto</label>';
+}
+
+async function uAreaProduto(login, produto) {
+  try {
+    await uChamar('area-produto', { login, produto });
+    if (_eu && _eu.login === login) _eu.area_produto = !!produto;
+    toast(produto ? login + ' passa a ser da área de produto.' : login + ' sai da área de produto.', 'ok');
+  } catch (e) { toast(e.message, 'err'); }
+  await renderUsuarios();
 }
 
 async function uAprovaSpike(login, aprova) {

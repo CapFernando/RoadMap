@@ -680,7 +680,7 @@
       var os = opcoesSprint(m && raiz.SPRINTPO ? raiz.SPRINTPO.doPO(m) : '');
       h += campo('axf-sprint', 'Sprint', '<select class="in" id="axf-sprint"' + (!po || os.fechada ? ' disabled' : '') + '>' + os.html + '</select>' +
         '<span class="note" id="axf-sprint-semana" aria-live="polite"></span>',
-        { nota: !po ? 'Só o Fernando (PM/PO) escolhe a sprint.' : os.fechada ? 'Sprint fechada — a demanda não sai mais dela.' : 'Obrigatória depois da Planning.' });
+        { nota: !po ? 'Só a área de produto escolhe a sprint.' : os.fechada ? 'Sprint fechada — a demanda não sai mais dela.' : 'Obrigatória depois da Planning.' });
     }
     h += campo('axf-inicio', 'Início previsto', entrada('axf-inicio', m ? m.inicio : '', { tipo: 'date', desligado: trava })) +
       campo('axf-entrega', 'Entrega prevista', entrada('axf-entrega', m ? m.entrega : '', { tipo: 'date', desligado: trava }),
