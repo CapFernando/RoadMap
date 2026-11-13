@@ -693,6 +693,9 @@
        regime de entrega o placar traz `entregues` (fechadas + em validacao) e o
        cumprimento e sobre ele; o cartao da validacao diz que elas ja contam. */
     var novaRegra = p.entregues != null;
+    var noKanbanVal = ((D || {}).melhorias || []).filter(function (m) {
+      return m && !m.mesclado_em && !m.oculto && ['validacao_area', 'validacao'].indexOf(H.colunaDe(m)) >= 0;
+    }).length;
     h += '<div class="sp-k5">' +
       kpi('Capacidade', H.num(cap), 'pts', cap
         ? plural(pessoas, 'pessoa', 'pessoas') + ' × 30 pts · alocado ' + H.num(aloc) + (cap ? ' (' + Math.round(aloc / cap * 100) + '%)' : '')
@@ -705,12 +708,17 @@
         /* 13/11/2026: "o calculo da sprint esta sobre os pontos. Deve ser em
            quantidade. 10 tasks equivalem a 100%, entregando 9 ficaria 90%."
            O numero grande e o % de TASKS entregues; os pontos viram detalhe. */
+        /* A SOMA FECHA NO TEXTO (13/11/2026): "64 de 126 (29 fechadas + 30 em
+           validacao)" nao fechava — pausada conta como entregue (08/11) e nao
+           aparecia. */
         ? kpi('Entregue', H.num(p.pct), '%', p.entregues + ' de ' + p.total + ' tasks (' +
-            plural(p.validados, 'fechada', 'fechadas') + ' + ' + p.aguardando + ' em validação) · ' + H.num(p.pontosEntregues) + ' pts', 'ok', 'var(--ok-t)')
+            plural(p.validados, 'fechada', 'fechadas') + ' + ' + p.aguardando + ' em validação' +
+            (p.pausadas ? ' + ' + plural(p.pausadas, 'pausada', 'pausadas') : '') + ') · ' + H.num(p.pontosEntregues) + ' pts', 'ok', 'var(--ok-t)')
         : kpi('Entregue e validado', H.num(p.pct), '%', p.validados + ' de ' + p.total + ' tasks · ' + H.num(p.pontosValidados) + ' pts', 'ok', 'var(--ok-t)')) +
       // Regra de 05/11 (3ca7514): aguardando = foi para validacao (area ou PM/PO) nesta sprint e o PM/PO ainda nao aprovou.
       kpi(novaRegra ? 'Em validação' : p.regraEntrega ? 'Aguardando aprovação' : 'Aguardando validação', H.num(p.pontosAguardando), 'pts', p.aguardando
-        ? (novaRegra ? plural(p.aguardando, 'item', 'itens') + ' na área ou com o PM/PO · já contam como entrega'
+        ? (novaRegra ? plural(p.aguardando, 'item', 'itens') + ' desta sprint e deste time na área ou com o PM/PO · já contam como entrega' +
+           (noKanbanVal > p.aguardando ? ' · o Kanban mostra ' + noKanbanVal + ' porque soma os outros times e sprints' : '')
            : plural(p.aguardando, 'item espera', 'itens esperam') + (p.regraEntrega ? ' a aprovação (área ou PM/PO); contam nesta sprint ao aprovar' : ' o PM/PO; contam aqui ao validar'))
         : 'nada esperando o PM/PO', p.aguardando ? 'in' : '', p.aguardando ? 'var(--in-t)' : '') +
       '</div>';
