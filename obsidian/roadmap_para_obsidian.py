@@ -127,9 +127,27 @@ def base():
     `raw.githubusercontent.com` serve com cache de 5 minutos e ignora cache-buster
     na query — a mesma armadilha que fazia o painel mostrar estado velho. A
     Contents API nao passa por esse cache.
+
+    ── PEDE O CONTEUDO CRU, E NAO O JSON COM `content` EM BASE64 ──────────────
+
+    A Contents API SO EMBUTE ARQUIVO ATE 1 MB. Acima disso ela responde 200, com
+    `"encoding": "none"` e `"content": ""` — sem erro nenhum. O `b64decode('')`
+    devolve vazio, o `json.loads` estoura com "Expecting value: line 1 column 1",
+    e a tarefa agendada morre calada.
+
+    FOI O QUE ACONTECEU: a base passou de 1 MB e este script parou de produzir
+    nota em 08/09/2026. Rodou de 30 em 30 minutos por dois meses, falhando todas
+    as vezes — 133 falhas seguidas no `ultima-execucao.log`, nenhum sucesso. Em
+    13/11 o arquivo estava com 3,67 MB.
+
+    O Worker ja tinha aprendido isto e o registra: "Ler o base64 da Contents API
+    quebrava aqui (JSON.parse de string vazia) e era a causa do erro 1101 — o
+    arquivo ja passou de 1MB". A saida e a mesma de la: o MEDIA TYPE `raw`, que
+    devolve o arquivo inteiro direto, sem base64 e sem o teto de 1 MB —
+    continuando pela API autenticada, e portanto sem o cache de 5 minutos.
     """
-    meta = json.loads(sh(['gh', 'api', 'repos/%s/contents/%s' % (REPO, ARQ)]))
-    return json.loads(base64.b64decode(meta['content']).decode('utf-8'))
+    return json.loads(sh(['gh', 'api', 'repos/%s/contents/%s' % (REPO, ARQ),
+                          '-H', 'Accept: application/vnd.github.raw']))
 
 
 def dia(v):
