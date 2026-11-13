@@ -337,20 +337,21 @@
 
     // Pontos da sprint: o placar (time) ou o ranking (a minha linha), ambos de
     // sprint.js, com a etapa GRAVADA — a mesma que admin.html e dev.html passam.
-    var pts = { total: 0, feitos: 0, pct: null, itens: 0 };
+    /* 13/11/2026: o cumprimento da sprint e por QUANTIDADE de tasks ("10 tasks
+       equivalem a 100%, entregando 9 ficaria 90%"), e nao por pontos. */
+    var pts = { total: 0, feitos: 0, pct: null, itens: 0, entregues: true };
     if (sprint && S) {
       if (dev) {
         var nomes = H.meusNomes();
         S.rankingDaSprint(ctx.D, sprint, H.colunaDe).forEach(function (r) {
-          if (nomes.indexOf(r.nome) >= 0) { pts.total += r.pontosTotal; pts.feitos += r.pontos; pts.itens += r.total; }
+          if (nomes.indexOf(r.nome) >= 0) { pts.itens += r.total; pts.feitos += (r.entregues != null ? r.entregues : r.validados); }
         });
-        pts.pct = pts.total ? Math.round(pts.feitos / pts.total * 100) : null;
       } else {
         var pl = S.placarDaSprint(ctx.D, sprint, H.colunaDe);
-        // Em validacao conta como entrega (fdf14e2): o percentual do placar ja soma as duas.
-        pts = { total: pl.pontosTotal, feitos: pl.pontosEntregues != null ? pl.pontosEntregues : pl.pontosValidados, pct: pl.pctPontos, itens: pl.total,
-                entregues: pl.pontosEntregues != null };
+        // Em validacao conta como entrega (fdf14e2): o placar ja soma as duas.
+        pts = { itens: pl.total, feitos: pl.entregues != null ? pl.entregues : pl.validados, entregues: pl.entregues != null };
       }
+      pts.pct = pts.itens ? Math.round(pts.feitos / pts.itens * 100) : null;
     }
     var podeVer = papel !== 'consulta';
     var kpis = '<div class="ini-kg">' +
@@ -359,9 +360,9 @@
         { cls: vHoje.length ? 'dg' : '', cor: vHoje.length ? 'var(--dg-t)' : '' }) +
       kpi('Em validação', emVal.length, emVal.length ? comPO + ' com o PO · ' + (emVal.length - comPO) + ' na área' : 'nada esperando validação',
         { href: papel === 'admin' ? '#backlog/validacao' : '' }) +
-      kpi('Na sprint', pts.total + ' <small>pts</small>',
-        pts.total ? pts.feitos + (pts.entregues ? ' entregues' : ' validados') + (pts.pct != null ? ' · ' + pts.pct + '%' : '')
-                  : (pts.itens ? H.plural(pts.itens, 'item', 'itens') + ' sem pontos do Poker' : (dev ? 'nada seu na sprint' : 'sprint sem itens')),
+      kpi('Na sprint', pts.itens + ' <small>tasks</small>',
+        pts.itens ? pts.feitos + (pts.entregues ? ' entregues' : ' validadas') + ' · ' + pts.pct + '%'
+                  : (dev ? 'nada seu na sprint' : 'sprint sem itens'),
         { notaCor: pts.feitos ? 'var(--ok-t)' : '', href: podeVer ? '#sprints' : '' }) +
       kpi('Atrasadas', atr.length, atr.length ? codigos(atr) : 'tudo no prazo',
         { cls: atr.length ? 'dg' : 'ok', cor: atr.length ? 'var(--dg-t)' : 'var(--ok-t)',

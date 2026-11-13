@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="ad3fe084eb">
+<html lang="pt-BR" data-build="89eddfdcc0">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10622,7 +10622,7 @@ function renderGerSprint() {
       : '<span class="spr-ok">✓ nenhuma em risco</span>';
   }
   const SIT = { validado: ['✅', 'Validado'], aguardando: ['⏳', 'Esperando você'],
-                em_curso: ['🔧', 'Em curso'], saiu: ['↪', 'Saiu da sprint'],
+                em_curso: ['🔧', 'Em curso'], saiu: ['↪', 'Replanejada'],
                 // Na Validacao da area: fora do placar (`SPRINTPO.naArea`, 05/11/2026).
                 na_area: ['🧪', 'Na área · fora do placar'],
                 negada: ['✕', 'Negada'] };
@@ -13614,7 +13614,7 @@ function relTexto(secao) {
                   (spAta.pctPontos === null ? '' : ', ' + spAta.pctPontos + '% por ponto') + ')');
       partes.push('  Pontos:               ' + spAta.pontosValidados + ' de ' + spAta.pontosTotal);
       if (spAta.aguardando) partes.push('  Esperando validacao:  ' + spAta.aguardando);
-      if (spAta.saiu) partes.push('  Sairam sem entregar:  ' + spAta.saiu);
+      if (spAta.saiu) partes.push('  Replanejadas sem entregar:  ' + spAta.saiu);
       spAta.ranking.forEach(d => partes.push('    - ' + d.nome + ': ' + d.validados +
         ' de ' + d.total + ' (' + d.pct + '%), ' + d.pontos + ' pt'));
       if (spAta.risco.length) {
