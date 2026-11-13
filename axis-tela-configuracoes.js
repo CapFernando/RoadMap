@@ -576,7 +576,7 @@
         chave: 'u:' + u.login, u: u, login: u.login, nome: u.nome || u.login, email: u.email || '', papel: u.papel || 'consulta',
         status: u.pendente ? 'pendente' : (u.ativo ? 'ativo' : 'off'), nomeDev: nd, declarado: decl.join(' / '),
         frente: (desenvolve || ehAtivo(nd)) ? frenteDe(nd, D) : { txt: '', padrao: false },
-        axcred: !!(perf && perf.axcred), spike: !!u.aprova_spike, nova: !!u.interface_nova,
+        axcred: !!(perf && perf.axcred), spike: !!u.aprova_spike, nova: !!u.interface_nova, produto: !!u.area_produto,
         capacidade: nd && ehAtivo(nd), acesso: u.ultimo_acesso || '', criado: u.criado_em || '',
         dem: contaDemandas(decl.length ? decl : (nd ? [nd] : []))
       };
@@ -774,6 +774,10 @@
       '<span class="lab" style="margin-top:6px">PERMISSÕES EXTRAS</span>' +
       (p.papel !== 'semconta' ? sw('Aprova spike', p.spike, 'Pode assinar a aprovação de um spike', 'u-spike', dLogin) : '') +
       (p.papel !== 'semconta' && p.status !== 'pendente' ? sw('Interface nova', p.nova, 'Usa o app AXIS; desligado, entra nas telas de sempre', 'u-interface', dLogin) : '') +
+      /* AREA DE PRODUTO (`ehDonoDaSprint`, no Worker): so em conta admin, que e o
+         papel que a regra exige; qualquer admin muda a marca. */
+      (p.papel === 'admin' && p.status === 'ativo'
+        ? sw('Área de produto', p.produto, 'Escolhe a sprint, marca prioritária, inicia e fecha a sprint e sela a planning', 'u-produto', dLogin) : '') +
       (noDev ? sw('DEV-AXCred', p.axcred, 'Aparece primeiro no Planejamento', 'perfil-axcred', dDev) : '');
     if (p.status !== 'semconta') {
       h += '<span class="note" style="font-size:12px">' + (p.acesso ? 'Último acesso em ' + esc(quando(p.acesso)) : '<span style="color:var(--wn-t)">Nunca entrou com a conta</span> (pode estar usando a senha geral)') +
@@ -1108,6 +1112,14 @@
       if (window.confirmar && !(await window.confirmar({ titulo: 'Interface nova para todos os admins',
           texto: 'Todos os admins ativos passam a usar o app AXIS na próxima tela que abrirem. Dá para desligar um a um depois.', ok: 'Ligar' }))) return;
       return chamaConta('interface', { todos_admins: true, nova: true }, 'Interface nova ligada para todos os admins.');
+    },
+    'u-produto': async function (el) {
+      var login = el.getAttribute('data-cfg-login'), u = contaDe(login) || {};
+      var liga = !u.area_produto;
+      var r = await chamaConta('area-produto', { login: login, produto: liga },
+        liga ? '"' + login + '" passa a ser da área de produto.' : '"' + login + '" sai da área de produto.');
+      var eu = raiz.AXIS_APP.APP.eu; if (r && eu && eu.login === login) eu.area_produto = liga;
+      return r;
     },
     'u-spike': async function (el) {
       var login = el.getAttribute('data-cfg-login'), u = contaDe(login) || {};

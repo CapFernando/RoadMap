@@ -3,7 +3,7 @@
      saber, de olhada, se o navegador esta servindo uma copia antiga desta tela.
      Faltava justamente aqui, e esta e a tela que o time inteiro abre ao mesmo
      tempo numa reuniao — onde descobrir tarde custa a reuniao. -->
-<html lang="pt-BR" data-build="594fa771ff">
+<html lang="pt-BR" data-build="1c70d7d35f">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -16,7 +16,7 @@
   <script src="config.js"></script>
 <!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
 <script src="axis.js?v=1eb606be26"></script>
-<script src="axis-interface.js?v=92ad121542"></script>
+<script src="axis-interface.js?v=450f254ec1"></script>
   <script src="qr.js?v=77f17395bd"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -350,7 +350,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="sprint.js?v=e63906aa30"></script>
+<script src="sprint.js?v=9868d1955e"></script>
 <script src="dialogo.js?v=9e20f6c47f"></script>
 <script src="senha.js?v=ae10842c4b"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
@@ -653,9 +653,11 @@ let _papel        = sessionStorage.getItem('pk_papel') || '';
 // O login de quem conduz: so o DONO da sprint escolhe a sprint na mesa
 // (`SPRINTPO.ehDonoDaSprint`, 02/11/2026) — o papel admin e de varias pessoas.
 let _pkLogin      = sessionStorage.getItem('pk_login') || '';
+// A marca de area de produto da conta (`area_produto`), que vem no login.
+let _pkProduto    = sessionStorage.getItem('pk_area_produto') === '1';
 function pkDonoDaSprint() {
   return _papel === 'admin' && !!_pkLogin && !!window.SPRINTPO &&
-         SPRINTPO.ehDonoDaSprint({ papel: _papel, login: _pkLogin });
+         SPRINTPO.ehDonoDaSprint({ papel: _papel, login: _pkLogin, area_produto: _pkProduto });
 }
 let _feriados     = [];     // sem eles o rotulo da sprint sai errado em 63 dias
 let _sprintsFechadas = [];
@@ -1229,6 +1231,8 @@ async function abrirSessao() {
     try { sessionStorage.setItem('pk_papel', _papel); } catch (_) {}
     _pkLogin = String((rl.body && rl.body.usuario && rl.body.usuario.login) || '');
     try { sessionStorage.setItem('pk_login', _pkLogin); } catch (_) {}
+    _pkProduto = !!(rl.body && rl.body.usuario && rl.body.usuario.area_produto);
+    try { sessionStorage.setItem('pk_area_produto', _pkProduto ? '1' : ''); } catch (_) {}
     if (papel && !['admin', 'analista'].includes(papel)) {
       err.textContent = 'Sua conta é de ' + papel + ' e não conduz a votação. ' +
                         'Entre como participante em "Vou apenas votar".';

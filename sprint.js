@@ -1790,16 +1790,17 @@
   }
 
   /* O DONO DA SPRINT (02/11/2026) — espelho de `ehDonoDaSprint` do Worker.
-   * "Somente eu consigo marcar a sprint que a demanda fará parte." Por CONTA
-   * (login), e não pelo papel admin, que é de oito pessoas. `eu` ausente é a
+   * "Somente eu consigo marcar a sprint que a demanda fará parte." Por CONTA,
+   * e não pelo papel admin, que é de oito pessoas: quem tem a marca ÁREA DE
+   * PRODUTO (`area_produto`, que vem no login e no quem-sou). `eu` ausente é a
    * senha administrativa compartilhada. A trava de verdade é do servidor; aqui
-   * é a cortesia de não oferecer o gesto a quem não pode. */
-  // 10/11/2026: Mateus Viana movimenta as tasks igual o Fernando (espelho do Worker).
-  var SPRINT_DONOS = ['fernando', 'mateus.viana'];
+   * é a cortesia de não oferecer o gesto a quem não pode.
+   * 11/11/2026: era uma lista fixa de logins; agora a área de produto se
+   * resolve em Usuários, sem mexer no código. */
   function ehDonoDaSprint(eu) {
     if (!eu) return true;
     if (txt(eu.papel) !== 'admin') return false;
-    return SPRINT_DONOS.indexOf(txt(eu.login).toLowerCase()) >= 0;
+    return !!eu.area_produto;
   }
 
   /** O PM/PO REPASSA a demanda para uma sprint. */
@@ -1988,7 +1989,6 @@
     travaDeAlocacao: travaDeAlocacao,
     proximasSprints: proximasSprints,
     podeRepassar: podeRepassar,
-    SPRINT_DONOS: SPRINT_DONOS,
     ehDonoDaSprint: ehDonoDaSprint,
     repassar: repassar,
     retirar: retirar,

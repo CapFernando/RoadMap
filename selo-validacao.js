@@ -50,8 +50,10 @@
      QUEM PODE SELAR — e este é o único lugar a editar.
 
      O selo é NOMINAL: ele diz "validado por fulano", e por isso não é qualquer
-     pessoa que o gera. Hoje é só o Fernando; o dia em que outra pessoa passar a
-     conduzir a planning, o nome dela entra aqui e nada mais muda.
+     pessoa que o gera. Desde 11/11/2026 quem sela é a ÁREA DE PRODUTO, marcada
+     na conta: o Worker carimba `poker_validado_produto` ao gravar a pontuação.
+     As listas abaixo ficam só para as pontuações ANTERIORES ao carimbo — não
+     precisam crescer quando alguém entra na área.
 
      SÃO DUAS LISTAS PORQUE AS DUAS FONTES GUARDAM COISAS DIFERENTES:
 
@@ -127,6 +129,13 @@
 
     var quem = texto(m.poker_validado_por);
     if (quem) {
+      /* ÁREA DE PRODUTO, CARIMBADA PELO WORKER. Desde 11/11/2026 o Worker grava
+         `poker_validado_produto`: se quem fechou a pontuação era da área de
+         produto naquele dia. Com o carimbo, ele decide; sem ele (pontuações
+         anteriores), valem as listas abaixo. */
+      if (typeof m.poker_validado_produto === 'boolean') {
+        return m.poker_validado_produto ? { quem: quem, em: texto(m.poker_validado_em) } : null;
+      }
       return podeSelar(m.poker_validado_login, quem)
         ? { quem: quem, em: texto(m.poker_validado_em) }
         : null;

@@ -98,9 +98,13 @@
         if (!j || !j.usuario) return null;
         var e = eu() || {};
         e.interface_nova = !!j.usuario.interface_nova;
+        // A area de produto tambem muda sem novo login (Usuarios, no admin).
+        e.area_produto = !!j.usuario.area_produto;
         if (j.papel) e.papel = j.papel;
         ['login', 'nome', 'email', 'nome_demandas'].forEach(function (k) { if (j.usuario[k] != null && e[k] == null) e[k] = j.usuario[k]; });
         try { sessionStorage.setItem('rm_eu', JSON.stringify(e)); } catch (_) {}
+        // As telas antigas guardam o `rm_eu` numa variavel ao abrir: avisa.
+        try { raiz.dispatchEvent(new CustomEvent('axis:eu', { detail: e })); } catch (_) {}
         return e;
       })
       .catch(function () { return null; });
