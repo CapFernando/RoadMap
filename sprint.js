@@ -1542,7 +1542,7 @@
         if (!pts) q.semPontuacao += 1;
         if (sit === 'entregue') { q.validados += 1; q.pontosValidados += pts; q.itens.validados.push(m); }
         else if (sit === 'aguardando') { q.aguardando += 1; q.pontosAguardando += pts; q.itens.aguardando.push(m); }
-        else if (sit === 'pausada') { q.pausadas += 1; q.itens.pausadas.push(m); }
+        else if (sit === 'pausada') { q.pausadas += 1; q.pontosPausadas = (q.pontosPausadas || 0) + pts; q.itens.pausadas.push(m); }
         else if (sit === 'em_curso') { q.emCurso += 1; q.itens.emCurso.push(m); }
         else { q.saiu += 1; q.itens.saiu.push(m); }
       });
@@ -1552,7 +1552,7 @@
          10 itens, 5 fechados, 3 em validação → 80%. `validados` continua sendo
          só o que o PM/PO fechou; `entregues` soma os dois. */
       q.entregues = q.validados + q.aguardando + q.pausadas;   // pausada = entregue (08/11)
-      q.pontosEntregues = q.pontosValidados + q.pontosAguardando;
+      q.pontosEntregues = q.pontosValidados + q.pontosAguardando + (q.pontosPausadas || 0);   // pausada = entregue, pontos tambem (13/11)
       q.pct = q.total ? Math.round(q.entregues / q.total * 100) : 0;
       q.pctPontos = q.pontosTotal ? Math.round(q.pontosEntregues / q.pontosTotal * 100) : null;
       return q;
@@ -1635,9 +1635,9 @@
         // Replanejada nao conta no total da pessoa (13/11/2026) — ver placarDaSprint.
         if (replanejadaNaSprint(dados, r, m, sit)) { a.replanejadas = (a.replanejadas || 0) + 1; return; }
         a.total += 1; a.pontosTotal += pts / qn;
-        if (sit === 'entregue') { a.validados += 1; a.pontos += pts / qn; }
-        else if (sit === 'aguardando') a.aguardando += 1;
-        else if (sit === 'pausada') a.pausadas += 1;
+        if (sit === 'entregue') { a.validados += 1; a.pontos += pts / qn; a.pontosEnt = (a.pontosEnt || 0) + pts / qn; }
+        else if (sit === 'aguardando') { a.aguardando += 1; a.pontosEnt = (a.pontosEnt || 0) + pts / qn; }
+        else if (sit === 'pausada') { a.pausadas += 1; a.pontosEnt = (a.pontosEnt || 0) + pts / qn; }   // pausada = entregue, pontos tambem (13/11)
         else if (sit === 'em_curso') a.emCurso += 1;
         else a.saiu += 1;
         if (qn > 1) a.dupla = true;
@@ -1673,6 +1673,7 @@
       var o = { nome: a.nome, total: a.total, validados: a.validados,
                aguardando: a.aguardando, pausadas: a.pausadas || 0, emCurso: a.emCurso,
                saiu: a.saiu, replanejadas: a.replanejadas || 0, pontos: Math.round(a.pontos),
+               pontosEntregues: Math.round(regraNova ? (a.pontosEnt || 0) : a.pontos),
                pontosTotal: Math.round(a.pontosTotal), dupla: !!a.dupla,
                pct: a.total ? Math.round(ent / a.total * 100) : 0 };
       if (regraNova) o.entregues = ent;

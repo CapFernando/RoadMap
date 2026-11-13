@@ -72,7 +72,9 @@
       '.axa .sp-pn{padding:20px;border-radius:16px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd);display:flex;flex-direction:column;gap:10px;min-width:0}',
       '.axa .sp-pn .h2{font-size:17px}',
       '.axa .sp-pn .hh{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center}',
-      '.axa .sp-pp{display:grid;grid-template-columns:140px minmax(0,1fr) 84px;gap:12px;align-items:center;font-size:13px}',
+      '.axa .sp-pp{display:grid;grid-template-columns:140px minmax(0,1fr) 64px 84px;gap:12px;align-items:center;font-size:13px}',
+      '.axa .sp-pp-hd{font-size:11px;color:var(--tx4);font-weight:700;letter-spacing:.04em;text-transform:uppercase}',
+      '.axa .sp-pp .pt{font-family:var(--font-mono);font-size:12px;color:var(--tx3);text-align:right}',
       '.axa .sp-pp .tr{height:8px;border-radius:4px;background:var(--sf5);overflow:hidden}',
       '.axa .sp-pp .tr i{display:block;height:8px;border-radius:4px;background:var(--ac)}',
       '.axa .sp-pp .tr i.ok{background:var(--ok)}',
@@ -228,7 +230,7 @@
       '.axa .es-ln .x{grid-column:2;justify-content:flex-start;max-width:none}',
       '.axa .sp-k5{grid-template-columns:repeat(2,minmax(0,1fr))}',
       '.axa .sp-2,.axa .sp-2e,.axa .sp-pl,.axa .sp-pj,.axa .sp-k3{grid-template-columns:minmax(0,1fr)}',
-      '.axa .sp-pp{grid-template-columns:110px minmax(0,1fr) 64px}',
+      '.axa .sp-pp{grid-template-columns:110px minmax(0,1fr) 52px 72px}',
       '.axa .sp-esc{grid-template-columns:62px minmax(0,1fr) 34px;row-gap:6px}',
       '.axa .sp-esc .x{display:flex;flex-wrap:wrap;gap:6px;align-items:center;grid-column:2/4;grid-row:2}',
       '.axa .sp-hd .ac{width:100%}',
@@ -742,8 +744,12 @@
     }
     var meus = H.meusNomes();
     var temDupla = rk.some(function (d) { return d.dupla; });
-    var blocoPp = '<section class="sp-pn"><div class="hh"><h2 class="h2">Por pessoa</h2><span class="note" style="font-size:11.5px">tasks entregues / tasks na sprint</span></div>' +
-      (rk.length ? rk.map(function (d) {
+    var blocoPp = '<section class="sp-pn"><div class="hh"><h2 class="h2">Por pessoa</h2><span class="note" style="font-size:11.5px">entregues / na sprint</span></div>' +
+      /* 13/11/2026: "crie uma coluna e add os pontos no modelo (20/30)". Tasks e
+         pontos com a mesma regra (fechadas + em validacao). Quem ficou sem nada
+         na sprint (tudo replanejado) nao aparece como 0 / 0. */
+      (rk.length ? '<div class="sp-pp sp-pp-hd"><span></span><span></span><span style="text-align:right">tasks</span><span style="text-align:right">pontos</span></div>' : '') +
+      (rk.length ? rk.filter(function (d) { return d.total > 0; }).map(function (d) {
         // 13/11/2026: por QUANTIDADE de tasks, como o placar (entregues = fechadas + em validacao).
         var feitas = d.entregues != null ? d.entregues : d.validados;
         var pct = d.total ? Math.min(100, Math.round(feitas / d.total * 100)) : 0;
@@ -754,7 +760,8 @@
           (d.aguardando ? ', ' + d.aguardando + ' aguardando' : '') + (d.emCurso ? ', ' + d.emCurso + ' em curso' : '') + (d.saiu ? ', ' + d.saiu + ' replanejadas' : '')) + '">' +
           '<span class="nm ell' + (eu ? ' eu' : '') + '">' + esc(d.nome) + '</span>' +
           '<span class="tr"><i class="' + (pct >= 100 ? 'ok' : '') + '" style="width:' + pct + '%"></i></span>' +
-          '<span class="lv">' + feitas + ' / ' + d.total + '</span></div>';
+          '<span class="lv">' + feitas + ' / ' + d.total + '</span>' +
+          '<span class="pt">' + (d.pontosTotal ? (d.pontosEntregues != null ? d.pontosEntregues : d.pontos) + ' / ' + d.pontosTotal : '—') + '</span></div>';
       }).join('') + (temDupla ? '<span class="note" style="font-size:11.5px">Demanda de dupla conta para os dois.</span>' : '')
       : H.vazio('users', 'Ninguém nesta sprint ainda', 'O PM/PO repassa as demandas pela aba Planning ou pelo campo Sprint do card.')) + '</section>';
     h += '<div class="sp-2">' + blocoBd + blocoPp + '</div>';
