@@ -72,7 +72,9 @@
       '.axa .sp-pn{padding:20px;border-radius:16px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd);display:flex;flex-direction:column;gap:10px;min-width:0}',
       '.axa .sp-pn .h2{font-size:17px}',
       '.axa .sp-pn .hh{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center}',
-      '.axa .sp-pp{display:grid;grid-template-columns:140px minmax(0,1fr) 84px;gap:12px;align-items:center;font-size:13px}',
+      '.axa .sp-pp{display:grid;grid-template-columns:140px minmax(0,1fr) 64px 84px;gap:12px;align-items:center;font-size:13px}',
+      '.axa .sp-pp-hd{font-size:11px;color:var(--tx4);font-weight:700;letter-spacing:.04em;text-transform:uppercase}',
+      '.axa .sp-pp .pt{font-family:var(--font-mono);font-size:12px;color:var(--tx3);text-align:right}',
       '.axa .sp-pp .tr{height:8px;border-radius:4px;background:var(--sf5);overflow:hidden}',
       '.axa .sp-pp .tr i{display:block;height:8px;border-radius:4px;background:var(--ac)}',
       '.axa .sp-pp .tr i.ok{background:var(--ok)}',
@@ -228,7 +230,7 @@
       '.axa .es-ln .x{grid-column:2;justify-content:flex-start;max-width:none}',
       '.axa .sp-k5{grid-template-columns:repeat(2,minmax(0,1fr))}',
       '.axa .sp-2,.axa .sp-2e,.axa .sp-pl,.axa .sp-pj,.axa .sp-k3{grid-template-columns:minmax(0,1fr)}',
-      '.axa .sp-pp{grid-template-columns:110px minmax(0,1fr) 64px}',
+      '.axa .sp-pp{grid-template-columns:110px minmax(0,1fr) 52px 72px}',
       '.axa .sp-esc{grid-template-columns:62px minmax(0,1fr) 34px;row-gap:6px}',
       '.axa .sp-esc .x{display:flex;flex-wrap:wrap;gap:6px;align-items:center;grid-column:2/4;grid-row:2}',
       '.axa .sp-hd .ac{width:100%}',
@@ -693,20 +695,32 @@
        regime de entrega o placar traz `entregues` (fechadas + em validacao) e o
        cumprimento e sobre ele; o cartao da validacao diz que elas ja contam. */
     var novaRegra = p.entregues != null;
+    var noKanbanVal = ((D || {}).melhorias || []).filter(function (m) {
+      return m && !m.mesclado_em && !m.oculto && ['validacao_area', 'validacao'].indexOf(H.colunaDe(m)) >= 0;
+    }).length;
     h += '<div class="sp-k5">' +
       kpi('Capacidade', H.num(cap), 'pts', cap
         ? plural(pessoas, 'pessoa', 'pessoas') + ' × 30 pts · alocado ' + H.num(aloc) + (cap ? ' (' + Math.round(aloc / cap * 100) + '%)' : '')
         : 'nenhuma pessoa cadastrada nesta trilha') +
       kpi('Planejado', H.num(pl.pts), 'pts', plural(pl.n, 'item', 'itens') + ' até o início' + (rep ? ' · ' + rep + ' repassad' + (rep === 1 ? 'o' : 'os') : '') +
-        (p.saiu ? ' · ' + p.saiu + ' saí' + (p.saiu === 1 ? 'u' : 'ram') + ' sem entregar' : '')) +
+        (p.replanejadas ? ' · ' + p.replanejadas + ' replanejad' + (p.replanejadas === 1 ? 'a' : 'as') + ' (fora da conta)' : '') +
+        (p.saiu ? ' · ' + p.saiu + ' transbord' + (p.saiu === 1 ? 'ou' : 'aram') + ' sem entregar' : '')) +
       kpi('Adicionado depois', H.num(ad.pts), 'pts', ad.n ? plural(ad.n, 'item', 'itens') + ' depois de iniciada' : 'nada entrou depois do início', ad.n ? 'wn' : '', ad.n ? 'var(--wn-t)' : '') +
       (novaRegra
-        ? kpi('Entregue', H.num(p.pontosEntregues), 'pts', pctPl + ' · ' + p.entregues + ' de ' + p.total + ' itens (' + p.pct + '%: ' +
-            plural(p.validados, 'fechado', 'fechados') + ' + ' + p.aguardando + ' em validação)', 'ok', 'var(--ok-t)')
-        : kpi('Entregue e validado', H.num(p.pontosValidados), 'pts', pctPl + ' · ' + p.validados + ' de ' + p.total + ' itens (' + p.pct + '%)', 'ok', 'var(--ok-t)')) +
+        /* 13/11/2026: "o calculo da sprint esta sobre os pontos. Deve ser em
+           quantidade. 10 tasks equivalem a 100%, entregando 9 ficaria 90%."
+           O numero grande e o % de TASKS entregues; os pontos viram detalhe. */
+        /* A SOMA FECHA NO TEXTO (13/11/2026): "64 de 126 (29 fechadas + 30 em
+           validacao)" nao fechava — pausada conta como entregue (08/11) e nao
+           aparecia. */
+        ? kpi('Entregue', H.num(p.pct), '%', p.entregues + ' de ' + p.total + ' tasks (' +
+            plural(p.validados, 'fechada', 'fechadas') + ' + ' + p.aguardando + ' em validação' +
+            (p.pausadas ? ' + ' + plural(p.pausadas, 'pausada', 'pausadas') : '') + ') · ' + H.num(p.pontosEntregues) + ' pts', 'ok', 'var(--ok-t)')
+        : kpi('Entregue e validado', H.num(p.pct), '%', p.validados + ' de ' + p.total + ' tasks · ' + H.num(p.pontosValidados) + ' pts', 'ok', 'var(--ok-t)')) +
       // Regra de 05/11 (3ca7514): aguardando = foi para validacao (area ou PM/PO) nesta sprint e o PM/PO ainda nao aprovou.
       kpi(novaRegra ? 'Em validação' : p.regraEntrega ? 'Aguardando aprovação' : 'Aguardando validação', H.num(p.pontosAguardando), 'pts', p.aguardando
-        ? (novaRegra ? plural(p.aguardando, 'item', 'itens') + ' na área ou com o PM/PO · já contam como entrega'
+        ? (novaRegra ? plural(p.aguardando, 'item', 'itens') + ' desta sprint e deste time na área ou com o PM/PO · já contam como entrega' +
+           (noKanbanVal > p.aguardando ? ' · o Kanban mostra ' + noKanbanVal + ' porque soma os outros times e sprints' : '')
            : plural(p.aguardando, 'item espera', 'itens esperam') + (p.regraEntrega ? ' a aprovação (área ou PM/PO); contam nesta sprint ao aprovar' : ' o PM/PO; contam aqui ao validar'))
         : 'nada esperando o PM/PO', p.aguardando ? 'in' : '', p.aguardando ? 'var(--in-t)' : '') +
       '</div>';
@@ -730,19 +744,25 @@
     }
     var meus = H.meusNomes();
     var temDupla = rk.some(function (d) { return d.dupla; });
-    var blocoPp = '<section class="sp-pn"><div class="hh"><h2 class="h2">Por pessoa</h2><span class="note" style="font-size:11.5px">pontos validados / pontos na sprint</span></div>' +
-      (rk.length ? rk.map(function (d) {
-        var base = d.pontosTotal || 0;
-        var pct = base ? Math.min(100, Math.round(d.pontos / base * 100)) : (d.total ? Math.round(d.validados / d.total * 100) : 0);
+    var blocoPp = '<section class="sp-pn"><div class="hh"><h2 class="h2">Por pessoa</h2><span class="note" style="font-size:11.5px">entregues / na sprint</span></div>' +
+      /* 13/11/2026: "crie uma coluna e add os pontos no modelo (20/30)". Tasks e
+         pontos com a mesma regra (fechadas + em validacao). Quem ficou sem nada
+         na sprint (tudo replanejado) nao aparece como 0 / 0. */
+      (rk.length ? '<div class="sp-pp sp-pp-hd"><span></span><span></span><span style="text-align:right">tasks</span><span style="text-align:right">pontos</span></div>' : '') +
+      (rk.length ? rk.filter(function (d) { return d.total > 0; }).map(function (d) {
+        // 13/11/2026: por QUANTIDADE de tasks, como o placar (entregues = fechadas + em validacao).
+        var feitas = d.entregues != null ? d.entregues : d.validados;
+        var pct = d.total ? Math.min(100, Math.round(feitas / d.total * 100)) : 0;
         var eu = meus.indexOf(d.nome) >= 0;
         // Na regra nova o ranking ordena por fechadas + em validacao (rankingDaSprint, c11b681).
         return '<div class="sp-pp" title="' + esc(d.nome + ': ' + (d.entregues != null ? d.entregues + ' de ' + d.total + ' entregues (fechados + em validação), ' : '') +
           d.validados + ' de ' + d.total + ' itens validados' +
-          (d.aguardando ? ', ' + d.aguardando + ' aguardando' : '') + (d.emCurso ? ', ' + d.emCurso + ' em curso' : '') + (d.saiu ? ', ' + d.saiu + ' saíram' : '')) + '">' +
+          (d.aguardando ? ', ' + d.aguardando + ' aguardando' : '') + (d.emCurso ? ', ' + d.emCurso + ' em curso' : '') + (d.saiu ? ', ' + d.saiu + ' replanejadas' : '')) + '">' +
           '<span class="nm ell' + (eu ? ' eu' : '') + '">' + esc(d.nome) + '</span>' +
           '<span class="tr"><i class="' + (pct >= 100 ? 'ok' : '') + '" style="width:' + pct + '%"></i></span>' +
-          '<span class="lv">' + (base ? d.pontos + ' / ' + base : d.validados + ' / ' + d.total + ' it') + '</span></div>';
-      }).join('') + (temDupla ? '<span class="note" style="font-size:11.5px">Demanda de dupla divide os pontos entre os dois.</span>' : '')
+          '<span class="lv">' + feitas + ' / ' + d.total + '</span>' +
+          '<span class="pt">' + (d.pontosTotal ? (d.pontosEntregues != null ? d.pontosEntregues : d.pontos) + ' / ' + d.pontosTotal : '—') + '</span></div>';
+      }).join('') + (temDupla ? '<span class="note" style="font-size:11.5px">Demanda de dupla conta para os dois.</span>' : '')
       : H.vazio('users', 'Ninguém nesta sprint ainda', 'O PM/PO repassa as demandas pela aba Planning ou pelo campo Sprint do card.')) + '</section>';
     h += '<div class="sp-2">' + blocoBd + blocoPp + '</div>';
 
@@ -769,7 +789,7 @@
       saiu:        function (x) { return x.situacao === 'saiu'; },
       meus:        function (x) { return H.minha(x.m); }
     };
-    var ROT = { todos: 'Todos', risco: 'Em risco', adicionados: 'Adicionados', repassados: 'Repassados', saiu: 'Saíram', meus: 'Meus' };
+    var ROT = { todos: 'Todos', risco: 'Em risco', adicionados: 'Adicionados', repassados: 'Repassados', saiu: 'Replanejadas', meus: 'Meus' };
     var ordem = ['todos', 'risco', 'adicionados', 'repassados', 'saiu'].concat(dev ? ['meus'] : []);
     if (!F[_esc.filtro] || (_esc.filtro === 'meus' && !dev)) _esc.filtro = 'todos';
     var lista = st.acomp.filter(F[_esc.filtro]);
@@ -777,7 +797,7 @@
     /* Na Validacao da area (`SPRINTPO.naArea`, fd4e5e8): o admin marca "Na area ·
        fora do placar". Da regra de 05/11 em diante ela volta ao placar como
        aguardando aprovacao (3ca7514), e o chip diz isso. */
-    var SIT = { validado: ['ok', 'Validado'], aguardando: ['wn', 'Aguardando PM/PO'], saiu: ['bk', 'Saiu da sprint'], negada: ['dg', 'Negada'],
+    var SIT = { validado: ['ok', 'Validado'], aguardando: ['wn', 'Aguardando PM/PO'], saiu: ['bk', 'Replanejada'], negada: ['dg', 'Negada'],
                 na_area: ['pu', st.regra ? 'Na área · aguardando aprovação' : 'Na área · fora do placar'] };
     var h = '<div class="hh"><h2 class="h2">Escopo <span class="note" style="font-family:var(--font-ui);font-weight:600">· ' + st.acomp.length + '</span></h2>' +
       '<span class="note" style="font-size:12.5px">Item que entra depois de iniciada fica marcado como Adicionado; o que veio de outra sprint, como Repassada.</span></div>' +
@@ -794,7 +814,7 @@
       h += vis.map(function (x) {
         var m = x.m, e = st.entrada[m.id] || { tipo: 'planejado' };
         var en = ENTRADA[e.tipo] || ENTRADA.planejado;
-        var chipEn = x.situacao === 'saiu' ? chip('Saiu', 'bk') : chip((e.tipo === 'prioritaria' ? ico('zap') + ' ' : '') + en.rot, en.cor);
+        var chipEn = x.situacao === 'saiu' ? chip('Replanejada', 'bk') : chip((e.tipo === 'prioritaria' ? ico('zap') + ' ' : '') + en.rot, en.cor);
         var why = x.situacao === 'saiu'
           ? (e.saiuPara ? 'foi para ' + curto(e.saiuPara) : 'voltou ao backlog') + (e.saiuEm ? ' · ' + H.dm(e.saiuEm) : '')
           : porQueEntrou(e);
@@ -1147,7 +1167,7 @@
           ? bal.entregues.map(function (m) { return linha(m, chip(ico('check') + ' Validado', 'ok')); }).join('') +
             bal.aguardando.map(function (m) { return linha(m, chip(ico('hourglass') + ' Aguardando', 'wn')); }).join('')
           : H.vazio('inbox', 'Nada entregue nesta sprint', '')) +
-        (p.saiu ? '<span class="note" style="font-size:11.5px">' + plural(p.saiu, 'demanda já saiu', 'demandas já saíram') + ' sem entregar e continua no total: foi aqui que falhou.</span>' : '') +
+        (p.saiu ? '<span class="note" style="font-size:11.5px">' + plural(p.saiu, 'demanda foi replanejada', 'demandas foram replanejadas') + ' para outra sprint e não conta no total desta.</span>' : '') +
         '</section>';
       h += '<div class="sp-2e">' + colNao + colVai + '</div>';
     });

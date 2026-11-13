@@ -24353,7 +24353,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      *  sprint; caso entre, somar."                                           */
     const SA = 'S2-11-2026', SB = 'S3-11-2026';
     const hs = (...ss) => ss.map(x => ({ sprint: x, em: '2026-11-09', por: 'F' }));
-    const dPlacar = () => ({ sprints: [], melhorias: [
+    const dPlacar = () => ({ sprints: [{ rotulo: SA, carry: [{ id: '6', codigo: 'AX-340' }, { id: '9', codigo: 'AX-370' }] }], melhorias: [
       /* VENCIDA E CONCLUIDA. O prazo estourou, mas ela SAIU — e card que ja
          entregou nao tem risco de nao entregar. Sem a data aqui, tirar a
          guarda de `acompanhamentoDaSprint` nao mudava nada e a sabotagem
@@ -24433,6 +24433,17 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       status_planejamento: 'planejado', sprint_po: SA, sprint_po_historico: hs(SA) });
     ok(SP.placarDaSprint(dTarde, SA, etG).total === 9,
        'demanda que entra depois SOMA no total da sprint');
+    /* REPLANEJADA NO MEIO DA SPRINT (13/11/2026): "do Paullymax eu realoquei para
+       a proxima sprint pelo fato dele estar ausente e na imagem esta contando".
+       Sem estar na lista de transbordo do fechamento, a que foi para outra sprint
+       sai do total desta — por pessoa tambem. A do fechamento continua contando. */
+    const dReplan = dPlacar(); dReplan.sprints = [];
+    const plR = SP.placarDaSprint(dReplan, SA, etG);
+    const rkR = SP.rankingDaSprint(dReplan, SA, etG);
+    ok(plR.total === 6 && plR.replanejadas === 2 && plR.saiu === 0 && plR.pct === Math.round(4 / 6 * 100) &&
+       rkR.find(d => d.nome === 'Ana').total === 3 && rkR.find(d => d.nome === 'Ana').replanejadas === 1,
+       'a replanejada pelo PM/PO durante a sprint sai do total (placar e por pessoa); a que transbordou no fechamento continua',
+       'total=' + plR.total + ' replanejadas=' + plR.replanejadas + ' pct=' + plR.pct);
 
     const rk = SP.rankingDaSprint(dPlacar(), SA, etG);
     const ana = rk.find(d => d.nome === 'Ana');
@@ -25107,7 +25118,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         const mkA = (id, et, extra) => Object.assign({ id, codigo: id, status_planejamento: et, sprint_po: rA, poker_pontos: 3, dev: 'Ana' }, extra || {});
         const dA = { melhorias: [mkA('A', 'concluido'), mkA('B', 'validacao_area'), mkA('C', 'em_andamento'), mkA('D', 'validacao'),
           mkA('E', 'em_andamento', { sprint_po: 'S2-11-2026', sprint_po_historico: [{ sprint: rA }, { sprint: 'S2-11-2026', de: rA, devolvida_area: true }] }),
-          mkA('F', 'em_andamento', { sprint_po: 'S2-11-2026', sprint_po_historico: [{ sprint: rA }, { sprint: 'S2-11-2026' }] })] };
+          mkA('F', 'em_andamento', { sprint_po: 'S2-11-2026', sprint_po_historico: [{ sprint: rA }, { sprint: 'S2-11-2026' }] })],
+          sprints: [{ rotulo: rA, carry: [{ id: 'E' }, { id: 'F' }] }] };
         const pA = SPA.placarDaSprint(dA, rA);
         /* REGRA DE 05/11/2026 (substitui "a area sai do placar"): "para sprint deve
            considerar a partir do momento que o dev coloca em validacao da area ou

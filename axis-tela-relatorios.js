@@ -518,7 +518,7 @@
           (spAta.pctPontos === null ? '' : ', ' + spAta.pctPontos + '% por ponto') + ')');
         partes.push('  Pontos:               ' + spAta.pontosValidados + ' de ' + spAta.pontosTotal);
         if (spAta.aguardando) partes.push('  Esperando validacao:  ' + spAta.aguardando);
-        if (spAta.saiu) partes.push('  Sairam sem entregar:  ' + spAta.saiu);
+        if (spAta.saiu) partes.push('  Replanejadas sem entregar:  ' + spAta.saiu);
         spAta.ranking.forEach(function (d) { partes.push('    - ' + d.nome + ': ' + d.validados + ' de ' + d.total + ' (' + d.pct + '%), ' + d.pontos + ' pt'); });
         if (spAta.risco.length) {
           partes.push('  EM RISCO DE NAO ENTREGAR (' + spAta.risco.length + '):');

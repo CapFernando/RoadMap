@@ -1485,6 +1485,24 @@
   /* PAUSADA CONTA COMO ENTREGUE (08/11/2026): "pausada (=entregue)". A
      demanda pausada ainda em aberto sai da coluna do que falta e entra na das
      entregas da sprint — quem pausou nao pode pesar contra o cumprimento. */
+  /* REPLANEJADA x TRANSBORDOU (13/11/2026).
+   * "Do Paullymax eu realoquei para a proxima sprint pelo fato dele estar
+   * ausente e na imagem esta contando." A task que o PM/PO leva para outra
+   * sprint DURANTE esta e replanejamento: sai do total desta. A que foi levada
+   * no FECHAMENTO por nao ter sido concluida (a lista `carry` do fechamento,
+   * o "transbordou") continua contando como nao entregue — senao o proprio
+   * fechamento deixaria toda sprint com 100%. */
+  function transbordouNoFechamento(dados, rotulo, m) {
+    var r = txt(rotulo);
+    var reg = ((dados || {}).sprints || []).filter(function (x) { return x && txt(x.rotulo) === r; })[0];
+    var carry = (reg && Array.isArray(reg.carry)) ? reg.carry : [];
+    return carry.some(function (c) { return c && ((c.id && c.id === m.id) || (c.codigo && c.codigo === m.codigo)); });
+  }
+  function replanejadaNaSprint(dados, rotulo, m, sit) {
+    var fora = sit !== 'entregue' && sit !== 'aguardando' && sit !== 'pausada' && sit !== 'em_curso';
+    return fora && !transbordouNoFechamento(dados, rotulo, m);
+  }
+
   function situacaoComPausa(m, rotulo, etapa, feriados) {
     var sit = situacaoNaSprint(m, rotulo, etapa, feriados);
     return sit === 'em_curso' && iso((m || {}).pausado_em) ? 'pausada' : sit;
@@ -1505,19 +1523,26 @@
     var r = txt(rotulo);
     if (sprintNoRegimeDeEntrega(r, (dados || {}).feriados)) {
       var fer = (dados || {}).feriados || [];
-      var q = { rotulo: r, trilha: txt(trilha), total: 0, validados: 0, aguardando: 0, pausadas: 0, emCurso: 0, saiu: 0, naArea: 0,
+      var q = { rotulo: r, trilha: txt(trilha), total: 0, validados: 0, aguardando: 0, pausadas: 0, emCurso: 0, saiu: 0, replanejadas: 0, naArea: 0,
                 pontosTotal: 0, pontosValidados: 0, pontosAguardando: 0,
                 semPontuacao: 0, pct: 0, pctPontos: null, regraEntrega: true,
-                itens: { validados: [], aguardando: [], pausadas: [], emCurso: [], saiu: [] } };
+                itens: { validados: [], aguardando: [], pausadas: [], emCurso: [], saiu: [], replanejadas: [] } };
       demandasDaSprintPorEntrega(dados, r, trilha, etapaDe).forEach(function (m) {
         var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
         var sit = situacaoComPausa(m, r, e, fer);
         var pts = pontosDe(m);
+        /* REPLANEJADA NAO CONTA NO TOTAL (13/11/2026): "do Paullymax eu
+           realoquei para proxima sprint pelo fato dele estar ausente e na
+           imagem esta contando". Quem o PM/PO levou para outra sprint sai da
+           conta desta; fica listada como replanejada, so para leitura. */
+        if (replanejadaNaSprint(dados, r, m, sit)) {
+          q.replanejadas += 1; q.itens.replanejadas.push(m); return;
+        }
         q.total += 1; q.pontosTotal += pts;
         if (!pts) q.semPontuacao += 1;
         if (sit === 'entregue') { q.validados += 1; q.pontosValidados += pts; q.itens.validados.push(m); }
         else if (sit === 'aguardando') { q.aguardando += 1; q.pontosAguardando += pts; q.itens.aguardando.push(m); }
-        else if (sit === 'pausada') { q.pausadas += 1; q.itens.pausadas.push(m); }
+        else if (sit === 'pausada') { q.pausadas += 1; q.pontosPausadas = (q.pontosPausadas || 0) + pts; q.itens.pausadas.push(m); }
         else if (sit === 'em_curso') { q.emCurso += 1; q.itens.emCurso.push(m); }
         else { q.saiu += 1; q.itens.saiu.push(m); }
       });
@@ -1527,7 +1552,7 @@
          10 itens, 5 fechados, 3 em validação → 80%. `validados` continua sendo
          só o que o PM/PO fechou; `entregues` soma os dois. */
       q.entregues = q.validados + q.aguardando + q.pausadas;   // pausada = entregue (08/11)
-      q.pontosEntregues = q.pontosValidados + q.pontosAguardando;
+      q.pontosEntregues = q.pontosValidados + q.pontosAguardando + (q.pontosPausadas || 0);   // pausada = entregue, pontos tambem (13/11)
       q.pct = q.total ? Math.round(q.entregues / q.total * 100) : 0;
       q.pctPontos = q.pontosTotal ? Math.round(q.pontosEntregues / q.pontosTotal * 100) : null;
       return q;
@@ -1607,10 +1632,12 @@
       var qn = nomes.length, pts = pontosDe(m);
       nomes.forEach(function (nome) {
         var a = pega(nome);
+        // Replanejada nao conta no total da pessoa (13/11/2026) — ver placarDaSprint.
+        if (replanejadaNaSprint(dados, r, m, sit)) { a.replanejadas = (a.replanejadas || 0) + 1; return; }
         a.total += 1; a.pontosTotal += pts / qn;
-        if (sit === 'entregue') { a.validados += 1; a.pontos += pts / qn; }
-        else if (sit === 'aguardando') a.aguardando += 1;
-        else if (sit === 'pausada') a.pausadas += 1;
+        if (sit === 'entregue') { a.validados += 1; a.pontos += pts / qn; a.pontosEnt = (a.pontosEnt || 0) + pts / qn; }
+        else if (sit === 'aguardando') { a.aguardando += 1; a.pontosEnt = (a.pontosEnt || 0) + pts / qn; }
+        else if (sit === 'pausada') { a.pausadas += 1; a.pontosEnt = (a.pontosEnt || 0) + pts / qn; }   // pausada = entregue, pontos tambem (13/11)
         else if (sit === 'em_curso') a.emCurso += 1;
         else a.saiu += 1;
         if (qn > 1) a.dupla = true;
@@ -1645,7 +1672,8 @@
       var ent = regraNova ? a.validados + a.aguardando + (a.pausadas || 0) : a.validados;   // pausada = entregue (08/11)
       var o = { nome: a.nome, total: a.total, validados: a.validados,
                aguardando: a.aguardando, pausadas: a.pausadas || 0, emCurso: a.emCurso,
-               saiu: a.saiu, pontos: Math.round(a.pontos),
+               saiu: a.saiu, replanejadas: a.replanejadas || 0, pontos: Math.round(a.pontos),
+               pontosEntregues: Math.round(regraNova ? (a.pontosEnt || 0) : a.pontos),
                pontosTotal: Math.round(a.pontosTotal), dupla: !!a.dupla,
                pct: a.total ? Math.round(ent / a.total * 100) : 0 };
       if (regraNova) o.entregues = ent;
