@@ -325,7 +325,7 @@
         validado_em: '', validado_por: '', validacao_obs: '', entregue_em: '', concluido_em: '',
         grill: {}, sprint_po: '', sprint_po_em: '', sprint_po_por: '', sprint_po_historico: [],
         pausado_em: '', pausa_motivo: '', pausa_por: '', pausa_dias: 0, pausa_historico: [],
-        pausa_pedido: null, pausa_recusas: [], pausa_aprovada_por: '', pausa_aprovada_em: '',
+        pausa_pedido: null, pausa_recusas: [], pausa_aprovada_por: '', pausa_aprovada_em: '', pausa_terceiro: null,
         historico: [], anexos: (f.anexos || []).slice(), horas_realizadas: parseFloat(f.horas) || 0,
         criado_em: c.agora
       };

@@ -151,6 +151,67 @@
   };
 
 
+  /* A CAIXA DA PAUSA: o motivo e, opcional, o TERCEIRO que segura a demanda
+     (pausa.js, "AGUARDANDO TERCEIRO"). o = { titulo, texto, ok, placeholder,
+     sugestoes: [nomes ja usados], valida: (v) => 'erro' | '' }.
+     Devolve Promise<{ motivo, terceiro: { nome, contato, retorno } | null } | null>.
+     Nome vazio = pausa interna, como sempre foi. */
+  window.pedirPausa = function (o) {
+    o = o || {};
+    return new Promise(function (resolve) {
+      var ov = document.createElement('div');
+      ov.className = 'dlg-ov';
+      var rot = function (t) { return '<div class="dlg-sub" style="margin:10px 0 4px">' + esc(t) + '</div>'; };
+      ov.innerHTML =
+        '<div class="dlg-box" role="dialog" aria-modal="true">' +
+          '<h3>' + esc(o.titulo || 'Pausar') + '</h3>' +
+          (o.texto ? '<div class="dlg-sub">' + esc(o.texto) + '</div>' : '') +
+          '<textarea id="dlg-in" placeholder="' + esc(o.placeholder || '') + '"></textarea>' +
+          rot('Aguardando terceiro? (opcional — fornecedor ou parceiro de fora)') +
+          '<input type="text" id="dlg-terc" list="dlg-terc-sug" maxlength="80" placeholder="Deixe vazio se a pausa é interna" autocomplete="off" />' +
+          '<datalist id="dlg-terc-sug">' + (o.sugestoes || []).map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>' +
+          rot('Contato ou protocolo (opcional)') +
+          '<input type="text" id="dlg-cont" maxlength="120" placeholder="Ex.: chamado 48213, ana@fornecedor.com" autocomplete="off" />' +
+          rot('Retorno prometido (opcional)') +
+          '<input type="date" id="dlg-ret" />' +
+          '<div class="dlg-erro" id="dlg-erro"></div>' +
+          '<div class="dlg-acoes">' +
+            '<button type="button" class="dlg-b sec" id="dlg-nao">Cancelar</button>' +
+            '<button type="button" class="dlg-b pri" id="dlg-sim">' + esc(o.ok || 'Pausar') + '</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(ov);
+      var q = function (s) { return ov.querySelector(s); };
+      var erro = q('#dlg-erro');
+      function fecha(r) { ov.remove(); resolve(r); }
+      function ler() {
+        var nome = String(q('#dlg-terc').value || '').trim();
+        return { motivo: String(q('#dlg-in').value || '').trim(),
+                 terceiro: nome || q('#dlg-cont').value.trim() || q('#dlg-ret').value
+                   ? { nome: nome, contato: String(q('#dlg-cont').value || '').trim(), retorno: q('#dlg-ret').value || '' } : null };
+      }
+      function confirma() {
+        var v = ler();
+        if (!v.motivo) { erro.textContent = 'Escreva por que a demanda precisa parar.'; q('#dlg-in').focus(); return; }
+        if (typeof o.valida === 'function') {
+          var m = o.valida(v);
+          if (m) { erro.textContent = m; return; }
+        }
+        fecha(v);
+      }
+      q('#dlg-sim').onclick = confirma;
+      q('#dlg-nao').onclick = function () { fecha(null); };
+      ov.addEventListener('click', function (e) { if (e.target === ov) fecha(null); });
+      ov.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); fecha(null); }
+        if (e.key === 'Enter' && (e.target.tagName === 'INPUT' || e.ctrlKey || e.metaKey)) { e.preventDefault(); confirma(); }
+      });
+      ov.addEventListener('input', function () { erro.textContent = ''; });
+      setTimeout(function () { q('#dlg-in').focus(); }, 10);
+    });
+  };
+
+
   /* Substitui confirm(). o = { titulo, texto, ok, cancelar, perigo }.
      Devolve Promise<boolean> — mesmo contrato do confirm(), para a conversao dos
      chamadores nao mudar a logica de nenhum deles.

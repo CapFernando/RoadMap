@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="e140ffc7c6">
+<html lang="pt-BR" data-build="a7e98efd0b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -734,11 +734,11 @@
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=88870a48ae"></script>
 <script src="capacidade.js?v=efaf632603"></script>
-<script src="dialogo.js?v=9e20f6c47f"></script>
+<script src="dialogo.js?v=bdef211258"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="rede-repete.js?v=0548b95c36"></script>
-<script src="pausa.js?v=06c4b82f84"></script>
+<script src="pausa.js?v=41c5b4a989"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
 <script src="colaboradores.js?v=c94edfa2e2"></script>
@@ -2540,11 +2540,15 @@ function aplicarRetomada(m) {
   const dias = diasPausadoAgora(m);
   if (m.entrega && dias > 0) m.entrega = _somaDias(m.entrega, dias);
   m.pausa_dias = (Number(m.pausa_dias) || 0) + dias;
-  m.pausa_historico = (m.pausa_historico || []).concat([{
-    de: m.pausado_em, ate: _isoHoje(), dias, motivo: m.pausa_motivo || '' }]);
+  // O terceiro que segurou a demanda vai junto para o historico: e dele que sai
+  // o "dias parados por fornecedor" (pausa.js, `terceiroDe`).
+  const terc = typeof PAUSA !== 'undefined' ? PAUSA.terceiroDe(m.pausa_terceiro) : null;
+  m.pausa_historico = (m.pausa_historico || []).concat([Object.assign({
+    de: m.pausado_em, ate: _isoHoje(), dias, motivo: m.pausa_motivo || '' }, terc ? { terceiro: terc } : {})]);
   m.pausado_em = '';
   m.pausa_motivo = '';
   m.pausa_por = '';
+  m.pausa_terceiro = null;
   return dias;
 }
 
@@ -2563,6 +2567,7 @@ function devPausaRender(m) {
       'padding:10px 12px;font-size:12.5px;line-height:1.6;color:var(--text2)">' +
       '⏸ <strong style="color:var(--text)">Pausada há ' + d + (d===1?' dia':' dias') + '</strong>' +
       '<br><strong>Motivo:</strong> ' + escAttr(m.pausa_motivo || '—') +
+      (PAUSA.terceiro(m) ? '<br><strong>' + escAttr(PAUSA.linhaTerceiro(m.pausa_terceiro, _isoHoje())) + '</strong>' : '') +
       /* A DATA ANDA, E A PESSOA VE. Antes a entrega ficava ESCONDIDA durante a
          pausa e o card mostrava a data original: quem pausou em 11/08 uma demanda
          com prazo 30/07 olhava o proprio card e via uma data que ja passou. Dizia
@@ -2587,6 +2592,7 @@ function devPausaRender(m) {
       (esperando ? ' <span style="color:var(--text3)">· aguardando há ' + esperando +
                    (esperando === 1 ? ' dia' : ' dias') + '</span>' : '') +
       '<br><strong>Sua justificativa:</strong> ' + escAttr(ped.motivo) +
+      (ped.terceiro ? '<br><strong>' + escAttr(PAUSA.linhaTerceiro(ped.terceiro, _isoHoje())) + '</strong>' : '') +
       '<br><span style="color:var(--text3)">O prazo segue correndo até um PM/PO aprovar. ' +
       'Aprovado, a pausa vale desde ' + formatDate(ped.em) + ' — a espera não é cobrada de você.</span>' +
       '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm" ' +
@@ -2625,21 +2631,21 @@ async function devPausaIniciar() {
   const id = document.getElementById('ms-id').value;
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
-  const motivo = await pedirTexto({
+  const v = await pedirPausa({
     titulo: 'Pedir pausa',
     texto: 'O pedido vai para o PM/PO. Enquanto ele nao responde o prazo segue ' +
            'correndo, mas, aprovado, a pausa vale DESDE HOJE — a espera pela ' +
            'resposta nao e cobrada de voce. A justificativa e o que explica, ' +
            'semanas depois, por que o prazo foi empurrado.',
-    multilinha: true, obrigatorio: true, ok: 'Pedir pausa',
-    placeholder: 'Ex.: aguardando retorno do banco sobre o layout do arquivo' });
-  if (motivo === null) return;
-  /* A MESMA REGRA QUE O SERVIDOR USA, perguntada aqui para a recusa chegar
-     ANTES da viagem. Repetir o texto da recusa nesta tela criaria a segunda
-     versao da mensagem — e a do servidor e a que manda. */
-  const prob = PAUSA.problemaNoMotivo(motivo);
-  if (prob) { toast(prob, 'err'); return; }
-  const r = PAUSA.pedir(m, motivo, currentDev || 'dev', _isoHoje());
+    ok: 'Pedir pausa', sugestoes: PAUSA.terceirosConhecidos(state.melhorias || []).map(t => t.nome),
+    placeholder: 'Ex.: aguardando retorno do banco sobre o layout do arquivo',
+    /* A MESMA REGRA QUE O SERVIDOR USA, perguntada aqui para a recusa chegar
+       ANTES da viagem. Repetir o texto da recusa nesta tela criaria a segunda
+       versao da mensagem — e a do servidor e a que manda. */
+    valida: x => PAUSA.problemaNoMotivo(x.motivo) || PAUSA.problemaNoTerceiro(x.terceiro, _isoHoje()) });
+  if (v === null) return;
+  if (v.terceiro && v.terceiro.nome) v.terceiro.nome = PAUSA.grafiaDe(v.terceiro.nome, state.melhorias || []);
+  const r = PAUSA.pedir(m, v.motivo, currentDev || 'dev', _isoHoje(), v.terceiro);
   if (!r.ok) { toast(r.erro, 'err'); return; }
   devPausaRender(m);
   const ok2 = await saveToGitHub({ [id]: { pausa_pedido: m.pausa_pedido } });
@@ -2679,7 +2685,7 @@ async function devPausaRetomar() {
       ok: 'Retomar' }))) return;
   const dias = aplicarRetomada(m);
   devPausaRender(m);
-  const ok2 = await saveToGitHub({ [id]: { pausado_em:'', pausa_motivo:'', pausa_por:'',
+  const ok2 = await saveToGitHub({ [id]: { pausado_em:'', pausa_motivo:'', pausa_por:'', pausa_terceiro:null,
     entrega:m.entrega || '', pausa_dias:m.pausa_dias, pausa_historico:m.pausa_historico } });
   toast(ok2 ? '▶ Retomada. Entrega +' + dias + (dias===1?' dia':' dias') + '.' : 'Não foi possível salvar.', ok2 ? 'ok' : 'err');
   renderKanban();
@@ -4886,7 +4892,7 @@ function renderCard(m, colKey) {
         ? '<div class="kcard-dono outro" title="Demanda de outro time — aparece porque o filtro Times está ligado. Combine com o time antes de pegar.">' +
           (m.dados_bi ? '📊 Time Dados/BI' : m.sales_ops ? '📈 Time Sales Ops' : '💻 Time Desenvolvimento') + '</div>' : ''}
       ${parentInfo}
-      ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}">⏸ Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
+      ${estaPausado(m) ? (s => `<div class="kcard-prazo pausada" title="${devEsc(s.titulo)}"${s.venceu ? ' style="color:var(--red-tx,#F9A0A0);border-color:var(--red-tx,#F9A0A0)"' : ''}>⏸ ${devEsc(s.texto === 'Pausada' ? 'Pausada' : s.texto)} há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>`)(PAUSA.selo(m, _isoHoje())) : ''}
       ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'⚠ vence hoje':'⏰ vence amanhã'}</div>` : ''}
       ${semPontuacao(m) ? `<div class="kcard-prazo sempt" title="Sem pontos do Planning Poker: a data foi combinada sem estimativa de tamanho.">🃏 sem pontuação</div>` : ''}
       ${/* O CONTADOR DA AREA. Foi o pedido junto com a coluna, e e o motivo dela:

@@ -1130,7 +1130,7 @@
             (H.pontosDe(m) ? ' · ' + H.pontosDe(m) + ' pts' : '') + '</small></span>' +
             // A REINCIDENCIA GRITA: empurrar pela terceira vez e decisao diferente da primeira.
             (n ? chip((n + 1) + 'ª vez', 'dg', 'Já rolou ' + plural(n, 'vez', 'vezes')) : '') +
-            (H.pausada(m) ? chip(ico('pause') + ' Pausada', 'mg') : '') + '</a>';
+            (H.pausada(m) ? H.chipPausa(m) : '') + '</a>';
           if (!dono) return cab;
           var idDest = 'fd-' + r + '-' + m.id;
           return '<div class="sp-fd">' + cab + '<div class="sp-fd-ed">' +
@@ -1903,7 +1903,7 @@
     var seg = SPm.sprintSeguinte(r, (D || {}).feriados || []);
     var dec = {};
     SPm.balancoDaSprint(D, r, etapaDe).pendentes.filter(pausada).forEach(function (m) {
-      dec[m.id] = { destino: seg, motivo: ('Pausada' + (m.pausa_motivo ? ': ' + m.pausa_motivo : ' aguardando terceiro')).slice(0, 300) };
+      dec[m.id] = { destino: seg, motivo: window.PAUSA.motivoTransbordo(m) };
     });
     return dec;
   }

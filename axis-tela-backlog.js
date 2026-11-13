@@ -223,7 +223,7 @@
     // "Pausada · Nd" (`renderMelhorias`, admin.html: `diasPausadoAgora`).
     if (pausadaAberta(m)) {
       var dp = W.PRAZO ? W.PRAZO.diasPausados(m, H.hoje()) : 0;
-      h += H.chip(H.ico('pause') + ' Pausada' + (dp ? ' · ' + dp + 'd' : ''), 'mg', m.pausa_motivo || '');
+      h += H.chipPausa(m, 'Pausada' + (dp ? ' · ' + dp + 'd' : ''));
     }
     return h;
   }

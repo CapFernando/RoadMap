@@ -544,7 +544,7 @@
     }
     if (sit === 'pausada') {
       var dp = window.PRAZO ? PRAZO.diasPausados(m, hoje) : 0;
-      c.push(H.chip(H.ico('pause') + ' pausada' + (dp ? ' · ' + dp + 'd' : ''), 'mg', m.pausa_motivo || ''));
+      c.push(H.chipPausa(m, 'pausada' + (dp ? ' · ' + dp + 'd' : '')));
     } else if (sit === 'aguardando') {
       c.push(H.chip(H.ico('pause') + ' pausa pedida', 'wn', (PAUSA.pedido(m) || {}).motivo || ''));
     }

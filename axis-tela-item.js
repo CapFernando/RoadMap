@@ -271,12 +271,16 @@
       var sit = PAUSA.situacao(m);
       if (sit === 'pausada') {
         var dp = window.PRAZO ? PRAZO.diasPausados(m, hoje) : 0;
-        out.push({ cls: '', trava: true, html: 'Pausada desde ' + H.dma(m.pausado_em) + (dp ? ' (' + H.plural(dp, 'dia', 'dias') + ')' : '') +
-          '; o prazo fica suspenso enquanto isso.' + (m.pausa_motivo ? ' Motivo: <b>' + H.esc(m.pausa_motivo) + '</b>' : '') });
+        var tc = PAUSA.terceiro ? PAUSA.terceiro(m) : null;
+        out.push({ cls: tc && PAUSA.retornoVencido(m, hoje) ? 'dg' : '', trava: true, html: (tc ? 'Aguardando <b>' + H.esc(tc.nome) + '</b> (terceiro) desde ' : 'Pausada desde ') + H.dma(m.pausado_em) + (dp ? ' (' + H.plural(dp, 'dia', 'dias') + ')' : '') +
+          '; o prazo fica suspenso enquanto isso.' + (m.pausa_motivo ? ' ' + (tc ? 'O que se espera' : 'Motivo') + ': <b>' + H.esc(m.pausa_motivo) + '</b>' : '') +
+          (tc && tc.contato ? ' Contato: ' + H.esc(tc.contato) + '.' : '') +
+          (tc && tc.retorno ? (PAUSA.retornoVencido(m, hoje) ? ' <b>O retorno prometido para ' + H.dma(tc.retorno) + ' venceu — hora de cobrar ' + H.esc(tc.nome) + '.</b>' : ' Retorno prometido: ' + H.dma(tc.retorno) + '.') : '') });
       } else if (sit === 'aguardando') {
         var p = PAUSA.pedido(m);
         out.push({ cls: '', trava: false, html: 'Pedido de pausa de ' + H.dma(p.em) + (p.por ? ' (' + H.esc(p.por) + ')' : '') +
-          ' aguardando o PM/PO.' + (p.motivo ? ' Motivo: <b>' + H.esc(p.motivo) + '</b>' : '') });
+          ' aguardando o PM/PO.' + (p.terceiro ? ' Aguardando o terceiro <b>' + H.esc(p.terceiro.nome) + '</b>' + (p.terceiro.retorno ? ', retorno prometido ' + H.dma(p.terceiro.retorno) : '') + '.' : '') +
+          (p.motivo ? ' Motivo: <b>' + H.esc(p.motivo) + '</b>' : '') });
       } else {
         /* A ULTIMA RECUSA FICA A VISTA (`devPausaRender`, dev.html): sem ela,
            pede-se de novo a mesma coisa e recebe-se o mesmo nao. */
@@ -509,7 +513,7 @@
       if (d === 0) c.push(H.chip('vence hoje', 'dg'));
       else if (d === 1) c.push(H.chip('vence amanhã', 'wn'));
     }
-    if (H.pausada(m)) c.push(H.chip(H.ico('pause') + ' Pausada', 'mg'));
+    if (H.pausada(m)) c.push(H.chipPausa(m));
     var pr = String(m.prioridade || '').toLowerCase();
     if (pr && window.ORDEMKB) c.push(H.chip('Prioridade ' + ORDEMKB.rotulo(m).toLowerCase(), pr === 'alta' ? 'wn' : 'bk'));
     if (window.SPRINTPO && SPRINTPO.ehPrioritariaDaSprint(m)) c.push(H.chip(H.ico('zap') + ' Prioritária da sprint', 'ac'));
