@@ -8,10 +8,11 @@
        acesso: a trava de verdade e o `exigePapel(admin)` no Worker. -->
   <meta name="robots" content="noindex, nofollow, noarchive" />
   <title>Acompanhamentos — RoadMap</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="axis/marca/axis-icone.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
 <!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
-<script src="axis.js?v=1eb606be26"></script>
+<script src="axis.js?v=5a2b7be518"></script>
 <script src="axis-interface.js?v=450f254ec1"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -161,6 +162,7 @@
       font-size:13px; display:none; z-index:200; }
     #salvando.on { display:block; }
   </style>
+  <link rel="stylesheet" href="axis.css?v=e9cf182eb3">
 </head>
 <body>
 
@@ -170,7 +172,7 @@
      ir de uma tela a outra treina a pessoa a digitar senha sem pensar. -->
 <div id="gate">
   <div class="gate-box">
-    <h1>Acompanhamentos</h1>
+    <h1><span class="axis-head-logo axis-logo" role="img" aria-label="AXIS"></span><span class="axis-head-t">Acompanhamentos</span></h1>
     <p>Área do PM/PO. Entre com a mesma conta do painel administrativo.</p>
     <input type="text" id="g-user" placeholder="Usuário ou e-mail (opcional)" autocomplete="username" />
     <input type="password" id="g-senha" placeholder="Senha" autocomplete="current-password" />
@@ -181,7 +183,7 @@
 
 <div id="app" style="display:none">
   <header>
-    <h1>Acompanhamentos</h1>
+    <h1><span class="axis-head-logo axis-logo" role="img" aria-label="AXIS"></span><span class="axis-head-t">Acompanhamentos</span></h1>
     <div class="mes-nav">
       <button type="button" onclick="mudaMes(-1)" title="Mês anterior" aria-label="Mês anterior">‹</button>
       <span id="rot-mes"></span>
@@ -249,7 +251,7 @@
 
 <div id="salvando">Salvando…</div>
 
-<script src="tema.js?v=7df38474d4"></script>
+<script src="tema.js?v=5d9c25fd66"></script>
 <script src="dialogo.js?v=9e20f6c47f"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script>

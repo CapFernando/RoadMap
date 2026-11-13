@@ -431,3 +431,53 @@ html .dv-tab.ativa { color: var(--tx); border-bottom-color: var(--ac); font-weig
 html .kb-col { min-width: 208px; }
 html .kb-card-title { overflow-wrap: anywhere; }
 html .login-box .login-esqueci { display: block; margin: 8px auto 0; }
+
+/* ═══ AS TELAS ANTIGAS POR INTEIRO (13/11/2026) ════════════════════════════
+   "O sistema completo na nova identidade." Os botoes principais das telas
+   antigas que o reaponte de tokens nao alcanca: os de login de cada pagina
+   (escritos com var(--blue), que no AXIS e o azul de INFORMACAO, e nao a cor
+   da acao) e os que tem a cor fixa no `style` do HTML. Acao principal e o
+   acento; selecionado/ativo e o acento tonal, como as abas e filtros do app. */
+html .login-box button:not(.login-esqueci):not(.tema-btn),
+html #step-senha > button, html #step-cadastro > button, html #step-recuperar > button,
+html .gate-box button, html .btn-1, html button.primario,
+html button[style*="#3B8FE8"], html a[style*="background:#3B8FE8"] {
+  background: linear-gradient(180deg, var(--ac-l) 0%, var(--ac) 100%) !important;
+  color: var(--on-ac) !important;
+  border: 0 !important;
+  font-family: var(--font-ui) !important;
+  font-weight: 700;
+  box-shadow: 0 8px 22px rgba(var(--ac-rgb), .26);
+}
+html .login-box .login-esqueci, html .login-box button.login-esqueci {
+  background: none !important; box-shadow: none !important; color: var(--ac-t) !important;
+}
+html .filter-btn.active, html .pj-visao button.on, html .pm-aba.ativa {
+  background: rgba(var(--ac-rgb), .16) !important; border-color: rgba(var(--ac-rgb), .55) !important;
+  color: var(--ac-t) !important;
+}
+html .btn-nav:hover { background: var(--sf4); color: var(--tx); border-color: var(--bd4); }
+/* A carta escolhida no Planning Poker: o acento, como o botao principal. */
+html .carta-btn.sel { background: linear-gradient(180deg, var(--ac-l) 0%, var(--ac) 100%); border-color: var(--ac); color: var(--on-ac); }
+/* Os icones que vieram dos emojis (axis.js, `trocaEmojis`): o espaco que vinha
+   depois do emoji continua no texto, entao o icone nao ganha margem propria. */
+
+/* ── Celular: o cabecalho das telas antigas (13/11/2026) ──────────────────
+   Titulo primeiro e inteiro, botoes numa grade que quebra em linhas, cada um
+   com altura de toque e sem quebrar o rotulo no meio ("Nova / issue"). */
+@media (max-width: 640px) {
+  html header { flex-wrap: wrap; gap: 10px; }
+  html header .header-left, html header .header-right {
+    display: flex !important; flex-wrap: wrap !important; align-items: center; gap: 8px !important;
+    min-width: 0; max-width: 100%;
+  }
+  html header h1 { order: -1; flex: 1 0 100%; font-size: 19px; line-height: 1.25; margin: 0; }
+  html header .header-left > p { flex: 1 0 100%; }
+  html header .header-right > button, html header .header-right > a,
+  html header .header-left > a.btn, html header .header-left > button.btn {
+    min-height: 40px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 12px !important;
+  }
+  html #ultima-atualizacao { order: 9; flex: 1 0 100%; font-size: 12px !important; }
+  html .axis-head-logo { height: 18px; margin-right: 10px; }
+}
