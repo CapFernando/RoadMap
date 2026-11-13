@@ -698,7 +698,8 @@
         ? plural(pessoas, 'pessoa', 'pessoas') + ' × 30 pts · alocado ' + H.num(aloc) + (cap ? ' (' + Math.round(aloc / cap * 100) + '%)' : '')
         : 'nenhuma pessoa cadastrada nesta trilha') +
       kpi('Planejado', H.num(pl.pts), 'pts', plural(pl.n, 'item', 'itens') + ' até o início' + (rep ? ' · ' + rep + ' repassad' + (rep === 1 ? 'o' : 'os') : '') +
-        (p.saiu ? ' · ' + p.saiu + ' replanejad' + (p.saiu === 1 ? 'a' : 'as') + ' sem entregar' : '')) +
+        (p.replanejadas ? ' · ' + p.replanejadas + ' replanejad' + (p.replanejadas === 1 ? 'a' : 'as') + ' (fora da conta)' : '') +
+        (p.saiu ? ' · ' + p.saiu + ' transbord' + (p.saiu === 1 ? 'ou' : 'aram') + ' sem entregar' : '')) +
       kpi('Adicionado depois', H.num(ad.pts), 'pts', ad.n ? plural(ad.n, 'item', 'itens') + ' depois de iniciada' : 'nada entrou depois do início', ad.n ? 'wn' : '', ad.n ? 'var(--wn-t)' : '') +
       (novaRegra
         /* 13/11/2026: "o calculo da sprint esta sobre os pontos. Deve ser em
@@ -1151,7 +1152,7 @@
           ? bal.entregues.map(function (m) { return linha(m, chip(ico('check') + ' Validado', 'ok')); }).join('') +
             bal.aguardando.map(function (m) { return linha(m, chip(ico('hourglass') + ' Aguardando', 'wn')); }).join('')
           : H.vazio('inbox', 'Nada entregue nesta sprint', '')) +
-        (p.saiu ? '<span class="note" style="font-size:11.5px">' + plural(p.saiu, 'demanda foi replanejada', 'demandas foram replanejadas') + ' sem entregar e continua no total: foi aqui que falhou.</span>' : '') +
+        (p.saiu ? '<span class="note" style="font-size:11.5px">' + plural(p.saiu, 'demanda foi replanejada', 'demandas foram replanejadas') + ' para outra sprint e não conta no total desta.</span>' : '') +
         '</section>';
       h += '<div class="sp-2e">' + colNao + colVai + '</div>';
     });
