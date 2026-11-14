@@ -8,10 +8,11 @@
        de acesso: quem tem a URL continua lendo tudo. -->
   <meta name="robots" content="noindex, nofollow, noarchive" />
   <title>Projetos por Tema — RoadMap</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="axis/marca/axis-icone.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
 <!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
-<script src="axis.js?v=1eb606be26"></script>
+<script src="axis.js?v=5a2b7be518"></script>
 <script src="axis-interface.js?v=450f254ec1"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -23,7 +24,7 @@
       --red:#E84444; --purple:#9B6FE8; --teal:#2BBFA0;
       --radius:12px;
     }
-    body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:15px; line-height:1.6; min-height:100vh; }
+    body { background:var(--bg); color:var(--text); font-family:'Manrope',sans-serif; font-size:15px; line-height:1.6; min-height:100vh; }
 
     /* ── HEADER ── */
     header {
@@ -34,7 +35,7 @@
     .header-left { display:flex; align-items:center; gap:14px; }
     .header-left h1 { font-size:20px; font-weight:700; }
     .header-right { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:var(--radius); font-size:14px; font-weight:600; font-family:'Inter',sans-serif; cursor:pointer; border:none; transition:opacity .15s; text-decoration:none; }
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:var(--radius); font-size:14px; font-weight:600; font-family:'Manrope',sans-serif; cursor:pointer; border:none; transition:opacity .15s; text-decoration:none; }
     .btn-secondary { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
     .btn-secondary:hover { opacity:.8; }
     .btn-primary { background:var(--blue); color:#fff; }
@@ -149,8 +150,9 @@
     #toast.ok  { background:#1a3d1a; color:#7EE0A0; border:1px solid #2d6b2d; }
     #toast.err { background:#3d1a1a; color:#F9A0A0; border:1px solid #6b2d2d; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
-  <script src="tema.js?v=7df38474d4"></script>
+  <link rel="stylesheet" href="tema.css?v=25141b56d3">
+  <link rel="stylesheet" href="axis.css?v=6c857c0273">
+  <script src="tema.js?v=5d9c25fd66"></script>
 <script src="dialogo.js?v=bdef211258"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 </head>
@@ -158,7 +160,7 @@
 
 <header>
   <div class="header-left">
-    <h1>📁 Projetos por Tema</h1>
+    <h1><span class="axis-head-logo axis-logo" role="img" aria-label="AXIS"></span><span class="axis-head-t">Projetos por Tema</span></h1>
     <span id="lbl-updated" style="font-size:12px;color:var(--text3)">—</span>
   </div>
   <div class="header-right">

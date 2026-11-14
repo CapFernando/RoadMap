@@ -1,59 +1,16 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   TEMA CLARO
-   As 7 telas foram escritas em escuro, cada uma com seu proprio :root. Este
-   arquivo redefine SO os tokens de cor quando o documento esta marcado com
-   data-tema="claro". Cada pagina usa um subconjunto dos tokens; declarar todos
-   aqui e inofensivo — o que a pagina nao usa, ela ignora.
+   TEMA CLARO — so as cores especiais
+   A paleta geral (fundo, texto, borda, azul, verde...) mora em axis.css, nos
+   tokens do AXIS, e vale para os dois temas. Este bloco NAO pode redeclara-la:
+   `:root[data-tema="claro"]` (0,2,0) venceria o `html:root` do axis.css e a
+   tela clara voltaria para a paleta antiga.
 
-   Ficam de fora, de proposito, os tokens que NAO sao cor:
-   --day-w (52px) e --dev-label (230px) no gantt, --radius e --radius-sm.
-   Sobrescrever esses aqui destruiria o layout da linha do tempo.
+   Ficam aqui so as cores que nao sao do AXIS e tem par proprio no claro: o
+   podio e o pausado. Os tokens que NAO sao cor (--day-w, --dev-label,
+   --radius) tambem ficam de fora, de proposito: sobrescreve-los destruiria o
+   layout da linha do tempo.
    ───────────────────────────────────────────────────────────────────────── */
 :root[data-tema="claro"] {
-  /* superficies: do mais ao fundo para o mais acima */
-  --bg:       #F5F4F0;
-  --bg1:      #FFFFFF;
-  --bg2:      #FFFFFF;
-  --bg3:      #F0EEE8;
-  --bg4:      #E4E1D8;
-  /* Usado como var(--card, #1E1E1C) no Kanban do admin. O token nao existe no
-     :root daquela pagina, entao o fallback escuro valia NOS DOIS temas: no claro
-     o card ficava preto com texto preto. Definindo aqui, o claro passa a ter
-     superficie clara e o escuro segue usando o fallback, intocado. */
-  --card:     #F7F6F2;
-  /* Secao do formulario de nova solicitacao. No escuro ela e mais escura que o
-     modal; no claro tem de ser mais acinzentada que o branco, senao some. */
-  --nm-sec-bg: #F7F6F2;
-
-  --border:   #DBD7CD;
-  --border2:  #C4BFB2;
-
-  /* texto: 1A1917 sobre branco da ~16:1 de contraste */
-  --text:     #1A1917;
-  --text1:    #1A1917;
-  --text2:    #56534C;
-  --text3:    #615D56;   /* #817D74 dava 3.54:1 em texto pequeno; abaixo do minimo */
-
-  /* acentos escurecidos: os tons do tema escuro sao claros demais para
-     assentar sobre branco */
-  --blue:     #1B67C7;
-  --green:    #3D7A18;   /* texto branco no botao primario: #46861F dava 4.48:1 */
-  --amber:    #8A5A06;   /* titulo de pendencia precisa de 4.5:1 sobre #F5F4F0 */
-  --red:      #CC3232;
-  --purple:   #7048D2;
-  --teal:     #0C9078;
-  --yellow:   #B98A00;
-  --accent:   #6A49B5;
-  --accent2:  #8360D8;
-
-  /* pares de chip: no escuro sao fundo escuro + texto claro; aqui invertem
-     para fundo tingido claro + texto escuro, mantendo a mesma familia de cor */
-  --blue-bg:   #DBE9FA;  --blue-tx:   #134A85;
-  --green-bg:  #DFF0D3;  --green-tx:  #2C5D13;
-  --amber-bg:  #FAE9C8;  --amber-tx:  #744903;
-  --red-bg:    #FADDDD;  --red-tx:    #8F1E1D;
-  --teal-bg:   #D1F1E8;  --teal-tx:   #096353;
-  --purple-bg: #E6DCFA;  --purple-tx: #45278C;
   /* Podio. Os tons escuros do ouro/prata/bronze ficam ilegiveis sobre branco;
      par invertido, com o ouro guardando mais saturacao que os outros dois para a
      diferenca entre primeiro e segundo continuar visivel no tema claro tambem.
@@ -142,19 +99,9 @@
 /* Quando nao existe cabecalho onde encaixar, o botao vira flutuante. */
 .tema-btn.solta { position: fixed; top: 14px; right: 14px; z-index: 9999; }
 
-/* ── Correção de contraste do tema escuro ────────────────────────────────
-   Branco sobre --blue #3B8FE8 da 3.34:1 — abaixo do minimo para texto. O azul
-   segue o mesmo para bordas e links, onde funciona; so o FUNDO de botao escurece.
-   No tema claro o --blue ja e #1B67C7 e o par passa folgado. */
-/* !important porque varios desses botoes tem style inline no HTML, e inline
-   vence qualquer folha de estilo por especificidade. */
-:root:not([data-tema="claro"]) .btn-primary,
-:root:not([data-tema="claro"]) #nm-save-btn,
-:root:not([data-tema="claro"]) #btn-nova-melhoria,
-:root:not([data-tema="claro"]) .btn-green { background: #2B72C4 !important; }
-:root:not([data-tema="claro"]) .btn-success { background: #3F7A1B !important; }
-:root:not([data-tema="claro"]) .btn-danger,
-:root:not([data-tema="claro"]) .delete-btn { background: #C42B2B !important; }
+/* A cor dos botoes (principal, sucesso, perigo) mora em axis.css, nos
+   componentes do AXIS. Aqui ficava um azul fixo para o tema escuro, de antes
+   da identidade nova. */
 
 /* ── Troca de tema sem animação ──────────────────────────────────────────
    Quando uma propriedade animada (color, background) tem valor vindo de var() e

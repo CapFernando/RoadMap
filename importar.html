@@ -8,10 +8,11 @@
        de acesso: quem tem a URL continua lendo tudo. -->
   <meta name="robots" content="noindex, nofollow, noarchive" />
   <title>Importar Demandas — RoadMap</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="axis/marca/axis-icone.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
 <!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
-<script src="axis.js?v=1eb606be26"></script>
+<script src="axis.js?v=5a2b7be518"></script>
 <script src="axis-interface.js?v=450f254ec1"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -22,7 +23,7 @@
       --text1:#ECEAE2; --text2:#B0ADCA; --text3:#7A788F;
       --border:#332F52; --radius:10px;
     }
-    body { font-family:'Inter',sans-serif; background:var(--bg1); color:var(--text1); min-height:100vh; }
+    body { font-family:'Manrope',sans-serif; background:var(--bg1); color:var(--text1); min-height:100vh; }
     .header { background:var(--bg2); border-bottom:1px solid var(--border); padding:14px 24px; display:flex; align-items:center; gap:16px; }
     .header h1 { font-size:18px; font-weight:600; }
     .header a  { color:var(--text2); text-decoration:none; font-size:13px; }
@@ -149,8 +150,9 @@
     .dedup-action-label { font-size:11px; color:var(--text3); align-self:center; margin-right:4px; }
     .dedup-decided { padding:10px 18px; font-size:12px; color:var(--text3); background:var(--bg3); border-top:1px solid var(--border); font-style:italic; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
-  <script src="tema.js?v=7df38474d4"></script>
+  <link rel="stylesheet" href="tema.css?v=25141b56d3">
+  <link rel="stylesheet" href="axis.css?v=6c857c0273">
+  <script src="tema.js?v=5d9c25fd66"></script>
 <script src="dialogo.js?v=bdef211258"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 </head>
@@ -158,7 +160,7 @@
 
 <div class="header">
   <a href="admin.html">← Admin</a>
-  <h1>📥 Importar Demandas</h1>
+  <h1><span class="axis-head-logo axis-logo" role="img" aria-label="AXIS"></span><span class="axis-head-t">Importar Demandas</span></h1>
   <span style="color:var(--text3);font-size:12px;margin-left:auto">Importe dados históricos para o RoadMap</span>
 </div>
 

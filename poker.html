@@ -3,7 +3,7 @@
      saber, de olhada, se o navegador esta servindo uma copia antiga desta tela.
      Faltava justamente aqui, e esta e a tela que o time inteiro abre ao mesmo
      tempo numa reuniao — onde descobrir tarde custa a reuniao. -->
-<html lang="pt-BR" data-build="89647857f1">
+<html lang="pt-BR" data-build="5c0fa68ec6">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,10 +12,11 @@
        de acesso: quem tem a URL continua lendo tudo. -->
   <meta name="robots" content="noindex, nofollow, noarchive" />
   <title>Planning Poker — RoadMap de Melhorias</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="axis/marca/axis-icone.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
 <!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
-<script src="axis.js?v=1eb606be26"></script>
+<script src="axis.js?v=5a2b7be518"></script>
 <script src="axis-interface.js?v=450f254ec1"></script>
   <script src="qr.js?v=77f17395bd"></script>
   <style>
@@ -27,7 +28,7 @@
       --blue:#3B8FE8; --green:#5EA832; --amber:#E89C2F; --red:#E84444; --teal:#2BBFA0;
       --radius:12px;
     }
-    body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:15px; line-height:1.5; min-height:100vh; }
+    body { background:var(--bg); color:var(--text); font-family:'Manrope',sans-serif; font-size:15px; line-height:1.5; min-height:100vh; }
 
     header {
       display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
@@ -348,8 +349,9 @@
     #toast { position:fixed; bottom:22px; right:22px; z-index:200; padding:11px 18px; border-radius:10px;
              font-size:13px; font-weight:500; opacity:0; transition:opacity .3s; pointer-events:none; max-width:380px; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
-  <script src="tema.js?v=7df38474d4"></script>
+  <link rel="stylesheet" href="tema.css?v=25141b56d3">
+  <link rel="stylesheet" href="axis.css?v=6c857c0273">
+  <script src="tema.js?v=5d9c25fd66"></script>
 <script src="sprint.js?v=c050a20701"></script>
 <script src="dialogo.js?v=bdef211258"></script>
 <script src="senha.js?v=ae10842c4b"></script>
@@ -364,7 +366,7 @@
 <header>
   <div class="h-left">
     <a href="admin.html" class="btn btn-ghost btn-sm">← Admin</a>
-    <h1>🃏 Planning Poker</h1>
+    <h1><span class="axis-head-logo axis-logo" role="img" aria-label="AXIS"></span><span class="axis-head-t">Planning Poker</span></h1>
     <div class="codigo-box" id="codigo-box" style="display:none">
       <span style="font-size:11px;color:var(--text3);text-transform:uppercase">Sala</span>
       <span class="codigo" id="codigo-txt">—</span>

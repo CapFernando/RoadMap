@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="73cc9cc8bc">
+<html lang="pt-BR" data-build="f643c39329">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,11 +8,12 @@
        de acesso: quem tem a URL continua lendo tudo. -->
   <meta name="robots" content="noindex, nofollow, noarchive" />
   <title>Meu Painel — RoadMap de Melhorias</title>
+  <link rel="icon" type="image/svg+xml" href="axis/marca/axis-icone.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
 <!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
-<script src="axis.js?v=1eb606be26"></script>
+<script src="axis.js?v=5a2b7be518"></script>
 <script src="axis-interface.js?v=450f254ec1"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,7 +46,7 @@
        propria pagina — e e a pagina que o Pages guarda por 10 minutos. */
     #build-selo { font-size:10px; color:var(--text3); opacity:.6; margin-left:8px;
       font-family:ui-monospace,monospace; letter-spacing:.02em; }
-    body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:15px; min-height:100vh; }
+    body { background:var(--bg); color:var(--text); font-family:'Manrope',sans-serif; font-size:15px; min-height:100vh; }
 
     /* ── LOGIN ── */
     #login-screen { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px; }
@@ -58,7 +59,7 @@
     #step-senha input, #step-cadastro input, #step-recuperar input {
       width:100%; box-sizing:border-box; padding:13px 14px; margin-bottom:12px;
       background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
-      color:var(--text); font-size:15px; font-family:'Inter',sans-serif; }
+      color:var(--text); font-size:15px; font-family:'Manrope',sans-serif; }
     #step-senha input:focus, #step-cadastro input:focus, #step-recuperar input:focus {
       outline:none; border-color:var(--blue); }
     #step-senha input::placeholder, #step-cadastro input::placeholder, #step-recuperar input::placeholder {
@@ -66,13 +67,13 @@
     #step-senha > button, #step-cadastro > button, #step-recuperar > button {
       width:100%; padding:13px; background:var(--blue); color:#fff; border:none;
       border-radius:var(--radius); font-size:15px; font-weight:700; cursor:pointer;
-      font-family:'Inter',sans-serif; }
+      font-family:'Manrope',sans-serif; }
     #step-senha > button:hover, #step-cadastro > button:hover, #step-recuperar > button:hover {
       filter:brightness(1.1); }
     /* Atalhos entre entrar / cadastrar / recuperar */
     .login-links { display:flex; justify-content:space-between; gap:12px; margin-top:14px; flex-wrap:wrap; }
     .login-link { background:none; border:none; color:var(--blue); font-size:13px; cursor:pointer;
-      font-family:'Inter',sans-serif; padding:0; text-decoration:underline; width:auto !important; }
+      font-family:'Manrope',sans-serif; padding:0; text-decoration:underline; width:auto !important; }
     /* O dev precisa ver o proprio atraso ao abrir, sem procurar coluna. */
     /* O dev abre o painel e a primeira pergunta e "o que eu faco agora". Cinco
        numeros respondem antes de ele varrer coluna. */
@@ -243,7 +244,7 @@
     .prod-vazio { color:var(--text3); }
     .dv-tab { padding:11px 16px; font-size:14.5px; font-weight:500; color:var(--text2);
       background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-1px;
-      cursor:pointer; font-family:'Inter',sans-serif; white-space:nowrap; border-radius:8px 8px 0 0; }
+      cursor:pointer; font-family:'Manrope',sans-serif; white-space:nowrap; border-radius:8px 8px 0 0; }
     .dv-tab:hover { color:var(--text); background:var(--bg2); }
     .dv-tab.ativa { color:var(--blue); border-bottom-color:var(--blue); font-weight:600; background:none; }
     /* Projetos no painel do dev. */
@@ -342,7 +343,7 @@
     .dg-topo { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:0 24px 14px; }
     .dg-nav { background:var(--bg3); border:1px solid var(--border); color:var(--text);
       border-radius:8px; width:32px; height:32px; cursor:pointer; font-size:16px; line-height:1;
-      font-family:'Inter',sans-serif; }
+      font-family:'Manrope',sans-serif; }
     .dg-nav:hover { border-color:var(--border2); }
     .dg-mes { font-size:15px; font-weight:700; color:var(--text); min-width:150px; }
     .dg-legenda { display:flex; align-items:center; gap:12px; font-size:11.5px; color:var(--text2);
@@ -435,7 +436,7 @@
     .nao-pub ul { margin:6px 0 0; padding-left:20px; }
     .nao-pub button { background:var(--amber,#B07D28); color:#20160a; border:0; border-radius:8px;
       padding:6px 14px; font-size:13px; font-weight:700; cursor:pointer;
-      font-family:'Inter',sans-serif; margin-top:8px; }
+      font-family:'Manrope',sans-serif; margin-top:8px; }
     /* O card tambem se marca: a faixa diz QUANTAS, o card diz QUAL. */
     .kcard.nao-pub-card { outline:2px dashed var(--amber,#B07D28); outline-offset:-2px; }
     .kcard-naopub { display:inline-block; background:var(--amber,#B07D28); color:#20160a;
@@ -472,7 +473,7 @@
     .dev-dropdown-sep { border-top:1px solid var(--border); margin:4px 0; }
     .header-right { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     /* text-decoration:none porque .btn agora veste tambem <a> de navegacao. */
-    .btn { text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; font-family:'Inter',sans-serif; cursor:pointer; border:none; transition:opacity .15s; }
+    .btn { text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; font-family:'Manrope',sans-serif; cursor:pointer; border:none; transition:opacity .15s; }
     .btn:hover { opacity:.85; }
     .btn-primary   { background:var(--blue);  color:#fff; }
     .btn-secondary { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
@@ -482,7 +483,7 @@
     /* ── FILTER BAR ── */
     .filter-bar { background:var(--bg2); border-bottom:1px solid var(--border); padding:10px 24px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
     .filter-bar label { font-size:12px; color:var(--text3); font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
-    .filter-select { background:var(--bg3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif; padding:5px 10px; outline:none; cursor:pointer; }
+    .filter-select { background:var(--bg3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px; font-family:'Manrope',sans-serif; padding:5px 10px; outline:none; cursor:pointer; }
     .filter-select:focus { border-color:var(--blue); }
     .filter-chip { padding:5px 12px; border-radius:20px; font-size:12px; font-weight:600; background:var(--bg3); border:1px solid var(--border); color:var(--text2); cursor:pointer; transition:all .15s; }
     .filter-chip:hover { border-color:var(--border2); color:var(--text); }
@@ -611,7 +612,7 @@
     .form-group label { display:block; font-size:13px; font-weight:600; color:var(--text2); margin-bottom:6px; }
     .form-group input, .form-group select, .form-group textarea {
       width:100%; padding:10px 12px; background:var(--bg3); border:1px solid var(--border);
-      border-radius:var(--radius); color:var(--text); font-size:14px; font-family:'Inter',sans-serif; outline:none;
+      border-radius:var(--radius); color:var(--text); font-size:14px; font-family:'Manrope',sans-serif; outline:none;
     }
     .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color:var(--blue); }
     .form-group textarea { resize:vertical; min-height:80px; }
@@ -655,7 +656,7 @@
     .dep-row.dep-pai { color:var(--text2); border-bottom:1px solid var(--border2); margin-bottom:2px; }
     .dep-peso{font-size:10.5px;color:var(--text3);padding:2px 0 0;cursor:help;}
     .dep-blocked-banner { background:var(--red-bg); color:var(--red-tx); border-radius:5px; padding:5px 8px; font-size:11px; margin-top:6px; font-weight:600; }
-    .btn-dep-open { font-size:11px; padding:4px 10px; background:none; border:1px dashed var(--border2); border-radius:5px; color:var(--text3); cursor:pointer; margin-top:6px; font-family:'Inter',sans-serif; transition:all .15s; }
+    .btn-dep-open { font-size:11px; padding:4px 10px; background:none; border:1px dashed var(--border2); border-radius:5px; color:var(--text3); cursor:pointer; margin-top:6px; font-family:'Manrope',sans-serif; transition:all .15s; }
     .btn-dep-open:hover { border-color:var(--blue); color:var(--blue); }
 
     /* ═══ A DEMANDA EM LEITURA — a tela de tirar dúvida ════════════════════
@@ -719,7 +720,8 @@
     .mv-disc { margin-bottom:18px; }
     .mv-disc .disc-sec { margin-bottom:0; background:var(--bg3); padding:13px 15px; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
+  <link rel="stylesheet" href="tema.css?v=25141b56d3">
+  <link rel="stylesheet" href="axis.css?v=6c857c0273">
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="subtarefa.js?v=23179d9523"></script>
   <script src="bis.js?v=735ed4e46d"></script>
@@ -731,7 +733,7 @@
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=e4ad177106"></script>
 <script src="resumo-dev.js?v=d113e5ce31"></script>
-<script src="tema.js?v=7df38474d4"></script>
+<script src="tema.js?v=5d9c25fd66"></script>
 <script src="prazo.js?v=88870a48ae"></script>
 <script src="capacidade.js?v=efaf632603"></script>
 <script src="dialogo.js?v=bdef211258"></script>
@@ -862,7 +864,7 @@
   <!-- Banner visível apenas para dev "Teste" -->
   <div id="banner-teste" style="display:none;align-items:center;gap:12px;background:#3d1a1a;border-bottom:1px solid #6b2d2d;padding:10px 24px;font-size:13px;color:#F9A0A0;">
     <span>⚠️ <strong>Conta de teste detectada.</strong> Todos os dados abaixo são de demonstração.</span>
-    <button onclick="limparDadosTeste()" style="margin-left:auto;background:#6b2d2d;color:#F9A0A0;border:1px solid #a04040;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">🗑️ Apagar todos os dados de Teste</button>
+    <button onclick="limparDadosTeste()" style="margin-left:auto;background:#6b2d2d;color:#F9A0A0;border:1px solid #a04040;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Manrope',sans-serif;">🗑️ Apagar todos os dados de Teste</button>
   </div>
   <!-- A GRAVACAO FALHOU E O CARD CONTINUA NA TELA. Fica ACIMA de tudo, e so
        sai quando a demanda chega ao servidor — um toast de 4 segundos nao da
@@ -872,7 +874,7 @@
   <div class="meu-dia" id="meu-dia"></div>
   <header>
     <div class="header-left">
-      <h1>🗂️ Meu Painel</h1><span id="build-selo" title="Versão desta tela. Se não bater com a publicada, o navegador está servindo uma cópia antiga: Ctrl+Shift+R."></span>
+      <h1><span class="axis-head-logo axis-logo" role="img" aria-label="AXIS"></span><span class="axis-head-t">Meu Painel</span></h1><span id="build-selo" title="Versão desta tela. Se não bater com a publicada, o navegador está servindo uma cópia antiga: Ctrl+Shift+R."></span>
       <div class="dev-switcher" id="dev-switcher" onclick="toggleDevDropdown(event)">
         <span id="dev-label">—</span>
         <span class="dev-switcher-arrow">▾</span>
@@ -1297,7 +1299,7 @@
         <!-- `min` 0,25 e `step` 0,25: este campo RECEBE a soma das subtarefas,
              que agora anda de 15 em 15 minutos. Ver a nota no campo de horas do
              passo, em `msSubLinha`. -->
-        <input type="number" id="ms-horas" min="0.25" step="0.25" placeholder="Ex: 16" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:'Inter',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'" />
+        <input type="number" id="ms-horas" min="0.25" step="0.25" placeholder="Ex: 16" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:'Manrope',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'" />
       </div>
       <!-- Explica de onde veio o numero quando ele deixa de ser digitado. Sem
            isto, o campo somente-leitura parece travado por defeito. -->

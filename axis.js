@@ -123,7 +123,166 @@
     return r.join('\n');
   }
 
-  var AXIS = { icone: icone, ICONES: ICONES, cssIcones: cssIcones };
+  /* ═══ EMOJI VIRA ICONE NA HORA DE DESENHAR (13/11/2026) ════════════════════
+   *
+   * "O sistema completo na nova identidade." As telas antigas (admin, dev,
+   * gantt, poker, painel publico...) escrevem emoji em titulo, botao e selo —
+   * milhares de pontos, que a main continua acrescentando. Reescreve-los um a
+   * um seria uma edicao de dezenas de milhares de linhas, desfeita a cada
+   * merge. Aqui a troca e feita no que a tela MOSTRA: cada pictograma vira o
+   * icone de traco equivalente; onde o texto nao aceita HTML (opcao de lista,
+   * dica do mouse, placeholder) o emoji so sai.
+   *
+   * O DADO NAO MUDA: exportacoes, PPT, CSV e copias de texto saem do estado da
+   * tela, e nao do DOM. As setas e marcas tipograficas (→ ✓ ✕ ▲ ★ ●) ficam,
+   * como no app. O app (axis.html, `html.axa`) nao passa por aqui. */
+  var EMOJI_ICONE = {
+    '⚠': 'alert', '✅': 'check', '✔': 'check', '☑': 'check', '🔗': 'link', '🔒': 'lock', '🔐': 'lock', '🔓': 'unlock',
+    '📋': 'clipboard', '⏳': 'hourglass', '⌛': 'hourglass', '📊': 'chart', '📈': 'trend', '📉': 'trend', '⏸': 'pause',
+    '🏃': 'refresh', '🔄': 'refresh', '🔁': 'refresh', '👤': 'user', '🙋': 'user', '👥': 'users', '🙌': 'users',
+    '📎': 'clip', '📅': 'calendar', '📆': 'calendar', '🗓': 'calendar', '🌴': 'calendar', '🔧': 'wrench', '🛠': 'wrench',
+    '⚙': 'wrench', '🚀': 'rocket', '👁': 'eye', '🔭': 'eye', '👀': 'eye', '🗂': 'folder', '📁': 'folder', '📂': 'folder',
+    '🧮': 'calc', '⚡': 'zap', '📥': 'inbox', '📤': 'upload', '🖨': 'printer', '⏰': 'clock', '⏱': 'clock', '🕐': 'clock',
+    '☕': 'clock', '🏁': 'flag', '🚩': 'flag', '⚑': 'flag', '⬇': 'download', '⬆': 'upload', '🧱': 'package', '📦': 'package',
+    '🔬': 'search', '🔍': 'search', '🔎': 'search', '🧪': 'search', '🔥': 'flame', '💾': 'save', '🚧': 'pulse', '🩺': 'pulse',
+    '📄': 'file', '📃': 'file', '📝': 'edit', '✏': 'edit', '✍': 'edit', '✎': 'edit', '🖊': 'edit', '💻': 'laptop', '🖥': 'laptop',
+    '🗑': 'trash', '🥇': 'medal', '🥈': 'medal', '🥉': 'medal', '🏅': 'medal', '🏆': 'trophy', '📽': 'present', '🎞': 'present',
+    '📌': 'pin', '📍': 'pin', '💬': 'message', '🗨': 'message', '📨': 'send', '✉': 'send', '📧': 'send', '🏛': 'shield',
+    '🛡': 'shield', '❌': 'x', '❎': 'x', '🚫': 'ban', '⛔': 'ban', '🔑': 'key', '🗝': 'key', '🚪': 'logout', '🗺': 'globe',
+    '🧭': 'globe', '🌐': 'globe', '🎯': 'target', '⭐': 'star', '🌟': 'star', '🏷': 'tag', '🖼': 'image', '📷': 'camera',
+    '💡': 'sparkles', '✨': 'sparkles', '🃏': 'cards', '🎴': 'cards', '🔔': 'bell', '📣': 'bell', '📢': 'bell', '🏠': 'home',
+    '❓': 'help', '❔': 'help', 'ℹ': 'info', '🔌': 'plug', '🧾': 'receipt', '🎫': 'ticket', '🎟': 'ticket', '↩': 'undo',
+    '➕': 'plus', '✚': 'plus', '📐': 'layers', '🧩': 'layers', '📚': 'layers', '💼': 'package', '🗄': 'folder',
+    '🌙': 'moon', '☀': 'sun', '🔆': 'sun', '📱': 'laptop', '🤖': 'laptop', '🧑': 'user', '👨': 'user', '👩': 'user'
+  };
+  // Bolinhas de cor: viram o ponto do AXIS, com a cor de cada uma.
+  var EMOJI_PONTO = { '🔴': 'var(--red)', '🟠': 'var(--ac)', '🟡': 'var(--amber)', '🟢': 'var(--green)', '🔵': 'var(--blue)',
+    '🟣': 'var(--purple)', '⚪': 'var(--text3)', '⚫': 'var(--text)', '🟤': 'var(--amber)' };
+  // Pictogramas que FICAM: setas e marcas que o app tambem usa como texto.
+  var EMOJI_FICA = '▶◀↗↘↙↖↔↕↪▪▫◻◼◽◾©®™‼⁉〰';
+  var RE_PICTO = null;
+  try { RE_PICTO = new RegExp('(\\p{Extended_Pictographic})(\\uFE0F|\\u20E3)?(\\p{Emoji_Modifier})?', 'gu'); } catch (_) {}
+
+  /** O que entra no lugar de um pictograma: { ico } | { ponto } | null (fica) | '' (sai). */
+  function substitutoDe(ch) {
+    if (EMOJI_ICONE[ch] && ICONES[EMOJI_ICONE[ch]]) return { ico: EMOJI_ICONE[ch] };
+    if (EMOJI_PONTO[ch]) return { ponto: EMOJI_PONTO[ch] };
+    if (EMOJI_FICA.indexOf(ch) >= 0) return null;
+    return '';
+  }
+
+  /** Texto sem emoji (para atributo e <option>, que nao aceitam icone). */
+  function semEmoji(t) {
+    if (!RE_PICTO || !t) return t;
+    return String(t).replace(RE_PICTO, function (todo, ch) {
+      return substitutoDe(ch) === null ? todo : '\u0000';
+    }).replace(/\u0000\s?/g, '').replace(/^\s+/, function (m) { return m; });
+  }
+
+  var PULA = { SCRIPT: 1, STYLE: 1, TEXTAREA: 1, INPUT: 1, SELECT: 1, OPTION: 1, NOSCRIPT: 1, svg: 1, SVG: 1, CODE: 0 };
+  var ATRS = ['title', 'placeholder', 'aria-label', 'alt'];
+
+  function trocaNoTexto(no) {
+    var t = no.nodeValue;
+    if (!t || !RE_PICTO.test(t)) return;
+    RE_PICTO.lastIndex = 0;
+    var frag = document.createDocumentFragment(), ult = 0, m, mexeu = false;
+    while ((m = RE_PICTO.exec(t))) {
+      var sub = substitutoDe(m[1]);
+      if (sub === null) continue;
+      mexeu = true;
+      if (m.index > ult) frag.appendChild(document.createTextNode(t.slice(ult, m.index)));
+      if (sub && sub.ico) {
+        var i = document.createElement('i');
+        i.className = 'axi axi-' + sub.ico + ' axi-emoji';
+        i.setAttribute('aria-hidden', 'true');
+        frag.appendChild(i);
+      } else if (sub && sub.ponto) {
+        var d = document.createElement('i');
+        d.className = 'axi-dot axi-emoji';
+        d.style.setProperty('--c', sub.ponto);
+        d.setAttribute('aria-hidden', 'true');
+        frag.appendChild(d);
+      }
+      ult = m.index + m[0].length;
+      // Emoji que so saiu: leva junto o espaco que o separava do texto.
+      if (sub === '' && t.charAt(ult) === ' ') ult++;
+    }
+    RE_PICTO.lastIndex = 0;
+    if (!mexeu) return;
+    if (ult < t.length) frag.appendChild(document.createTextNode(t.slice(ult)));
+    if (no.parentNode) no.parentNode.replaceChild(frag, no);
+  }
+
+  function trocaAtributos(el) {
+    for (var k = 0; k < ATRS.length; k++) {
+      var v = el.getAttribute && el.getAttribute(ATRS[k]);
+      if (v && RE_PICTO.test(v)) { RE_PICTO.lastIndex = 0; var nv = semEmoji(v); if (nv !== v) el.setAttribute(ATRS[k], nv); }
+      RE_PICTO.lastIndex = 0;
+    }
+  }
+
+  /** Troca os emojis de um pedaco da tela (o no e tudo abaixo dele). */
+  function trocaEmojis(raizNo) {
+    if (!RE_PICTO || !raizNo) return;
+    if (raizNo.nodeType === 3) {
+      var pai = raizNo.parentNode;
+      if (pai && !pula(pai)) trocaNoTexto(raizNo);
+      return;
+    }
+    if (raizNo.nodeType !== 1 || pula(raizNo)) {
+      if (raizNo.nodeType === 1 && (raizNo.tagName === 'OPTION' || raizNo.tagName === 'SELECT')) limpaOpcoes(raizNo);
+      return;
+    }
+    trocaAtributos(raizNo);
+    var w = document.createTreeWalker(raizNo, 1 | 4, null), textos = [], n;
+    while ((n = w.nextNode())) {
+      if (n.nodeType === 1) {
+        trocaAtributos(n);
+        if (n.tagName === 'OPTION') limpaOpcoes(n);
+      } else if (n.parentNode && !pula(n.parentNode)) textos.push(n);
+    }
+    textos.forEach(trocaNoTexto);
+  }
+  function pula(el) {
+    for (var e = el; e && e.nodeType === 1; e = e.parentNode) {
+      if (PULA[e.tagName] || e.isContentEditable) return true;
+      if (e.hasAttribute && e.hasAttribute('data-axis-emoji')) return true;   // "nao troque aqui"
+    }
+    return false;
+  }
+  function limpaOpcoes(el) {
+    var ops = el.tagName === 'OPTION' ? [el] : el.querySelectorAll('option');
+    for (var i = 0; i < ops.length; i++) {
+      var t = ops[i].textContent;
+      if (t && RE_PICTO.test(t)) { RE_PICTO.lastIndex = 0; var nt = semEmoji(t); if (nt !== t) ops[i].textContent = nt; }
+      RE_PICTO.lastIndex = 0;
+    }
+  }
+
+  function ligaTrocaDeEmojis() {
+    if (!RE_PICTO || typeof MutationObserver === 'undefined') return;
+    var html = document.documentElement;
+    if (html.classList.contains('axa')) return;            // o app ja desenha icones
+    var obs = new MutationObserver(function (ms) {
+      for (var i = 0; i < ms.length; i++) {
+        var m = ms[i];
+        if (m.type === 'childList') { for (var j = 0; j < m.addedNodes.length; j++) trocaEmojis(m.addedNodes[j]); }
+        else if (m.type === 'characterData') trocaEmojis(m.target);
+        else if (m.type === 'attributes') trocaAtributos(m.target);
+      }
+    });
+    var vai = function () {
+      trocaEmojis(document.body);
+      obs.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATRS });
+    };
+    if (document.body) vai(); else document.addEventListener('DOMContentLoaded', vai);
+    // O titulo da aba tambem.
+    if (document.title) document.title = semEmoji(document.title).trim();
+  }
+
+  var AXIS = { icone: icone, ICONES: ICONES, cssIcones: cssIcones,
+               EMOJI_ICONE: EMOJI_ICONE, substitutoDe: substitutoDe, semEmoji: semEmoji, trocaEmojis: trocaEmojis };
   if (typeof window !== 'undefined') {
     window.AXIS = AXIS;
     if (!document.getElementById('axis-icones')) {
@@ -132,6 +291,7 @@
       st.textContent = cssIcones();
       (document.head || document.documentElement).appendChild(st);
     }
+    ligaTrocaDeEmojis();
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = AXIS;
 })();
