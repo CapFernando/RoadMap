@@ -672,6 +672,7 @@ const HIST_CAMPOS = {
   pausa_pedido:        'pedido de pausa',
   pausa_motivo:        'motivo da pausa',
   pausa_aprovada_por:  'pausa aprovada por',
+  pausa_terceiro:      'terceiro da pausa',
 };
 // Guarda por demanda. Sem teto, um card antigo acumularia centenas de entradas e
 // o arquivo (164 KB hoje) cresceria sem controle — ele e lido inteiro em toda
@@ -8614,6 +8615,19 @@ async function rotear(request, env, _histFila) {
                               '. Use "Pedir pausa" — o pedido vai com a sua ' +
                               'justificativa e, se aprovado, a pausa vale desde hoje.' },
                     403, headers);
+      }
+      /* O TERCEIRO DA PAUSA E DO PM/PO, como a propria pausa: ele chega pela
+         APROVACAO do pedido. O painel do dev so pode limpa-lo (retomar); trocar
+         ou inventar um volta ao que estava, calado — nao ha caminho legitimo na
+         tela que o faca. */
+      if (Array.isArray(data.melhorias)) {
+        const antesT = pausaAntes(antesDev);
+        for (const m of data.melhorias) {
+          if (!m || !m.id || m.pausa_terceiro == null) continue;
+          const v = antesT.get(m.id);
+          const velho = v ? v.pausa_terceiro || null : null;
+          if (JSON.stringify(m.pausa_terceiro) !== JSON.stringify(velho)) m.pausa_terceiro = velho;
+        }
       }
       const pausaMotivoDev = pausandoSemMotivo(data, antesDev);
       if (pausaMotivoDev.length) {

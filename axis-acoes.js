@@ -325,7 +325,7 @@
     return { ok: true, patch: { entrega: nova }, msg: 'Prazo replanejado para ' + nova.split('-').reverse().join('/') + '.' };
   }
 
-  var CAMPOS_PAUSA = ['pausado_em', 'pausa_motivo', 'pausa_por', 'pausa_aprovada_por', 'pausa_aprovada_em', 'pausa_pedido'];
+  var CAMPOS_PAUSA = ['pausado_em', 'pausa_motivo', 'pausa_por', 'pausa_aprovada_por', 'pausa_aprovada_em', 'pausa_pedido', 'pausa_terceiro'];
   function camposDe(obj, lista) {
     var p = {};
     lista.forEach(function (k) { p[k] = obj[k] === undefined ? null : obj[k]; });
@@ -340,20 +340,32 @@
   function semPausa() { return falha('pausa.js não carregado'); }
   function encerrada(m) { return ['concluido', 'negada'].indexOf(etapa(m)) >= 0; }
 
+  /** O TERCEIRO QUE VEIO DA CAIXA (`terceiro`, `contato`, `retorno`), com a
+   *  grafia que a base ja usa para aquele nome (pausa.js, `grafiaDe`): "banco x"
+   *  digitado vira o "Banco X" de sempre, e o relatorio nao o parte em dois. */
+  function terceiroDoForm(a, c) {
+    var P = mod(c, 'PAUSA');
+    var nomeT = txt((a || {}).terceiro);
+    if (!nomeT) return null;
+    return { nome: P && P.grafiaDe ? P.grafiaDe(nomeT, ((c && c.D) || {}).melhorias) : nomeT,
+             contato: txt((a || {}).contato), retorno: txt((a || {}).retorno) };
+  }
+
   /** O PM/PO PAUSA DIRETO (`pausaIniciar`). */
   function pausar(m, a, c) {
     var P = mod(c, 'PAUSA');
     if (!P) return semPausa();
     if (!P.podeAprovar(c.papel)) return falha('Pausar depende de um PM/PO: use "Pedir pausa".');
     if (encerrada(m)) return falha('Concluída ou negada não se pausa: não há prazo correndo.');
-    return viaPausa(m, function (x) { return P.pausarComoAdm(x, (a || {}).motivo, c.quem, c.hoje); }, CAMPOS_PAUSA, 'Demanda pausada.');
+    return viaPausa(m, function (x) { return P.pausarComoAdm(x, (a || {}).motivo, c.quem, c.hoje, terceiroDoForm(a, c)); }, CAMPOS_PAUSA,
+      function () { var t = terceiroDoForm(a, c); return t && t.nome ? 'Demanda pausada, aguardando ' + t.nome + '.' : 'Demanda pausada.'; });
   }
   /** O DEV PEDE (`devPausaIniciar`). */
   function pedirPausa(m, a, c) {
     var P = mod(c, 'PAUSA');
     if (!P) return semPausa();
     if (encerrada(m)) return falha('Concluída ou negada não se pausa: não há prazo correndo.');
-    return viaPausa(m, function (x) { return P.pedir(x, (a || {}).motivo, c.quem, c.hoje); }, ['pausa_pedido'], 'Pedido enviado ao PM/PO.');
+    return viaPausa(m, function (x) { return P.pedir(x, (a || {}).motivo, c.quem, c.hoje, terceiroDoForm(a, c)); }, ['pausa_pedido'], 'Pedido enviado ao PM/PO.');
   }
   /** O DEV DESISTE do proprio pedido (`devPausaDesistir`). */
   function desistirPausa(m, a, c) {
@@ -391,10 +403,11 @@
       var d = new Date(Date.UTC(+q[0], +q[1] - 1, +q[2] + dias));
       entrega = d.toISOString().slice(0, 10);
     }
-    var hist = (Array.isArray(m.pausa_historico) ? m.pausa_historico : []).concat([{
-      de: m.pausado_em, ate: c.hoje, dias: dias, motivo: m.pausa_motivo || '' }]);
+    var terc = P.terceiroDe(m.pausa_terceiro);
+    var hist = (Array.isArray(m.pausa_historico) ? m.pausa_historico : []).concat([Object.assign({
+      de: m.pausado_em, ate: c.hoje, dias: dias, motivo: m.pausa_motivo || '' }, terc ? { terceiro: terc } : {})]);
     return { ok: true, dias: dias, msg: 'Retomada. Entrega empurrada em ' + dias + (dias === 1 ? ' dia' : ' dias') + '.', patch: {
-      pausado_em: '', pausa_motivo: '', pausa_por: '', entrega: entrega,
+      pausado_em: '', pausa_motivo: '', pausa_por: '', pausa_terceiro: null, entrega: entrega,
       pausa_dias: (Number(m.pausa_dias) || 0) + dias, pausa_historico: hist } };
   }
 
@@ -1180,6 +1193,19 @@
      valor, dica, opcoes: [{ v, r, d }] }], ok, perigo, valida(v) -> frase }.
      Devolve Promise<valores|null>. A recusa da regra aparece DENTRO da caixa,
      ao lado do que a pessoa escreveu, e nao num aviso depois que ela fechou. */
+  /** OS CAMPOS DO TERCEIRO nas caixas de pausar e pedir pausa (pausa.js,
+   *  "AGUARDANDO TERCEIRO"). Vazio no nome = pausa interna, como sempre foi. */
+  function camposTerceiro() {
+    var P = raiz.PAUSA;
+    var conhecidos = P && P.terceirosConhecidos ? P.terceirosConhecidos(((AX.APP.D || {}).melhorias) || []).map(function (t) { return t.nome; }) : [];
+    return [
+      { nome: 'terceiro', rotulo: 'Aguardando terceiro? (opcional)', dica: 'Fornecedor ou parceiro de fora — deixe vazio se a pausa é interna', sugestoes: conhecidos, max: 80,
+        nota: 'Com um terceiro, o card mostra "Aguardando…" e o retorno prometido; o prazo do dev fica parado do mesmo jeito.' },
+      { nome: 'contato', rotulo: 'Contato ou protocolo (opcional)', dica: 'Ex.: chamado 48213, ana@fornecedor.com', max: 120 },
+      { nome: 'retorno', rotulo: 'Retorno prometido (opcional)', tipo: 'data' }
+    ];
+  }
+
   function caixa(o) {
     css();
     return new Promise(function (resolve) {
@@ -1203,8 +1229,11 @@
           }).join('') + '</div>';
         } else {
           var tp = f.tipo === 'data' ? 'date' : f.tipo === 'numero' ? 'number' : 'text';
+          // `sugestoes`: o campo continua livre ("+ novo" e so digitar) e oferece os ja usados.
+          var dl = Array.isArray(f.sugestoes) && f.sugestoes.length ? id + '-sug' : '';
           ctl = '<input class="in" id="' + id + '" type="' + tp + '"' + max + (tp === 'number' ? ' min="0" step="' + (f.passo || '0.5') + '" inputmode="decimal"' : '') +
-            ' value="' + H.esc(v) + '" placeholder="' + H.esc(f.dica || '') + '" autocomplete="off">';
+            (dl ? ' list="' + dl + '"' : '') + ' value="' + H.esc(v) + '" placeholder="' + H.esc(f.dica || '') + '" autocomplete="off">' +
+            (dl ? '<datalist id="' + dl + '">' + f.sugestoes.map(function (x) { return '<option value="' + H.esc(x) + '">'; }).join('') + '</datalist>' : '');
         }
         return '<div class="axc-f">' + (f.rotulo ? (f.tipo === 'opcoes' ? '<span style="font-size:12.5px;font-weight:700;color:var(--tx2)">' + H.esc(f.rotulo) + '</span>' : '<label for="' + id + '">' + H.esc(f.rotulo) + '</label>') : '') +
           ctl + (f.nota ? '<span class="note">' + H.esc(f.nota) + '</span>' : '') + '</div>';
@@ -1497,7 +1526,7 @@
     pausar: async function (m) {
       var v = await caixa({ titulo: 'Pausar ' + cod(m),
         texto: 'O prazo para de correr enquanto ela estiver pausada, e os dias parados são somados à entrega ao retomar. O motivo justifica isso depois.',
-        campos: [{ nome: 'motivo', rotulo: 'Motivo', tipo: 'area', dica: 'Ex.: aguardando retorno do banco sobre o layout do arquivo', obrig: true }],
+        campos: [{ nome: 'motivo', rotulo: 'Motivo', tipo: 'area', dica: 'Ex.: aguardando retorno do banco sobre o layout do arquivo', obrig: true }].concat(camposTerceiro()),
         ok: 'Pausar', valida: validaCom('pausar', m) });
       if (v) return aplicar('pausar', m, v);
     },
@@ -1505,7 +1534,7 @@
     pedirPausa: async function (m) {
       var v = await caixa({ titulo: 'Pedir pausa de ' + cod(m),
         texto: 'O pedido vai para o PM/PO. Enquanto ele não responde o prazo segue correndo, mas, aprovado, a pausa vale DESDE HOJE — a espera pela resposta não é cobrada de você.',
-        campos: [{ nome: 'motivo', rotulo: 'Justificativa', tipo: 'area', dica: 'Ex.: aguardando retorno do banco sobre o layout do arquivo', obrig: true }],
+        campos: [{ nome: 'motivo', rotulo: 'Justificativa', tipo: 'area', dica: 'Ex.: aguardando retorno do banco sobre o layout do arquivo', obrig: true }].concat(camposTerceiro()),
         ok: 'Pedir pausa', valida: validaCom('pedirPausa', m) });
       if (v) return aplicar('pedirPausa', m, v);
     },
@@ -1521,6 +1550,7 @@
       var dias = raiz.PAUSA.diasEntre(ped.em, H.hoje());
       var v = await caixa({ titulo: 'Aprovar a pausa de ' + cod(m),
         texto: (ped.por || 'O dev') + ' pediu em ' + H.dma(ped.em) + '. A pausa passa a valer desde ' + H.dma(ped.em) + '.' +
+          (ped.terceiro ? '\nAguardando o terceiro: ' + ped.terceiro.nome + (ped.terceiro.retorno ? ' (retorno prometido ' + H.dma(ped.terceiro.retorno) + ')' : '') + '.' : '') +
           (dias ? '\nOs ' + H.plural(dias, 'dia', 'dias') + ' de espera pela sua resposta entram na pausa, e não como atraso do dev.' : '') + '\nMotivo: ' + ped.motivo,
         ok: 'Aprovar', verde: true });
       if (v) return aplicar('aprovarPausa', m, {});

@@ -617,10 +617,24 @@
   function chip(txt, cor, titulo) {
     return '<span class="chip c-' + (cor || 'bk') + '"' + (titulo ? ' title="' + esc(titulo) + '"' : '') + '>' + txt + '</span>';
   }
+  /** O CHIP DA PAUSA, um so para as telas. Com terceiro (pausa.js), diz quem
+   *  segura — "Aguardando Fornecedor X" — e fica VERMELHO quando o retorno
+   *  prometido passou: e a hora de cobrar o fornecedor, nao atraso do dev.
+   *  `rot` troca o "Pausada" da pausa interna (o Quadro escreve em minusculo,
+   *  com os dias); vazio quando a demanda nao esta pausada. */
+  function chipPausa(m, rot) {
+    if (!pausada(m)) return '';
+    var P = raiz.PAUSA, t = P && P.terceiro ? P.terceiro(m) : null;
+    var motivo = m.pausa_motivo || '';
+    if (!t) return chip(ico('pause') + ' ' + (rot || 'Pausada'), 'mg', motivo);
+    var venceu = P.retornoVencido(m, hoje());
+    return chip(ico('pause') + ' Aguardando ' + esc(t.nome) + (venceu ? ' · retorno venceu' : ''), venceu ? 'dg' : 'mg',
+      P.rotuloTerceiro(m, hoje()) + (t.contato ? ' · contato: ' + t.contato : '') + (motivo ? '\n' + motivo : ''));
+  }
   function chipEtapa(m) {
     var e = ETAPA_POR_ID[etapaDe(m)] || ETAPA_POR_ID[colunaDe(m)] || { rotulo: m.status_planejamento || '—', cor: 'bk' };
     var h = chip(esc(e.rotulo), e.cor);
-    if (pausada(m)) h += ' ' + chip(ico('pause') + ' Pausada', 'mg');
+    if (pausada(m)) h += ' ' + chipPausa(m);
     return h;
   }
   function chipTipo(m) {
@@ -1498,7 +1512,7 @@
     visiveis: visiveis, etapaDe: etapaDe, colunaDe: colunaDe, pausada: pausada, prazoDe: prazoDe, atrasoDe: atrasoDe,
     pontosDe: pontosDe, devsDe: devsDe, tema: tema, caminho: caminho, projeto: projeto, sprintAtual: sprintAtual,
     porCodigo: porCodigo, meusNomes: meusNomes, minha: minha, pode: pode, donoDaSprint: donoDaSprint, hidrata: hidrata,
-    ico: ico, chip: chip, chipEtapa: chipEtapa, chipTipo: chipTipo, chipsReq: chipsReq, chipCasoUso: chipCasoUso, CASO_USO_COR: CASO_USO_COR, av: av, cod: cod, hrefItem: hrefItem,
+    ico: ico, chip: chip, chipPausa: chipPausa, chipEtapa: chipEtapa, chipTipo: chipTipo, chipsReq: chipsReq, chipCasoUso: chipCasoUso, CASO_USO_COR: CASO_USO_COR, av: av, cod: cod, hrefItem: hrefItem,
     prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, gravar: gravar, kpi: kpi, toast: toast, ir: ir, api: api, postar: postar, fila: { ler: filaLer, codifica: filaCodifica, decodifica: filaDecodifica, comFila: comFila, processa: filaProcessa }, recarregar: function () { return carregar().then(desenhar); },
     filtros: filtros, filtrosN: filtrosN, gaveta: gaveta, celula: celula, pintaFaixas: pintaFaixas, vincular: pedirVinculo
   };

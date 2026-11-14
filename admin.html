@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="5a8f080c91">
+<html lang="pt-BR" data-build="d2e2302a1d">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1662,7 +1662,7 @@
   <script src="fila.js?v=3e7bb2500a"></script>
 <script src="tema.js?v=5d9c25fd66"></script>
 <script src="prazo.js?v=88870a48ae"></script>
-<script src="dialogo.js?v=9e20f6c47f"></script>
+<script src="dialogo.js?v=bdef211258"></script>
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="requisitos.js?v=cac792c192"></script>
 <script src="pipelines.js?v=2374e11d52"></script>
@@ -1675,7 +1675,7 @@
 <script src="historico-cliente.js?v=2b0fcaf502"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="rede-repete.js?v=0548b95c36"></script>
-<script src="pausa.js?v=06c4b82f84"></script>
+<script src="pausa.js?v=41c5b4a989"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
 <script src="colaboradores.js?v=c94edfa2e2"></script>
@@ -5771,7 +5771,7 @@ function renderMelhorias() {
       // Selo na linha do titulo: "(pausada)" no fim da data passava batido para
       // quem varre a lista de cima a baixo.
       const pausaBadge = estaPausado(m)
-        ? `<span class="kb-pausa" title="${esc(m.pausa_motivo || '')}">⏸ Pausada · ${diasPausadoAgora(m)}d</span>`
+        ? (s => `<span class="kb-pausa" title="${esc(s.titulo)}"${s.venceu ? ' style="color:var(--red-tx,#F9A0A0);border-color:var(--red-tx,#F9A0A0)"' : ''}>⏸ ${esc(s.texto)} · ${diasPausadoAgora(m)}d</span>`)(PAUSA.selo(m, _isoHoje()))
         : '';
       // A SPRINT NA LISTA: o chip colorido e a faixa do card, como no Kanban.
       const _spEstL = SPRINTPO.estiloSprint(m);
@@ -6346,8 +6346,8 @@ function renderKanban() {
       if (semPontuacao(m)) badges.push('<span class="kb-sempt" title="' +
         'Comprometida com data sem ter passado pelo Planning Poker: a estimativa ' +
         'nao existe. Pontue na reuniao ou pelo card.">🃏 sem pontos</span>');
-      if (estaPausado(m)) badges.push('<span class="kb-pausa" title="' +
-        esc(m.pausa_motivo || '') + '">⏸ Pausada · ' + diasPausadoAgora(m) + 'd</span>');
+      if (estaPausado(m)) { const s = PAUSA.selo(m, _isoHoje()); badges.push('<span class="kb-pausa" title="' +
+        esc(s.titulo) + '"' + (s.venceu ? ' style="color:var(--red-tx,#F9A0A0);border-color:var(--red-tx,#F9A0A0)"' : '') + '>⏸ ' + esc(s.texto) + ' · ' + diasPausadoAgora(m) + 'd</span>'); }
       const nMesc = mescladasDe(m.id).length;
       if (nMesc) badges.push('<span class="kb-mesc" title="Absorveu ' + nMesc + ' demanda(s)">🔗 +' + nMesc + '</span>');
       /* ── O CHIP DO PROJETO ABRE O PROJETO ───────────────────────────────
@@ -10184,7 +10184,7 @@ function sprintFecharAbrir(rotulo) {
   SPRINTPO.balancoDaSprint(state, _fechRotulo, m => statusKey(m)).pendentes
     .filter(m => estaPausado(m))
     .forEach(m => { _fechDecisoes[m.id] = { destino: _seg,
-      motivo: ('Pausada' + (m.pausa_motivo ? ': ' + m.pausa_motivo : ' aguardando terceiro')).slice(0, 300) }; });
+      motivo: PAUSA.motivoTransbordo(m) }; });
   const ov = document.createElement('div');
   ov.className = 'dlg-ov';
   ov.id = 'fech-ov';
@@ -14773,11 +14773,15 @@ function aplicarRetomada(m) {
   const dias = diasPausadoAgora(m);
   if (m.entrega && dias > 0) m.entrega = _somaDias(m.entrega, dias);
   m.pausa_dias = (Number(m.pausa_dias) || 0) + dias;
-  m.pausa_historico = (m.pausa_historico || []).concat([{
-    de: m.pausado_em, ate: _isoHoje(), dias, motivo: m.pausa_motivo || '' }]);
+  // O terceiro que segurou a demanda vai junto para o historico: e dele que sai
+  // o "dias parados por fornecedor" (pausa.js, `terceiroDe`).
+  const terc = typeof PAUSA !== 'undefined' ? PAUSA.terceiroDe(m.pausa_terceiro) : null;
+  m.pausa_historico = (m.pausa_historico || []).concat([Object.assign({
+    de: m.pausado_em, ate: _isoHoje(), dias, motivo: m.pausa_motivo || '' }, terc ? { terceiro: terc } : {})]);
   m.pausado_em = '';
   m.pausa_motivo = '';
   m.pausa_por = '';
+  m.pausa_terceiro = null;
   return dias;
 }
 
@@ -14830,6 +14834,7 @@ function pausaRenderBloco(m) {
       (d === 1 ? ' dia' : ' dias') + '</strong>, desde ' + esc(formatDate(m.pausado_em)) +
       (m.pausa_por ? ' por ' + esc(m.pausa_por) : '') + '.' +
       '<br><strong>Motivo:</strong> ' + esc(m.pausa_motivo || '—') +
+      (PAUSA.terceiro(m) ? '<br><strong>' + esc(PAUSA.linhaTerceiro(m.pausa_terceiro, _isoHoje())) + '</strong>' : '') +
       /* A DATA ANDA COM OS DIAS PARADOS, e fica à vista. Esconder a entrega
          durante a pausa deixava quem planeja sem saber quando ela volta — e o
          card do dev mostrava a data ORIGINAL, já vencida, ao lado da palavra
@@ -14857,6 +14862,7 @@ function pausaRenderBloco(m) {
       (esperando ? ' <span style="color:var(--text3)">· esperando há ' + esperando +
                    (esperando === 1 ? ' dia' : ' dias') + '</span>' : '') +
       '<br><strong>Justificativa:</strong> ' + esc(ped.motivo) +
+      (ped.terceiro ? '<br><strong>' + esc(PAUSA.linhaTerceiro(ped.terceiro, _isoHoje())) + '</strong>' : '') +
       '<br><span style="color:var(--text3)">Aprovando, a pausa vale desde ' +
       esc(formatDate(ped.em)) +
       (esperando ? ' — os ' + esperando + (esperando === 1 ? ' dia' : ' dias') +
@@ -14895,18 +14901,20 @@ async function pausaIniciar() {
   const id = document.getElementById('m-id').value;
   const m = (state.melhorias || []).find(x => x.id === id);
   if (!m) { toast('Salve a demanda antes de pausar.', 'err'); return; }
-  const motivo = await pedirTexto({
+  const v = await pedirPausa({
     titulo: 'Pausar demanda',
     texto: 'O prazo para de correr enquanto ela estiver pausada, e os dias parados ' +
            'sao somados a entrega ao retomar. O motivo justifica isso depois.',
-    multilinha: true, obrigatorio: true, ok: 'Pausar',
-    placeholder: 'Ex.: aguardando retorno do banco sobre o layout do arquivo' });
-  if (motivo === null) return;
-  const prob = PAUSA.problemaNoMotivo(motivo);
-  if (prob) { toast(prob, 'err'); return; }
-  const r = PAUSA.pausarComoAdm(m, motivo, (_eu && (_eu.nome || _eu.login)) || 'admin', _isoHoje());
+    ok: 'Pausar', sugestoes: PAUSA.terceirosConhecidos(state.melhorias || []).map(t => t.nome),
+    placeholder: 'Ex.: aguardando retorno do banco sobre o layout do arquivo',
+    valida: x => PAUSA.problemaNoMotivo(x.motivo) || PAUSA.problemaNoTerceiro(x.terceiro, _isoHoje()) });
+  if (v === null) return;
+  // A grafia que a base ja usa para o terceiro ("banco x" vira o "Banco X" de sempre).
+  if (v.terceiro && v.terceiro.nome) v.terceiro.nome = PAUSA.grafiaDe(v.terceiro.nome, state.melhorias || []);
+  const r = PAUSA.pausarComoAdm(m, v.motivo, (_eu && (_eu.nome || _eu.login)) || 'admin', _isoHoje(), v.terceiro);
   if (!r.ok) { toast(r.erro, 'err'); return; }
-  await pausaSalvar(m, '⏸ Demanda pausada.');
+  const tc = PAUSA.terceiro(m);
+  await pausaSalvar(m, tc ? '⏸ Demanda pausada, aguardando ' + tc.nome + '.' : '⏸ Demanda pausada.');
 }
 
 /** APROVAR O PEDIDO DO DEV. A data gravada e a DO PEDIDO — o servidor recusa
@@ -14921,6 +14929,8 @@ async function pausaAprovar() {
   const dias = PAUSA.diasEntre(ped.em, _isoHoje());
   if (!(await confirmar({ titulo: 'Aprovar a pausa',
       texto: 'A pausa passa a valer desde ' + formatDate(ped.em) + '.' +
+             (ped.terceiro ? String.fromCharCode(10) + 'Aguardando o terceiro: ' + ped.terceiro.nome +
+                             (ped.terceiro.retorno ? ' (retorno prometido ' + formatDate(ped.terceiro.retorno) + ')' : '') : '') +
              (dias ? String.fromCharCode(10) + 'Os ' + dias + (dias === 1 ? ' dia' : ' dias') +
                      ' de espera pela sua resposta entram na pausa, e nao como atraso do dev.'
                    : '') +
@@ -15246,6 +15256,8 @@ async function saveMelhoria() {
     pausa_recusas:       existing.pausa_recusas  || [],
     pausa_aprovada_por:  existing.pausa_aprovada_por || '',
     pausa_aprovada_em:   existing.pausa_aprovada_em  || '',
+    // Quem segura a pausa, quando e um terceiro (pausa.js) — mesma armadilha.
+    pausa_terceiro:      existing.pausa_terceiro || null,
     // O Worker e o dono do historico e o repoe se faltar, mas repassar aqui evita
     // que a copia na tela fique sem ele entre o save e a proxima leitura.
     historico:           existing.historico || [],
