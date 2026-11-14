@@ -481,3 +481,32 @@ html .carta-btn.sel { background: linear-gradient(180deg, var(--ac-l) 0%, var(--
   html #ultima-atualizacao { order: 9; flex: 1 0 100%; font-size: 12px !important; }
   html .axis-head-logo { height: 18px; margin-right: 10px; }
 }
+
+/* Filtro sem classe propria (o "Tipo" do painel do dev) no mesmo desenho dos outros. */
+html .filter-bar select:not(.filter-select) {
+  background: var(--sf3); color: var(--tx); border: 1px solid var(--bd2); border-radius: 9px;
+  padding: 6px 10px; font-family: var(--font-ui);
+}
+@media (max-width: 640px) {
+  /* O cabecalho que gruda no topo (gantt) cobria meia tela depois de quebrar
+     em linhas: no celular ele rola junto com a pagina. */
+  html header, html #gantt-app > header { position: static !important; }
+  /* Barra de filtros do painel do dev: rotulo a esquerda e campo a direita,
+     um por linha; o que nao e par rotulo/campo ocupa a linha inteira. */
+  html .filter-bar { display: grid !important; grid-template-columns: auto minmax(0, 1fr); gap: 8px 10px !important; padding: 12px 16px !important; }
+  html .filter-bar > .filter-sep, html .filter-bar > .filter-divider { display: none; }
+  html .filter-bar > label { grid-column: 1; margin: 0; }
+  html .filter-bar > select, html .filter-bar > input { grid-column: 2; width: 100%; min-height: 40px; }
+  html .filter-bar > :not(label):not(select):not(input):not(.filter-sep):not(.filter-divider) { grid-column: 1 / -1; }
+}
+/* Link de texto no acento, como no app; link com cara de botao sem sublinhado. */
+html a.btn, html a.btn:hover { text-decoration: none; }
+html a:not([class]):not([style]) { color: var(--ac-t); }
+html a:not([class]):not([style]):hover { color: var(--ac-h); }
+@media (max-width: 640px) {
+  /* Cabecalho do Importar (div.header): titulo inteiro na primeira linha, a
+     frase de apoio embaixo, voltar e tema nas pontas. */
+  html body > .header { flex-wrap: wrap; gap: 6px 12px; }
+  html body > .header > h1 { flex: 1 0 100%; order: -1; font-size: 19px; margin: 0; }
+  html body > .header > span[style*="margin-left:auto"] { flex: 1 0 100%; margin-left: 0 !important; order: 5; }
+}
