@@ -4824,10 +4824,52 @@ sec('Novembro: o servidor recusa a pausa que nao passou pelo PM/PO');
        { melhorias: [{ id: 'a', pausado_em: '2026-11-07' }] }, serv).length === 0,
      'PM/PO pausando direto grava hoje, e isso nao e erro');
 
+  /* ── AGUARDANDO TERCEIRO (12/11/2026) ──
+     A pausa ganha QUEM segura (fornecedor/parceiro), contato e retorno
+     prometido. Nao e etapa nova: a demanda fica onde estava e o relogio para
+     igual. */
+  {
+    const PT = require('./pausa.js');
+    const mt = {};
+    PT.pedir(mt, 'aguardando o ambiente do fornecedor', 'ana', '2026-11-05', { nome: 'Banco X', contato: 'chamado 1', retorno: '2026-11-15' });
+    const apr = PT.aprovar(mt, 'fer', '2026-11-07');
+    ok(apr.ok && mt.pausado_em === '2026-11-05' && mt.pausa_terceiro && mt.pausa_terceiro.nome === 'Banco X' && mt.pausa_terceiro.retorno === '2026-11-15' && mt.pausa_pedido === null,
+       'o terceiro pedido pelo dev chega na aprovacao, e a pausa continua valendo desde o pedido', JSON.stringify(mt));
+    ok(PT.rotuloTerceiro(mt, '2026-11-10') === 'Aguardando Banco X · desde 05/11 · retorno 15/11' && !PT.retornoVencido(mt, '2026-11-15') &&
+       PT.retornoVencido(mt, '2026-11-16') && /venceu/.test(PT.rotuloTerceiro(mt, '2026-11-16')),
+       'o card diz quem segura e o retorno, e o retorno vencido acende (hora de cobrar o fornecedor)');
+    const mi = {};
+    PT.pausarComoAdm(mi, 'aguardando definicao interna', 'fer', '2026-11-05', { nome: '  ', contato: '' });
+    ok(mi.pausa_terceiro === null && PT.terceiro(mi) === null && PT.selo(mi, '2026-11-06').texto === 'Pausada' &&
+       PT.motivoTransbordo(mi) === 'Pausada: aguardando definicao interna',
+       'sem nome, a pausa e interna como sempre foi — mesmo selo e mesmo motivo de transbordo');
+    ok(PT.motivoTransbordo(mt) === 'Pausada aguardando Banco X: aguardando o ambiente do fornecedor',
+       'na virada da sprint, a pausada por terceiro transborda dizendo quem segura');
+    ok(!!PT.problemaNoTerceiro({ nome: 'x' }) && !!PT.problemaNoTerceiro({ contato: 'so o contato' }) &&
+       !!PT.problemaNoTerceiro({ nome: 'Banco', retorno: '2026-11-01' }, '2026-11-05') && !PT.problemaNoTerceiro({ nome: 'Banco', retorno: '2026-11-09' }, '2026-11-05') &&
+       !PT.problemaNoTerceiro(null) && !PT.problemaNoTerceiro({ nome: '', contato: '', retorno: '' }),
+       'terceiro sem nome (com contato ou data) e recusado, e o retorno prometido nao nasce no passado');
+    const base = [{ pausa_terceiro: { nome: 'Banco X' }, pausado_em: '2026-11-01' }, { pausa_historico: [{ terceiro: { nome: 'banco x' } }, { terceiro: { nome: 'Fornecedor Y' } }] },
+                  { pausa_pedido: { em: '2026-11-02', terceiro: { nome: 'BANCO X' } } }];
+    const conh = PT.terceirosConhecidos(base);
+    ok(conh.length === 2 && conh[0].nome === 'Banco X' && conh[0].usos === 3 && PT.grafiaDe('banco  x', base) === 'Banco X' && PT.grafiaDe('Novo Fornecedor', base) === 'Novo Fornecedor',
+       'a lista de terceiros sai das proprias demandas, junta grafias de caixa/acento e "+ novo" e so digitar', JSON.stringify(conh));
+    // As tres telas antigas guardam o campo na lista fechada, e o retomar o leva ao historico.
+    ok(/pausa_terceiro:\s+existing\.pausa_terceiro \|\| null/.test(lerTela('admin.html')) && /pausa_terceiro:\s+existing\.pausa_terceiro\s+\|\| null/.test(lerTela('gantt.html')) &&
+       /pausa_aprovada_em: '', pausa_terceiro: null,/.test(lerTela('axis-form-demanda.js')),
+       'salvar o card no admin, no gantt ou pelo formulario do app nao apaga o terceiro da pausa');
+    ok(['admin.html', 'dev.html', 'gantt.html'].every(f => /m\.pausa_terceiro = null;/.test(lerTela(f)) && /terc \? \{ terceiro: terc \} : \{\}/.test(lerTela(f))) &&
+       /pausa_terceiro:null/.test(lerTela('dev.html')) && /<script src="pausa\.js\?v=/.test(lerTela('gantt.html')),
+       'retomar (admin, dev e gantt) leva o terceiro para o historico e o tira da demanda — o gantt carrega o pausa.js para isso');
+    const devPubT = W.slice(W.indexOf("body.action === 'dev-publish'"), W.indexOf("body.action === 'dev-publish'") + 12000);
+    ok(/if \(JSON\.stringify\(m\.pausa_terceiro\) !== JSON\.stringify\(velho\)\) m\.pausa_terceiro = velho;/.test(devPubT),
+       'o painel do dev nao inventa nem troca o terceiro da pausa: so a aprovacao o grava, e retomar o limpa');
+  }
+
   /* ── AS DUAS ROTAS ESTAO LIGADAS ──
      Escrever a trava e nao chama-la e o modo mais silencioso de nao ter trava. */
   const devPub = W.slice(W.indexOf("body.action === 'dev-publish'"),
-                         W.indexOf("body.action === 'dev-publish'") + 9000);
+                         W.indexOf("body.action === 'dev-publish'") + 12000);
   ok(/pausandoSemSerAdm\(data, antesDev\)/.test(devPub),
      'dev-publish consulta quem pode pausar');
   ok(/pausandoSemMotivo\(data, antesDev\)/.test(devPub),
@@ -25492,16 +25534,18 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(divergeMc.length === 0, 'marcaConclusao do app = a do admin (concluir estampa, sair limpa)', divergeMc.join(', '));
 
     // retomar: `aplicarRetomada` do admin, com o relogio fixo.
-    const ret = new Function('ETAPA', 'HOJE',
+    const ret = new Function('ETAPA', 'HOJE', 'PAUSA',
       'const estaPausado = m => ETAPA.pausada(m);\nfunction _isoHoje() { return HOJE; }\n' +
       (corpo(ADMIN, 'function _somaDias(iso, n) {') || '') + '\n' + (corpo(ADMIN, 'function _difDias(de, ate) {') || '') + '\n' +
-      (ADMIN.match(/const diasPausadoAgora = [^\n]+/) || [''])[0] + '\n' + (corpo(ADMIN, 'function aplicarRetomada(m) {') || '') + '\nreturn aplicarRetomada;')(require('./etapa-demanda.js'), HOJE);
+      (ADMIN.match(/const diasPausadoAgora = [^\n]+/) || [''])[0] + '\n' + (corpo(ADMIN, 'function aplicarRetomada(m) {') || '') + '\nreturn aplicarRetomada;')(require('./etapa-demanda.js'), HOJE, require('./pausa.js'));
     [{ entrega: '2026-11-10', pausado_em: '2026-10-28', pausa_motivo: 'banco', pausa_dias: 2, pausa_historico: [{ de: 'x' }] },
+     // Aguardando terceiro (12/11/2026): o terceiro vai para o historico e sai da demanda.
+     { entrega: '2026-11-20', pausado_em: '2026-11-03', pausa_motivo: 'ambiente do fornecedor', pausa_terceiro: { nome: 'Banco X', contato: 'chamado 1', retorno: '2026-11-08' } },
      { entrega: '', pausado_em: '2026-11-01', pausa_motivo: 'm' }, { entrega: '2026-12-30', pausado_em: HOJE, pausa_motivo: 'm' }].forEach((m, i) => {
       const adm = JSON.parse(JSON.stringify(m)); ret(adm, HOJE);
       const r = R_.retomar(m, {}, ctx('admin'));
       const app = Object.assign(JSON.parse(JSON.stringify(m)), r.patch);
-      const ks = ['entrega', 'pausado_em', 'pausa_motivo', 'pausa_por', 'pausa_dias', 'pausa_historico'];
+      const ks = ['entrega', 'pausado_em', 'pausa_motivo', 'pausa_por', 'pausa_dias', 'pausa_historico', 'pausa_terceiro'];
       ok(r.ok && ks.every(k => JSON.stringify(adm[k] == null ? '' : adm[k]) === JSON.stringify(app[k] == null ? '' : app[k])),
          'retomar ' + (i + 1) + ': o patch do app = aplicarRetomada do admin (entrega empurrada, historico da pausa)',
          ks.map(k => k + ' ' + JSON.stringify(adm[k]) + '/' + JSON.stringify(app[k])).join('; '));
@@ -25525,7 +25569,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const viva = { id: 'p', status_planejamento: 'em_andamento', entrega: '2026-11-20' };
     const rp = R_.pausar(viva, { motivo: 'aguardando o banco responder' }, ctx('admin'));
     ok(rp.ok && rp.patch.pausado_em === HOJE && rp.patch.pausa_por === 'Paula PO' && rp.patch.pausa_pedido === null &&
-       Object.keys(rp.patch).sort().join() === 'pausa_aprovada_em,pausa_aprovada_por,pausa_motivo,pausa_pedido,pausa_por,pausado_em',
+       Object.keys(rp.patch).sort().join() === 'pausa_aprovada_em,pausa_aprovada_por,pausa_motivo,pausa_pedido,pausa_por,pausa_terceiro,pausado_em' &&
+       rp.patch.pausa_terceiro === null,
        'o PM/PO pausa direto: os campos de `pausarComoAdm`, e nada alem', Object.keys(rp.patch).join());
     ok(!R_.pausar(viva, { motivo: 'curto' }, ctx('admin')).ok, 'pausar com justificativa curta e recusado (PAUSA.problemaNoMotivo)');
     ok(!R_.pausar(viva, { motivo: 'aguardando o banco responder' }, ctx('dev')).ok, 'o dev nao pausa: pede');
@@ -27230,7 +27275,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const srcs = nomes.map(n => corpo(SPT, n));
     ok(srcs.every(Boolean), 'as funcoes puras do ciclo existem em axis-tela-sprints.js para serem comparadas', nomes.filter((n, i) => !srcs[i]).join(', '));
     if (!srcs.every(Boolean)) return;
-    const APP = new Function(srcs.join('\n') + '\nreturn { cicloCopia, cicloPatch, cicloTextoIniciar, cicloIniciar, cicloRepassar, cicloDecisoesIniciais, cicloFaltam, cicloFechar, loteGrupos, loteCandidatas };')();
+    const APP = new Function('window', srcs.join('\n') + '\nreturn { cicloCopia, cicloPatch, cicloTextoIniciar, cicloIniciar, cicloRepassar, cicloDecisoesIniciais, cicloFaltam, cicloFechar, loteGrupos, loteCandidatas };')({ PAUSA: require('./pausa.js') });
 
     // ── A amostra ─────────────────────────────────────────────────────────
     const ETS = ['backlog', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'negada'];
@@ -27352,11 +27397,12 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       'function sprintFecharPendencias() {', 'function sprintFecharAtualizaBotao() {', 'function sprintFecharRender() {', 'async function sprintFecharAplicar() {'].map(n => corpo(ADMIN, n));
     ok(fechSrcs.every(Boolean), 'o fechamento do admin (sprintFecharAbrir a sprintFecharAplicar) existe para ser comparado');
     if (fechSrcs.every(Boolean)) {
+      globalThis.__PAUSA_TESTE = require('./pausa.js');
       const fechAdm = (state, saida) => {
         const el = () => ({ innerHTML: '', textContent: '', disabled: false, style: {}, onclick: null, addEventListener() {}, querySelector: () => el(), remove() {} });
         const document = { getElementById: () => el(), createElement: () => el(), body: { appendChild() {} } };
         return new Function('state', 'SPRINTPO', 'PRAZO', 'statusKey', 'estaPausado', 'saida', 'document',
-          'const window = { PRAZO: PRAZO }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin", area_produto: true };\n' +
+          'const window = { PRAZO: PRAZO }; const PAUSA = globalThis.__PAUSA_TESTE; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin", area_produto: true };\n' +
           linhaAdm(/^function esc\(s\) \{.*$/m) + '\nlet _fechDecisoes = {}; let _fechRotulo = "";\n' +
           'const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false; const renderAll = () => {}; const saveViaProxy = async () => true;\n' +
           'const avisaFalha = (t) => { saida.falha = t; }; const toast = (t, k) => { saida.toast = t; saida.tipo = k; };\n' +
@@ -29895,7 +29941,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       const txt = mk ? lista.map((m) => mk(m).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) : [];
       ok(!!mk && /▲ no ar 2\.4/.test(txt[1]) && /Dep\. de AX-1/.test(txt[1]) && /1 dep\. aberta/.test(txt[0]) && txt[0].indexOf(VI.frase(lista, lista[0])) >= 0 && /▲ no ar/.test(txt[2]) && !/Dep\./.test(txt[2]) &&
          /▲ no ar\$\{m\.versao \? ' ' \+ esc\(m\.versao\) : ''\}/.test(ADMIN) && /🔗 Dep\. de: \$\{esc\(parentM\.codigo/.test(ADMIN) &&
-         /H\.ico\('pause'\) \+ ' Pausada' \+ \(dp \? ' · ' \+ dp \+ 'd' : ''\)/.test(BKT) && /m\.descricao\.substring\(0,120\)/.test(ADMIN) && /ds\.slice\(0, 120\)/.test(BKT),
+         /H\.chipPausa\(m, 'Pausada' \+ \(dp \? ' · ' \+ dp \+ 'd' : ''\)\)/.test(BKT) && /m\.descricao\.substring\(0,120\)/.test(ADMIN) && /ds\.slice\(0, 120\)/.test(BKT),
          'Marcas da linha do Backlog: "▲ no ar" com a versao, "Dep. de AX-n", as dependencias abertas, a soma da arvore, a pausa com os dias e a previa de 120 caracteres da descricao, como na lista do admin', txt.join(' | '));
     }
     ok(/\$\{m\.is_dependency \? `<span title="Dependência"/.test(GANTT) && /\(m\.is_dependency \? '<span class="x">' \+ ico\('link'\)/.test(PLT) &&
