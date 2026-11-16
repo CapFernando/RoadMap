@@ -27906,7 +27906,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        I.rotaNova('gantt.html', '') === 'planejamento' && I.rotaNova('ADMIN.HTML', '#ax-887') === 'item/AX-887' &&
        I.rotaNova('dev.html', '#AX-12') === 'item/AX-12' && I.rotaNova('index.html', '') === '',
        'cada tela antiga tem a sua rota no app; #AX-n abre o Item; o painel publico nao muda');
-    ok(I.rotaNova('projetos.html', '') === 'paineis/visao', 'projetos.html (horas por tema) vai para a visao dos Paineis, e nao para os projetos EP-');
+    ok(I.rotaNova('projetos.html', '') === 'paineis/tema', 'projetos.html (horas por tema) vai para a aba Por tema dos Paineis, e nao para os projetos EP-');
     ok(I.rotaNova('mensageria.html', '', '?codigo=AX-1091') === 'item/AX-1091/conversa' &&
        I.rotaNova('mensageria.html', '', '?codigo=1091') === 'item/AX-1091/conversa' && I.rotaNova('mensageria.html', '', '') === 'api',
        'mensageria.html?codigo=AX-n abre a Conversa daquela demanda no app (antes caia em #api e perdia o codigo)');
@@ -30152,6 +30152,50 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a fila insiste so na queda; recusa de regra sai da fila e e avisada');
     ok(AXA.includes('setInterval(filaProcessa, FILA_INTERVALO)') && AXA.includes('APP.D = comFila('),
        'a fila roda sozinha e a releitura mantem na tela o que ainda esta na fila');
+  }
+
+  /* HORAS POR TEMA NO APP (PRD RF-28): a aba Por tema dos Paineis repete a
+     conta de projetos.html (renderPage/calcHorasPlanejadas/getHorasEfetivas). */
+  sec('App AXIS: Paineis > Por tema bate com a tela antiga de horas por tema');
+  {
+    const win = { AXIS_APP: { tela() {}, APP: { D: {} }, H: new Proxy({ MESES: [], MESES_C: [] }, { get: (o, k) => (k in o ? o[k] : () => '') }) }, addEventListener() {} };
+    new Function('window', 'document', lerTela('axis-tela-paineis.js'))(win, { getElementById: () => null, addEventListener() {}, head: { appendChild() {} }, createElement: () => ({ style: {} }) });
+    const G = win.AXIS_GER;
+    ok(!!(G && G.horasPorTema), 'os Paineis expoem a conta de horas por tema');
+    const PRJ = fs.readFileSync('projetos.html', 'utf8');
+    const fCalc = corpo(PRJ, 'function calcHorasPlanejadas(inicio, entrega) {');
+    const fEf = corpo(PRJ, 'function getHorasEfetivas(m) {');
+    ok(!!fCalc && !!fEf, 'projetos.html ainda tem as contas de referencia');
+    if (G && fCalc && fEf) {
+      const feriados = [{ data: '2026-11-02' }, '2026-11-20'];
+      const temas = [{ id: 't2', nome: 'Sistema B' }, { id: 't1', nome: 'Sistema A' }, { id: 't3', nome: 'Vazio' }];
+      const mel = [
+        { id: 'a', tema_id: 't1', inicio: '2026-11-03', entrega: '2026-11-21', status_planejamento: 'concluido' },
+        { id: 'b', tema_id: 't1', inicio: '2026-11-10', entrega: '2026-11-12', horas_realizadas: 40 },
+        { id: 'c', tema_id: 't2', inicio: '2026-11-01', entrega: '2026-11-30', status: 'concluida' },
+        { id: 'd', tema_id: 't2', inicio: '2026-11-05', entrega: '2026-11-04' },
+        { id: 'e', tema_id: 't1', inicio: '2026-10-28', entrega: '2026-11-03' },
+        { id: 'f', tema_id: 't1', inicio: '2026-11-03', entrega: '2026-11-06', status_planejamento: 'negada' },
+        { id: 'g', tema_id: 't2', entrega: '2026-11-06' },
+        { id: 'h', tema_id: 't1', inicio: '2025-11-03', entrega: '2025-11-07' },
+        ...[1, 2, 3, 4].map((i) => ({ id: 'x' + i, tema_id: 't1', inicio: '2026-11-1' + i, entrega: '2026-11-2' + i }))
+      ];
+      const ref = new Function('state', fCalc + '\n' + fEf + '\nreturn [calcHorasPlanejadas, getHorasEfetivas];')({ feriados });
+      const [calc, ef] = ref;
+      const esperado = (ano, mes) => {
+        const it = mel.filter((m) => m.status_planejamento !== 'negada' && m.inicio && (!ano || m.inicio.slice(0, 4) === ano) && (!mes || +m.inicio.slice(5, 7) === +mes));
+        return temas.filter((t) => it.some((m) => m.tema_id === t.id)).map((t) => {
+          const ts = it.filter((m) => m.tema_id === t.id);
+          return [t.id, ts.length, ts.filter((m) => m.status_planejamento === 'concluido' || m.status === 'concluida').length,
+                  ts.reduce((s, m) => s + (calc(m.inicio, m.entrega) || 0), 0), ts.reduce((s, m) => s + ef(m), 0),
+                  [...ts].sort((a, b) => ef(b) - ef(a)).slice(0, 5).map((m) => m.id).join()].join('|');
+        }).join(' ; ');
+      };
+      for (const [ano, mes] of [['2026', '11'], ['2026', ''], ['', ''], ['2025', '11'], ['2026', '1']]) {
+        const obt = G.horasPorTema(mel, temas, ano, mes, feriados).map((t) => [t.id, t.n, t.concluidas, t.hPlan, t.hReal, t.top.map((x) => x.m.id).join()].join('|')).join(' ; ');
+        ok(obt === esperado(ano, mes), 'horas por tema em ' + (mes || 'todos os meses') + '/' + (ano || 'todos os anos') + ' igual a tela antiga', obt + ' <> ' + esperado(ano, mes));
+      }
+    }
   }
 
   Promise.all(pendentes).then(() => {

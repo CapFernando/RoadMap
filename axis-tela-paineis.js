@@ -733,6 +733,14 @@
     s.id = 'css-tela-paineis';
     s.textContent = [
       '.axa .gx-hd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px}',
+      /* Horas por tema (PRD RF-28): um sistema por linha, que abre as 5 que mais consumiram. */
+      '.axa .pt-lista{display:flex;flex-direction:column;gap:10px}',
+      '.axa .pt-it>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;min-height:44px;flex-wrap:wrap}',
+      '.axa .pt-it>summary::-webkit-details-marker{display:none}',
+      '.axa .pt-t{display:flex;flex-direction:column;gap:2px;min-width:0;color:var(--tx);font-size:13.5px}',
+      '.axa .pt-h{display:flex;gap:12px;align-items:baseline;font-size:13px;color:var(--tx3)}.axa .pt-h b{color:var(--ac-t);font-size:15px}',
+      '.axa .pt-top{display:flex;flex-direction:column;gap:2px;margin-top:10px;border-top:1px solid var(--bd);padding-top:8px}',
+      '.axa .pt-l{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 4px;text-decoration:none;color:var(--tx);font-size:13px;min-height:44px;border-bottom:1px solid var(--bd)}',
       '.axa .gx-g{display:grid;gap:16px;align-items:start}',
       '.axa .gx-k4{grid-template-columns:repeat(4,minmax(0,1fr))}.axa .gx-k5{grid-template-columns:repeat(5,minmax(0,1fr))}.axa .gx-k6{grid-template-columns:repeat(6,minmax(0,1fr))}',
       '.axa .gx-k4,.axa .gx-k5,.axa .gx-k6{align-items:stretch}',
@@ -799,7 +807,70 @@
     document.head.appendChild(s);
   }
 
+  /* ═══ HORAS POR TEMA (PRD RF-28) — COPIA de `renderPage` (projetos.html) ═══
+     As demandas com INICIO no periodo (ano e mes, cada um opcional), menos as
+     negadas, agrupadas pelo sistema EXATO (`tema_id`), na ordem do catalogo:
+     quantas, quantas concluidas, horas planejadas (dias uteis de inicio a
+     entrega x 8 h, `calcHorasPlanejadas`) e efetivas (as realizadas; sem elas,
+     as planejadas — `getHorasEfetivas`), e as 5 que mais consumiram. */
+  function horasPlan(inicio, entrega, feriados) {
+    var a = String(inicio || '').slice(0, 10), b = String(entrega || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(a) || !/^\d{4}-\d{2}-\d{2}$/.test(b) || b < a) return null;
+    var fer = {}; (feriados || []).forEach(function (f) { var d = f && typeof f === 'object' ? f.data : f; if (d) fer[String(d).slice(0, 10)] = 1; });
+    var q = a.split('-'), d = new Date(Date.UTC(+q[0], +q[1] - 1, +q[2])), n = 0;
+    while (d.toISOString().slice(0, 10) <= b) {
+      var dw = d.getUTCDay();
+      if (dw !== 0 && dw !== 6 && !fer[d.toISOString().slice(0, 10)]) n++;
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return n * 8;
+  }
+  function horasPorTema(melhorias, temas, ano, mes, feriados) {
+    var ef = function (m) { return m.horas_realizadas > 0 ? Number(m.horas_realizadas) : (horasPlan(m.inicio, m.entrega, feriados) || 0); };
+    var itens = (melhorias || []).filter(function (m) {
+      if (!m || m.status_planejamento === 'negada' || !m.inicio) return false;
+      var y = String(m.inicio).slice(0, 4), mm = +String(m.inicio).slice(5, 7);
+      if (ano && y !== String(ano)) return false;
+      if (mes && mm !== +mes) return false;
+      return true;
+    });
+    return (temas || []).filter(function (t) { return itens.some(function (m) { return m.tema_id === t.id; }); }).map(function (t) {
+      var ts = itens.filter(function (m) { return m.tema_id === t.id; });
+      var top = ts.slice().sort(function (a, b) { return ef(b) - ef(a); }).slice(0, 5);
+      return { id: t.id, nome: t.nome, n: ts.length,
+               concluidas: ts.filter(function (m) { return m.status_planejamento === 'concluido' || m.status === 'concluida'; }).length,
+               hPlan: ts.reduce(function (s, m) { return s + (horasPlan(m.inicio, m.entrega, feriados) || 0); }, 0),
+               hReal: ts.reduce(function (s, m) { return s + ef(m); }, 0),
+               top: top.map(function (m) { return { m: m, hPlan: horasPlan(m.inicio, m.entrega, feriados) || 0, hReal: ef(m) }; }) };
+    });
+  }
+  var _pt = { ano: '', mes: '' };
+  function porTema(ctx) {
+    var D = ctx.D || {};
+    var anos = {}; (D.melhorias || []).forEach(function (m) { if (m && m.inicio) anos[String(m.inicio).slice(0, 4)] = 1; });
+    var opt = function (v, r, sel) { return '<option value="' + esc(v) + '"' + (String(v) === String(sel) ? ' selected' : '') + '>' + esc(r) + '</option>'; };
+    var fil = '<select class="in" data-pt="mes" aria-label="Mês" style="height:32px">' + opt('', 'Todos os meses', _pt.mes) +
+      H.MESES.map(function (n, i) { return opt(String(i + 1), n.charAt(0).toUpperCase() + n.slice(1), _pt.mes); }).join('') + '</select>' +
+      '<select class="in" data-pt="ano" aria-label="Ano" style="height:32px">' + opt('', 'Todos os anos', _pt.ano) +
+      Object.keys(anos).sort().reverse().map(function (a) { return opt(a, a, _pt.ano); }).join('') + '</select>';
+    var hd = cabecalho('Horas por tema', 'As demandas pelo mês de início, agrupadas por sistema: planejado (dias úteis × 8 h) e efetivo (as horas lançadas; sem elas, o planejado).',
+      fil, '<span class="note">Painéis › Por tema</span>');
+    var ts = horasPorTema(D.melhorias, D.temas, _pt.ano, _pt.mes, D.feriados);
+    if (!ts.length) return hd + H.vazio('chart', 'Nenhuma demanda no período escolhido', 'Troque o mês ou o ano.');
+    return hd + '<div class="pt-lista">' + ts.map(function (t) {
+      return '<details class="pn pt-it"><summary><span class="pt-t"><b>' + esc(t.nome) + '</b><span class="note">' + H.plural(t.n, 'demanda', 'demandas') + ' · ' +
+        H.plural(t.concluidas, 'concluída', 'concluídas') + '</span></span><span class="pt-h"><span title="Planejado">' + H.num(t.hPlan) + ' h plan.</span>' +
+        '<b title="Efetivo">' + H.num(t.hReal) + ' h</b></span></summary>' +
+        '<div class="pt-top"><span class="lab">AS 5 QUE MAIS CONSUMIRAM</span>' + t.top.map(function (x, i) {
+          var m = x.m;
+          return '<a class="pt-l" href="' + H.hrefItem(m) + '"><span class="mono">' + (i + 1) + '</span><span class="ell">' + esc(m.titulo || '') +
+            '<span class="note"> · ' + esc(m.dev || '—') + '</span></span><span class="mono">' + H.num(x.hReal) + ' h' + (m.horas_realizadas > 0 ? '' : '*') + '</span></a>';
+        }).join('') + '<span class="note">* estimadas pelo planejado (sem horas lançadas).</span></div></details>';
+    }).join('') + '</div>';
+  }
+
   var G = raiz.AXIS_GER = {
+    horasPorTema: horasPorTema, horasPlan: horasPlan,
     mesSoma: mesSoma, mesCorrente: mesCorrente, limites: limites, nomeMes: nomeMes, rotuloMes: rotuloMes, alvoDe: alvoDe,
     feriadosDe: feriadosDe, vivas: vivas, todas: todas, temaNome: temaNome,
     mesTrilhaDe: mesTrilhaDe, mesDe: mesDe, mesRolos: mesRolos, mesDesdeOInicio: mesDesdeOInicio,
@@ -826,7 +897,8 @@
     return [
       { id: 'visao', rotulo: 'Visão geral', href: '#paineis/visao' + m },
       { id: 'fluxo', rotulo: 'Fluxo e pessoas', href: '#paineis/fluxo' + m },
-      { id: 'pontos', rotulo: 'Pontos', href: '#paineis/pontos' + m }
+      { id: 'pontos', rotulo: 'Pontos', href: '#paineis/pontos' + m },
+      { id: 'tema', rotulo: 'Por tema', href: '#paineis/tema' }
     ];
   }
 
@@ -1372,20 +1444,24 @@
   css();
   raiz.AXIS_APP.tela({
     id: 'paineis', rotulo: 'Painéis', papeis: ['admin', 'consulta'],
-    abas: [{ id: 'visao', rotulo: 'Visão geral' }, { id: 'fluxo', rotulo: 'Fluxo e pessoas' }, { id: 'pontos', rotulo: 'Pontos' }],
+    abas: [{ id: 'visao', rotulo: 'Visão geral' }, { id: 'fluxo', rotulo: 'Fluxo e pessoas' }, { id: 'pontos', rotulo: 'Pontos' }, { id: 'tema', rotulo: 'Por tema' }],
     abasDe: abasDe,
-    titulo: function (r) { return 'Painéis · ' + ({ visao: 'Visão geral', fluxo: 'Fluxo e pessoas', pontos: 'Pontos' }[r.aba] || ''); },
+    titulo: function (r) { return 'Painéis · ' + ({ visao: 'Visão geral', fluxo: 'Fluxo e pessoas', pontos: 'Pontos', tema: 'Por tema' }[r.aba] || ''); },
     render: function (el, ctx) {
       css();
       var alvo = alvoDe(ctx.param);
       if (alvo !== _alvoPag) { _alvoPag = alvo; _pagDem = 0; }
       if (ctx.aba === 'fluxo') return fluxo(ctx, alvo);
       if (ctx.aba === 'pontos') return pontos(ctx, alvo);
+      if (ctx.aba === 'tema') return porTema(ctx);
       return visao(ctx, alvo);
     },
     depois: function (el, ctx) {
       var alvo = alvoDe(ctx.param);
       ligaSeletorMes(el);
+      Array.prototype.forEach.call(el.querySelectorAll('[data-pt]'), function (s) {
+        s.addEventListener('change', function () { _pt[s.getAttribute('data-pt')] = s.value; raiz.AXIS_APP.desenhar(); });
+      });
       el.addEventListener('click', function (e) {
         var b = e.target.closest('[data-pm]');
         if (b) {

@@ -33,7 +33,7 @@
     'poker.html': 'poker', 'follow.html': 'acompanhamentos',
     // projetos.html e a carteira de HORAS POR TEMA, e nao os projetos EP-: no
     // app, o mais proximo e a visao gerencial dos Paineis.
-    'projetos.html': 'paineis/visao',
+    'projetos.html': 'paineis/tema',
     'importar.html': 'importar', 'mensageria.html': 'api'
   };
 
