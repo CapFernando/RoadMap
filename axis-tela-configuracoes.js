@@ -577,6 +577,7 @@
         status: u.pendente ? 'pendente' : (u.ativo ? 'ativo' : 'off'), nomeDev: nd, declarado: decl.join(' / '),
         frente: (desenvolve || ehAtivo(nd)) ? frenteDe(nd, D) : { txt: '', padrao: false },
         axcred: !!(perf && perf.axcred), spike: !!u.aprova_spike, nova: !!u.interface_nova, produto: !!u.area_produto,
+        kanban: !!u.kanban_livre, comite: !!u.marca_comite,
         capacidade: nd && ehAtivo(nd), acesso: u.ultimo_acesso || '', criado: u.criado_em || '',
         dem: contaDemandas(decl.length ? decl : (nd ? [nd] : []))
       };
@@ -778,6 +779,12 @@
          papel que a regra exige; qualquer admin muda a marca. */
       (p.papel === 'admin' && p.status === 'ativo'
         ? sw('Área de produto', p.produto, 'Escolhe a sprint, marca prioritária, inicia e fecha a sprint e sela a planning', 'u-produto', dLogin) : '') +
+      /* KANBAN SEM TRAVAS E MARCA DO COMITE (PRD RF-22 a RF-24): eram listas no
+         codigo; agora sao marcas da conta. A do comite so em quem nao e admin. */
+      (p.papel !== 'semconta' && p.status !== 'pendente'
+        ? sw('Kanban sem travas', p.kanban, 'Move todo o Kanban de Desenvolvimento e Sales Ops sem as travas do dev (menos Dados/BI)', 'u-kanban', dLogin) : '') +
+      (p.papel !== 'semconta' && p.papel !== 'admin' && p.status !== 'pendente'
+        ? sw('Marca o comitê', p.comite, 'Pode marcar o validado pelo comitê (admin já pode)', 'u-comite', dLogin) : '') +
       (noDev ? sw('DEV-AXCred', p.axcred, 'Aparece primeiro no Planejamento', 'perfil-axcred', dDev) : '');
     if (p.status !== 'semconta') {
       h += '<span class="note" style="font-size:12px">' + (p.acesso ? 'Último acesso em ' + esc(quando(p.acesso)) : '<span style="color:var(--wn-t)">Nunca entrou com a conta</span> (pode estar usando a senha geral)') +
@@ -1121,6 +1128,16 @@
         liga ? '"' + login + '" passa a ser da área de produto.' : '"' + login + '" sai da área de produto.');
       var eu = raiz.AXIS_APP.APP.eu; if (r && eu && eu.login === login) eu.area_produto = liga;
       return r;
+    },
+    'u-kanban': async function (el) {
+      var login = el.getAttribute('data-cfg-login'), u = contaDe(login) || {};
+      var liga = !u.kanban_livre;
+      return chamaConta('kanban-livre', { login: login, liga: liga }, (liga ? 'Ligado' : 'Desligado') + ' "Kanban sem travas" para "' + login + '".');
+    },
+    'u-comite': async function (el) {
+      var login = el.getAttribute('data-cfg-login'), u = contaDe(login) || {};
+      var liga = !u.marca_comite;
+      return chamaConta('marca-comite', { login: login, liga: liga }, (liga ? 'Ligado' : 'Desligado') + ' "Marca o comitê" para "' + login + '".');
     },
     'u-spike': async function (el) {
       var login = el.getAttribute('data-cfg-login'), u = contaDe(login) || {};

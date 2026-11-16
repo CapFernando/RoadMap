@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="7d04726e81">
+<html lang="pt-BR" data-build="8d1a45843e">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -14,7 +14,7 @@
   <script src="config.js"></script>
 <!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
 <script src="axis.js?v=5a2b7be518"></script>
-<script src="axis-interface.js?v=cfdd203866"></script>
+<script src="axis-interface.js?v=9904095a84"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -752,7 +752,7 @@
 <script src="links-github.js?v=5ebb0e63ab"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=2b19b49af3"></script>
-<script src="selo-validacao.js?v=b4a6779519"></script>
+<script src="selo-validacao.js?v=b4c09d0a6d"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <!-- A data prometida ao solicitante faltava NESTE painel, e e ele que ordena
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
@@ -4145,10 +4145,10 @@ async function verificarSenha() {
    demandas deles (ou sem dono e marcadas Sales Ops). Espelho do Worker
    (`salesOpsForaDasTravas`). Desligar: false aqui e la. */
 const SALES_OPS_SEM_TRAVA = true;
-const SALES_OPS_LIVRES = ['josias', 'rikelme'];
-function ehSalesOpsLivre(nome) { return SALES_OPS_LIVRES.includes(normNome(nome).split(' ')[0] || ''); }
+/* 16/11/2026 (PRD RF-22): quem tem a liberacao e a marca `kanban_livre` da
+   CONTA (Usuarios / Configuracoes > Pessoas), e nao mais uma lista de nomes. */
 function salesOpsLivre(m) {
-  if (!SALES_OPS_SEM_TRAVA || !ehSalesOpsLivre(currentDev) || !m) return false;
+  if (!SALES_OPS_SEM_TRAVA || !(_eu && _eu.kanban_livre) || !m) return false;
   return m.dados_bi !== true;   // 10/11/2026: todo o kanban de dev/sales, menos Dados/BI
 }
 

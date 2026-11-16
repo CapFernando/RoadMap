@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="1c6d1e1ed4">
+<html lang="pt-BR" data-build="06f70d3b5a">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -14,7 +14,7 @@
   <script src="config.js"></script>
 <!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
 <script src="axis.js?v=5a2b7be518"></script>
-<script src="axis-interface.js?v=cfdd203866"></script>
+<script src="axis-interface.js?v=9904095a84"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
   <style>
@@ -1685,7 +1685,7 @@
 <script src="links-github.js?v=5ebb0e63ab"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=2b19b49af3"></script>
-<script src="selo-validacao.js?v=b4a6779519"></script>
+<script src="selo-validacao.js?v=b4c09d0a6d"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
 <script src="sprint.js?v=c7d0185502"></script>
@@ -15965,7 +15965,7 @@ function uLinhaAtiva(u) {
       '<label class="us-spike" title="Usa o app AXIS (axis.html); desmarcado, segue nestas telas">' +
         '<input type="checkbox"' + (u.interface_nova ? ' checked' : '') +
         ' onchange="uInterfaceNova(\'' + l + '\', this.checked)"> interface nova</label>' +
-      uMarcaAreaProduto(u, l) +
+      uMarcaAreaProduto(u, l) + uMarcasConta(u, l) +
       '</td>' +
     '<td>' + uCelulaNomeDemandas(u) + '</td>' +
     uCelulaPerfil(u) +
@@ -16147,6 +16147,27 @@ async function uAreaProduto(login, produto) {
     await uChamar('area-produto', { login, produto });
     if (_eu && _eu.login === login) _eu.area_produto = !!produto;
     toast(produto ? login + ' passa a ser da área de produto.' : login + ' sai da área de produto.', 'ok');
+  } catch (e) { toast(e.message, 'err'); }
+  await renderUsuarios();
+}
+
+/* KANBAN SEM TRAVAS E MARCA DO COMITE (PRD RF-22 a RF-24): eram listas fixas
+   no codigo (Josias e Rikelme; Guilherme Augusto). Agora sao marcas da conta,
+   que qualquer admin liga. A do comite so aparece em conta que nao e admin. */
+function uMarcasConta(u, l) {
+  return '<label class="us-spike" title="Move todo o Kanban de Desenvolvimento e Sales Ops sem as travas do painel do dev (menos Dados/BI)">' +
+    '<input type="checkbox"' + (u.kanban_livre ? ' checked' : '') +
+    ' onchange="uMarcaConta(\'kanban-livre\', \'' + l + '\', this.checked)"> kanban sem travas</label>' +
+    (u.papel === 'admin' ? '' : '<label class="us-spike" title="Pode marcar o validado pelo comitê (admin já pode)">' +
+    '<input type="checkbox"' + (u.marca_comite ? ' checked' : '') +
+    ' onchange="uMarcaConta(\'marca-comite\', \'' + l + '\', this.checked)"> marca o comitê</label>');
+}
+
+async function uMarcaConta(op, login, liga) {
+  try {
+    await uChamar(op, { login, liga });
+    const nome = op === 'kanban-livre' ? 'kanban sem travas' : 'marca o comitê';
+    toast((liga ? 'Ligado' : 'Desligado') + ' "' + nome + '" para ' + login + '.', 'ok');
   } catch (e) { toast(e.message, 'err'); }
   await renderUsuarios();
 }
