@@ -2840,6 +2840,38 @@ function demandaDaConta(m, ident) {
   return String(m.dev || '').split('/').map(x => norm(x)).filter(Boolean).some(n => aceitos.includes(n));
 }
 
+/* A DEMANDA E DESTA CONTA? O criterio da API (`meuDono`): o nome da conta, os
+ * nomes declarados (`nome_demandas`) e o derivado do e-mail, todos por
+ * igualdade sem acento e sem caixa, contra cada nome do campo `dev`. */
+function demandaDaConta(m, ident) {
+  const u = (ident && ident.usuario) || null;
+  if (!u || !m) return false;
+  const norm = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const eu = nomeNaDemanda(ident);
+  const declarados = String(u.nome_demandas || '').split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
+  const aceitos = [...declarados, nomeDemandasDoEmail(u.email || '', eu), eu].filter(Boolean).map(norm);
+  return String(m.dev || '').split('/').map(x => norm(x)).filter(Boolean).some(n => aceitos.includes(n));
+}
+
+/* QUEM TENTA TOMAR A DEMANDA DE OUTRO (PRD RF-14): no servidor ela ja tem
+ * dono, esse dono nao e quem grava, e o envio poe a demanda no nome de quem
+ * grava. Devolve [{ codigo, dono }]. Tirar o proprio nome (devolver a fila) e
+ * mexer em demanda sem dono nao entram. */
+function tomandoDemandaDeOutro(recebido, servidor, ident) {
+  if (!recebido || !Array.isArray(recebido.melhorias) || !ident || !ident.usuario) return [];
+  const antes = new Map(((servidor && servidor.melhorias) || []).map(v => [v && v.id, v]));
+  const fora = [];
+  for (const m of recebido.melhorias) {
+    const v = m && antes.get(m.id);
+    if (!v || !String(v.dev || '').trim()) continue;                 // sem dono no servidor: livre
+    if (String(m.dev || '') === String(v.dev || '')) continue;       // dono nao mudou
+    if (demandaDaConta(v, ident)) continue;                          // o dono era quem grava
+    if (!demandaDaConta(m, ident)) continue;                         // nao esta se pondo no nome
+    fora.push({ codigo: v.codigo || v.titulo || v.id, dono: String(v.dev).trim() });
+  }
+  return fora;
+}
+
 function preservaComite(recebido, servidor, autorizado) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const antes = new Map();
@@ -8953,6 +8985,20 @@ async function rotear(request, env, _histFila) {
                               '. De Planejado em diante toda demanda tem dono — sem ele a '  +
                               'entrega não entra em nenhum relatório por pessoa.' },
                     400, headers);
+      }
+      /* QUEM PEGOU PRIMEIRO FICA (PRD RF-13 e RF-14). O "Pegar da fila" grava
+         pela base mais nova: dois devs que viram a demanda sem dono ao mesmo
+         tempo gravariam os dois, e o segundo tiraria a demanda do primeiro em
+         silencio. Recusa quem tenta pôr no proprio nome uma demanda que, no
+         servidor, ja tem outro dono — e diz quem. */
+      const jaTemDono = tomandoDemandaDeOutro(data, antesDev, _ident);
+      if (jaTemDono.length) {
+        return json({ error: 'ja_tem_dono',
+                      itens: jaTemDono,
+                      codigos: jaTemDono.map(x => x.codigo),
+                      detail: jaTemDono.map(x => x.codigo + ' já está com ' + x.dono).join(' | ') +
+                              '. Outra pessoa pegou antes — a tela vai mostrar a fila atualizada' },
+                    409, headers);
       }
       const comecaSemDev = entrandoNoTrabalhoSemDev(data, antesDev);
       if (comecaSemDev.length) {

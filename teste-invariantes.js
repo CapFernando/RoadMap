@@ -26722,6 +26722,27 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
            /H\.api\('rascunho-gravar', \{ id: m\.id, texto: '' \}\)/.test(ACs) && /Planejado: ' \+ hp\.horas \+ ' h/.test(ACs),
            'o Item tem o rascunho do dono, salvo ao parar de digitar; a caixa de entregar vem com ele e com as horas planejadas, e entregar o apaga');
       }
+      /* QUEM PEGOU PRIMEIRO FICA (PRD RF-13 e RF-14, tarefa 10.0). */
+      {
+        const WG = lerTela('cloudflare-worker/worker.js');
+        const src = [corpo(WG, 'function demandaDaConta(m, ident) {'), corpo(WG, 'function tomandoDemandaDeOutro(recebido, servidor, ident) {')];
+        ok(src.every(Boolean), 'a trava de quem pegou primeiro existe no Worker');
+        if (src.every(Boolean)) {
+          const T = new Function('nomeNaDemanda', 'nomeDemandasDoEmail', src.join('\n') + '\nreturn tomandoDemandaDeOutro;')((i) => i.usuario.nome, () => '');
+          const bia = { usuario: { nome: 'Bia Souza' } };
+          const serv = { melhorias: [{ id: 'f', codigo: 'AX-1', dev: 'Ana Lima' }, { id: 'g', codigo: 'AX-2', dev: '' }, { id: 'h', codigo: 'AX-3', dev: 'Bia Souza' }] };
+          const r = T({ melhorias: [{ id: 'f', dev: 'Bia Souza' }, { id: 'g', dev: 'Bia Souza' }, { id: 'h', dev: '' }] }, serv, bia);
+          ok(r.length === 1 && r[0].codigo === 'AX-1' && r[0].dono === 'Ana Lima',
+             'recusa pegar a demanda que, no servidor, ja tem outro dono — e diz quem; a sem dono e a propria (devolver a fila) passam', JSON.stringify(r));
+          ok(!T({ melhorias: [{ id: 'f', dev: 'Ana Lima' }] }, serv, bia).length && !T({ melhorias: [{ id: 'f', dev: 'Bia Souza' }] }, serv, { usuario: null }).length,
+             'sem mudanca de dono nao recusa; e a senha compartilhada (sem conta) nao passa por esta trava');
+        }
+        const dp = WG.slice(WG.indexOf("body.action === 'dev-publish'"), WG.indexOf("body.action === 'dev-publish'") + 40000);
+        ok(/const jaTemDono = tomandoDemandaDeOutro\(data, antesDev, _ident\);/.test(dp) && /error: 'ja_tem_dono'/.test(dp) && /409, headers\);/.test(dp),
+           'o dev-publish (por onde o "Pegar da fila" grava) responde 409 ja_tem_dono');
+        ok(/if \(r\.codigo === 'ja_tem_dono'\) carregar\(\)\.then/.test(lerTela('axis-app.js')),
+           'o app diz quem pegou e rele a fila');
+      }
     }
     const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
     ok(/if \(sprint && \(!EST\.sprintPadrao \|\|[^\n]*\)\) \{\s*EST\.sprintPadrao = true; EST\.sprint = sprint; EST\.sprintAuto = sprint;/.test(INI) &&
