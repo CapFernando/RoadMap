@@ -238,7 +238,8 @@
     { grp: 'INTEGRAÇÕES', itens: [
       // A secao e uma tela propria (axis-tela-api.js): o item leva ate ela.
       { id: 'api', rotulo: 'API e integrações', real: true, href: '#api' },
-      { id: 'widget', rotulo: 'Widget', real: false }
+      { id: 'widget', rotulo: 'Widget', real: false },
+      { id: 'espelho', rotulo: 'Base no banco (D1)', real: true }
     ] },
     { grp: 'SEGURANÇA', itens: [
       { id: 'auditoria', rotulo: 'Auditoria', real: true }
@@ -286,6 +287,7 @@
       '.axa button.cfg-sw:focus-visible,.axa .cfg-papel:focus-visible{outline:2px solid var(--ac);outline-offset:2px}' +
       '.axa .cfg-it{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;background:var(--sf2);font-size:13px}' +
       '.axa .cfg-pend{border-color:rgba(var(--wn-rgb),.45);background:rgba(var(--wn-rgb),.06)}.axa .cfg-pend .cfg-it{flex-wrap:wrap}.axa .cfg-pend .btnp,.axa .cfg-pend .btn{min-height:44px}' +
+      '.axa .cfg-esp-dif{border-color:rgba(var(--wn-rgb),.45);background:rgba(var(--wn-rgb),.06)}' +
       '.axa .cfg-it.hj{box-shadow:inset 3px 0 0 var(--ac)}' +
       '.axa .cfg-it.pass{opacity:.6}' +
       '.axa .cfg-ton{height:44px;border-radius:10px;border:1px solid var(--bd2)}' +
@@ -1257,6 +1259,32 @@
       try { await navigator.clipboard.writeText(link); H.toast('Link do Planejamento copiado!'); }
       catch (_) { await caixa({ titulo: 'Copie o link', campos: [{ nome: 'link', rotulo: 'Link do Planejamento (somente leitura)', valor: link }], ok: 'Fechar' }); }
     },
+    'esp-status': async function () { carregarEspelho(true); },
+    'esp-comparar': async function () {
+      esp.rodando = 'comparar'; pintarEspelho();
+      try { var j = await H.api('espelho-d1', { op: 'comparar' }); esp.ultima = j.ultima || esp.ultima; H.toast(resumoEspelho(esp.ultima)); }
+      catch (e) { H.toast((e.corpo && e.corpo.detail) || 'Não foi possível comparar agora.', 'erro'); }
+      esp.rodando = ''; pintarEspelho();
+    },
+    /* A carga inicial e os reparos: uma fatia por chamada (o teto do plano
+       Free), repetindo enquanto restar algo; no fim, compara. */
+    'esp-sincronizar': async function () {
+      esp.rodando = 'sincronizar'; esp.progresso = ''; pintarEspelho();
+      var feitas = 0, voltas = 0;
+      try {
+        while (voltas < 40) {
+          voltas++;
+          var j = await H.api('espelho-d1', { op: 'sincronizar' });
+          feitas += (j.gravadas || 0) + (j.apagadas || 0);
+          esp.progresso = feitas + ' / ' + (j.total || '?'); pintarEspelho();
+          if (!j.restam) break;
+        }
+        var c = await H.api('espelho-d1', { op: 'comparar' });
+        esp.ultima = c.ultima || esp.ultima;
+        H.toast(H.plural(feitas, 'linha copiada', 'linhas copiadas') + '. ' + resumoEspelho(esp.ultima));
+      } catch (e) { H.toast((e.corpo && e.corpo.detail) || 'A sincronização parou no meio; rode de novo para continuar.', 'erro'); }
+      esp.rodando = ''; esp.progresso = ''; pintarEspelho();
+    },
     'link-view': async function () {
       var link = linkVisualizacao(location.origin + location.pathname.replace(/[^\/]*$/, ''), raiz.VIEW_CHAVE || '');
       try { await navigator.clipboard.writeText(link); H.toast('Link de visualização copiado!'); }
@@ -1273,6 +1301,60 @@
     folga: { rot: 'Folga', ico: 'pause', cor: 'in' }, outro: { rot: 'Outro', ico: 'pin', cor: 'pu' }
   };
   var feriadoISO = function (f) { return (f && typeof f === 'object' ? f.data : f) || ''; };
+
+  /* ═══ A BASE NO BANCO (PRD RF-35/36, passo 1) ═══════════════════════════
+     O espelho do melhorias.json no D1: se esta ligado, a ultima comparacao
+     (cron diario ou o botao) e, com o espelho ligado, comparar agora e a
+     sincronizacao em fatias (a carga inicial e ela com o banco vazio). O app
+     continua lendo do arquivo; isto so mostra se os dois batem. */
+  var esp = { carregando: false, erro: '', ligado: null, ultima: null, rodando: '', progresso: '' };
+  function carregarEspelho(forcar) {
+    if (esp.carregando || (!forcar && esp.ligado !== null)) return;
+    esp.carregando = true; esp.erro = '';
+    H.api('espelho-d1', { op: 'status' }).then(function (j) { esp.ligado = !!j.ligado; esp.ultima = j.ultima || null; })
+      .catch(function (e) { esp.erro = (e.corpo && e.corpo.detail) || String(e.message || e); })
+      .then(function () { esp.carregando = false; pintarEspelho(); });
+  }
+  function pintarEspelho() {
+    var A = raiz.AXIS_APP;
+    if (!A || A.APP.rota.aba !== 'espelho') return;
+    var box = document.getElementById('cfg-esp');
+    if (box) box.innerHTML = corpoEspelho();
+  }
+  function resumoEspelho(u) {
+    if (!u) return 'Nenhuma comparação registrada ainda.';
+    var n = (u.detalhe && u.detalhe.n) || {};
+    var partes = [];
+    if (n.faltando) partes.push(H.plural(n.faltando, 'demanda falta no banco', 'demandas faltam no banco'));
+    if (n.diferentes) partes.push(H.plural(n.diferentes, 'demanda diferente', 'demandas diferentes'));
+    if (n.sobrando) partes.push(H.plural(n.sobrando, 'demanda sobrando no banco', 'demandas sobrando no banco'));
+    if (n.meta) partes.push(H.plural(n.meta, 'chave de topo diferente', 'chaves de topo diferentes'));
+    return u.diferencas ? partes.join(' · ') : 'Zero diferenças entre o arquivo e o banco (' + H.plural((u.detalhe && u.detalhe.demandas) || 0, 'demanda', 'demandas') + ').';
+  }
+  function corpoEspelho() {
+    if (esp.erro) return H.vazio('alert', 'Não foi possível ler o estado do espelho', esp.erro, '<button type="button" class="btn" data-cfg-acao="esp-status">Tentar de novo</button>');
+    if (esp.ligado === null) return '<div class="sk" style="height:140px"></div>';
+    var u = esp.ultima, ok = u && !u.diferencas;
+    var quando = u ? H.dma(String(u.em).slice(0, 10)) + ' ' + String(u.em).slice(11, 16) + ' UTC · ' + (u.origem === 'cron' ? 'rotina diária' : 'comparação manual') : '';
+    var lista = function (rot, ids) { return ids && ids.length ? '<span class="note" style="font-size:12px"><b>' + esc(rot) + ':</b> ' + ids.map(esc).join(', ') + '</span>' : ''; };
+    var d = (u && u.detalhe) || {};
+    return '<section class="pn' + (u && u.diferencas ? ' cfg-esp-dif' : '') + '"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px">' +
+        '<h2 class="h2">' + (esp.ligado ? 'Espelho ligado' : 'Espelho desligado') + '</h2>' +
+        H.chip(esp.ligado ? (u ? (ok ? 'bate' : 'diferente') : 'sem comparação') : 'desligado', esp.ligado ? (u ? (ok ? 'ok' : 'wn') : 'bk') : 'bk') + '</div>' +
+      (esp.ligado ? '' : '<span class="note">Liga-se pela variável <span class="mono">ESPELHO_D1=1</span> no Worker. Desligado, nenhuma gravação copia nada para o banco e a rotina diária não compara.</span>') +
+      (u ? '<span style="font-weight:700">' + esc(resumoEspelho(u)) + '</span><span class="note">' + esc(quando) + '</span>' +
+           lista('Faltam', d.faltando) + lista('Diferentes', d.diferentes) + lista('Sobrando', d.sobrando) + lista('Chaves de topo', d.meta)
+         : '<span class="note">Nenhuma comparação registrada ainda.</span>') +
+      (esp.ligado ? '<div class="row" style="gap:8px;flex-wrap:wrap">' +
+        '<button type="button" class="btnp" data-cfg-acao="esp-comparar"' + (esp.rodando ? ' disabled' : '') + '>' + (esp.rodando === 'comparar' ? 'Comparando…' : 'Comparar agora') + '</button>' +
+        '<button type="button" class="btn" data-cfg-acao="esp-sincronizar"' + (esp.rodando ? ' disabled' : '') + ' title="Copia para o banco o que estiver diferente do arquivo, em fatias">' +
+          (esp.rodando === 'sincronizar' ? 'Sincronizando… ' + esc(esp.progresso) : 'Sincronizar com o arquivo') + '</button></div>' : '') +
+      '</section>';
+  }
+  function secEspelho(ctx) {
+    return cab('Base no banco (D1)', 'O espelho do arquivo de demandas no banco D1, passo 1 da migração: toda gravação continua indo para o arquivo e é copiada para o banco; uma rotina diária compara os dois. O AXIS continua lendo do arquivo.', '') +
+      '<div id="cfg-esp" style="display:flex;flex-direction:column;gap:16px">' + corpoEspelho() + '</div>';
+  }
 
   function secSprint(ctx) {
     var D = ctx.D, S = raiz.SPRINTPO, P = raiz.PIPELINES;
@@ -1553,6 +1635,7 @@
         : aba === 'sprint' ? secSprint(ctx)
         : aba === 'aparencia' ? secAparencia(ctx)
         : aba === 'auditoria' ? secAuditoria()
+        : aba === 'espelho' ? secEspelho(ctx)
         : secFutura(aba, ctx);
       return '<div class="cfg">' + nav(aba) + '<div class="view" style="min-width:0">' + corpo + '</div></div>';
     },
@@ -1561,6 +1644,7 @@
       if (aba === 'pessoas') carregarContas(false);
       if (aba === 'aparencia') pintarTons(el);
       if (aba === 'auditoria') carregarUsoAntiga(false);
+      if (aba === 'espelho') carregarEspelho(false);
 
       // Buscas: so a lista redesenha, o campo fica com o foco. Por delegacao,
       // porque a secao do catalogo e redesenhada inteira ao escolher sistema.

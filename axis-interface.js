@@ -102,6 +102,8 @@
         e.area_produto = !!j.usuario.area_produto;
         e.kanban_livre = !!j.usuario.kanban_livre;
         e.marca_comite = !!j.usuario.marca_comite;
+        // Diferenca no espelho da base no D1 (so vem para a area de produto).
+        e.espelho_dif = Number(j.espelho_dif) || 0;
         if (j.papel) e.papel = j.papel;
         ['login', 'nome', 'email', 'nome_demandas'].forEach(function (k) { if (j.usuario[k] != null && e[k] == null) e[k] = j.usuario[k]; });
         try { sessionStorage.setItem('rm_eu', JSON.stringify(e)); } catch (_) {}

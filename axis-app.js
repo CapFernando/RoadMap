@@ -1138,6 +1138,10 @@
       var pend = raiz.SPRINTPO && raiz.SPRINTPO.pendentesDeFechamento ? (raiz.SPRINTPO.pendentesDeFechamento(APP.D, hoje(), (APP.D || {}).feriados || [], colunaDe) || []) : [];
       if (pend.length) lista.push({ ico: 'refresh', cor: 'var(--wn-t)', txt: '<b>' + plural(pend.length, 'sprint terminou', 'sprints terminaram') + '</b> e não ' + (pend.length === 1 ? 'foi fechada' : 'foram fechadas'), href: '#sprints/encerrar' });
     }
+    /* O espelho da base no D1 nao bate com o arquivo (ultima comparacao): o
+       Worker so manda o numero para a area de produto, com o espelho ligado. */
+    var espDif = Number((APP.eu || {}).espelho_dif) || 0;
+    if (espDif > 0) lista.push({ ico: 'alert', cor: 'var(--wn-t)', txt: '<b>' + plural(espDif, 'diferença', 'diferenças') + '</b> entre o arquivo de demandas e o banco (D1)', href: APP.papel === 'admin' ? '#configuracoes/espelho' : '#inicio' });
     // O pessoal vale para quem tem demanda no nome, o PM/PO que tambem
     // desenvolve inclusive — e nao so para o perfil dev.
     var minhas = vs.filter(minha);
