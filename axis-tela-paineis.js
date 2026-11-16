@@ -733,6 +733,15 @@
     s.id = 'css-tela-paineis';
     s.textContent = [
       '.axa .gx-hd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px}',
+      /* Saude do backlog (PRD RF-26/27): uma linha por problema, que abre a lista. */
+      '.axa .sd-lista{display:flex;flex-direction:column;gap:10px}',
+      '.axa .sd-it>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;min-height:44px}',
+      '.axa .sd-it>summary::-webkit-details-marker{display:none}',
+      '.axa .sd-it[data-vazio]>summary{opacity:.7}',
+      '.axa .sd-t{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:13.5px;color:var(--tx)}',
+      '.axa .sd-dem{display:flex;flex-direction:column;margin-top:10px;border-top:1px solid var(--bd)}',
+      '.axa .sd-l{display:grid;grid-template-columns:90px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--bd);text-decoration:none;color:var(--tx);font-size:13px;min-height:44px}',
+      '.axa .sd-l:hover{background:var(--sf4)}',
       '.axa .gx-g{display:grid;gap:16px;align-items:start}',
       '.axa .gx-k4{grid-template-columns:repeat(4,minmax(0,1fr))}.axa .gx-k5{grid-template-columns:repeat(5,minmax(0,1fr))}.axa .gx-k6{grid-template-columns:repeat(6,minmax(0,1fr))}',
       '.axa .gx-k4,.axa .gx-k5,.axa .gx-k6{align-items:stretch}',
@@ -821,12 +830,44 @@
   var _sprSel = '';         // Pontos: sprint aberta no ranking
   var _alvoPag = '';        // trocar de mes volta a tabela para a pagina 1
 
+  /* ═══ SAUDE DO BACKLOG (PRD RF-26 e RF-27) ════════════════════════════════
+     Tudo o que esta travado ou incompleto, numa lista so: cada linha com a
+     contagem e as demandas dela (a contagem e o tamanho da lista). A regra e
+     `SAUDE.problemas`, com as regras das outras telas injetadas. */
+  function saude(ctx) {
+    var S = raiz.SAUDE, D = ctx.D || {};
+    var hd = cabecalho('Saúde do backlog', 'O que está travado ou incompleto agora, em todo o backlog. Abra uma linha para ver as demandas.', '',
+      '<span class="note">Painéis › Saúde</span>');
+    if (!S) return hd + H.vazio('alert', 'O módulo da saúde do backlog não carregou', 'saude-backlog.js precisa vir antes deste arquivo.');
+    var SP = raiz.SPRINTPO, HO = raiz.HOMOLOGACAO, PA = raiz.PAUSA;
+    var ps = S.problemas(D, H.hoje(), {
+      etapaDe: H.colunaDe, etapaEfetiva: H.etapaDe, pontosDe: H.pontosDe,
+      situacaoDaSprint: function (r) { return SP ? SP.situacaoDaSprint(D, r) : ''; },
+      diasNaArea: function (m, h) { return HO ? HO.diasNaArea(m, h) : 0; },
+      retornoVencido: function (m, h) { return PA && PA.retornoVencido ? PA.retornoVencido(m, h) : false; }
+    });
+    var por = {}; (D.melhorias || []).forEach(function (m) { if (m && m.id) por[m.id] = m; });
+    var total = ps.reduce(function (t, p) { return t + p.n; }, 0);
+    return hd + (total ? '' : H.vazio('check', 'Nada travado nem incompleto agora', 'Quando aparecer algo, cada problema vira uma linha aqui.')) +
+      '<div class="sd-lista">' + ps.map(function (p) {
+        var cor = p.n ? (p.k === 'vencida' || p.k === 'terceiro_vencido' ? 'dg' : 'wn') : 'ok';
+        return '<details class="pn sd-it"' + (p.n ? '' : ' data-vazio="1"') + '><summary><span class="sd-t"><b>' + esc(p.rotulo) + '</b><span class="note">' + esc(p.d) + '</span></span>' +
+          H.chip(H.num(p.n), cor) + '</summary>' +
+          (p.n ? '<div class="sd-dem">' + p.ids.map(function (id) {
+            var m = por[id];
+            return m ? '<a class="sd-l" href="' + H.hrefItem(m) + '"><span class="mono">' + esc(m.codigo || '—') + '</span><span class="ell">' + esc(m.titulo || '') + '</span>' +
+              '<span class="note">' + esc(m.dev || 'sem dono') + '</span></a>' : '';
+          }).join('') + '</div>' : '<span class="note">Nenhuma demanda nesta situação.</span>') + '</details>';
+      }).join('') + '</div>';
+  }
+
   function abasDe(r) {
     var m = r.param && ehAlvo(r.param.split('/')[0]) ? '/' + r.param.split('/')[0] : (_alvo ? '/' + _alvo : '');
     return [
       { id: 'visao', rotulo: 'Visão geral', href: '#paineis/visao' + m },
       { id: 'fluxo', rotulo: 'Fluxo e pessoas', href: '#paineis/fluxo' + m },
-      { id: 'pontos', rotulo: 'Pontos', href: '#paineis/pontos' + m }
+      { id: 'pontos', rotulo: 'Pontos', href: '#paineis/pontos' + m },
+      { id: 'saude', rotulo: 'Saúde', href: '#paineis/saude' }
     ];
   }
 
@@ -1372,15 +1413,16 @@
   css();
   raiz.AXIS_APP.tela({
     id: 'paineis', rotulo: 'Painéis', papeis: ['admin', 'consulta'],
-    abas: [{ id: 'visao', rotulo: 'Visão geral' }, { id: 'fluxo', rotulo: 'Fluxo e pessoas' }, { id: 'pontos', rotulo: 'Pontos' }],
+    abas: [{ id: 'visao', rotulo: 'Visão geral' }, { id: 'fluxo', rotulo: 'Fluxo e pessoas' }, { id: 'pontos', rotulo: 'Pontos' }, { id: 'saude', rotulo: 'Saúde' }],
     abasDe: abasDe,
-    titulo: function (r) { return 'Painéis · ' + ({ visao: 'Visão geral', fluxo: 'Fluxo e pessoas', pontos: 'Pontos' }[r.aba] || ''); },
+    titulo: function (r) { return 'Painéis · ' + ({ visao: 'Visão geral', fluxo: 'Fluxo e pessoas', pontos: 'Pontos', saude: 'Saúde' }[r.aba] || ''); },
     render: function (el, ctx) {
       css();
       var alvo = alvoDe(ctx.param);
       if (alvo !== _alvoPag) { _alvoPag = alvo; _pagDem = 0; }
       if (ctx.aba === 'fluxo') return fluxo(ctx, alvo);
       if (ctx.aba === 'pontos') return pontos(ctx, alvo);
+      if (ctx.aba === 'saude') return saude(ctx);
       return visao(ctx, alvo);
     },
     depois: function (el, ctx) {

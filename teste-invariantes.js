@@ -26468,6 +26468,39 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(/!EST\.sprintManual && EST\.sprintAuto !== sprint && EST\.sprint === EST\.sprintAuto/.test(lerTela('axis-tela-inicio.js')) &&
          /spr\.onchange = function \(\) \{ EST\.sprint = spr\.value; EST\.sprintManual = true;/.test(lerTela('axis-tela-inicio.js')),
          'e o Meu trabalho do app tambem: o padrao vira com a semana enquanto a pessoa nao escolhe outra sprint');
+      /* SAUDE DO BACKLOG (PRD RF-26 e RF-27, tarefa 11.0): `SAUDE.problemas`. */
+      {
+        const SD = require('./saude-backlog.js');
+        const M = (id, o) => Object.assign({ id, codigo: 'AX-' + id, titulo: 'T', dev: 'Ana', tema_id: 't1', status_planejamento: 'em_andamento', poker_pontos: 3 }, o);
+        const D = { melhorias: [
+          M('1', { dev: '', sprint_po: 'S3-11-2026', status_planejamento: 'planejado' }),   // sem dono, sprint em curso
+          M('2', { dev: '', sprint_po: 'S4-11-2026', status_planejamento: 'planejado' }),   // sem dono, sprint montando: nao
+          M('3', { poker_pontos: 0 }),                                                       // comprometida sem pontos
+          M('4', { status_planejamento: 'validacao_area' }),                                 // 6 dias na area
+          M('5', { status_planejamento: 'validacao_area' }),                                 // 2 dias: nao
+          M('6', { entrega: '2026-11-10' }),                                                 // vencida
+          M('7', { tema_id: '' }),                                                           // sem sistema
+          M('8', { pausado_em: '2026-11-05', pausa_terceiro: { nome: 'Banco X', retorno: '2026-11-12' } }),
+          M('9', { status_planejamento: 'concluido', poker_pontos: 0, tema_id: '' }),        // concluida: nada
+          M('10', { status_planejamento: 'backlog', poker_pontos: 0, tema_id: '' }),         // backlog: nem pontos nem sistema
+          M('11', { mesclado_em: '2026-11-01', poker_pontos: 0 }) ] };                       // mesclada: nada
+        const opts = {
+          situacaoDaSprint: (r) => (r === 'S3-11-2026' ? 'em_curso' : 'montando'),
+          diasNaArea: (m) => (m.id === '4' ? 6 : 2),
+          etapaEfetiva: (m) => (m.entrega && m.entrega < '2026-11-16' && m.status_planejamento === 'em_andamento' ? 'atrasado' : m.status_planejamento),
+          retornoVencido: (m, h) => require('./pausa.js').retornoVencido(m, h) };
+        const ps = SD.problemas(D, '2026-11-16', opts);
+        const res = ps.map((p) => p.k + '=' + p.ids.join(',')).join(' ');
+        ok(res === 'sem_dono_na_sprint=1 sem_pontos=3 parada_na_area=4 vencida=6 sem_sistema=7 terceiro_vencido=8',
+           'saude: cada categoria pega so a sua demanda (sem dono em sprint em curso, sem pontos, parada na area, vencida, sem sistema, terceiro vencido)', res);
+        ok(ps.every((p) => p.n === p.ids.length) && ps.map((p) => p.k).join() === SD.CATEGORIAS.map((c) => c.k).join(),
+           'saude: a contagem e o tamanho da lista que a linha abre, e a ordem e a da tela (RF-27)');
+        ok(SD.problemas({ melhorias: [] }, '2026-11-16', opts).every((p) => p.n === 0), 'saude: base vazia, todas as linhas em zero');
+        const PN = lerTela('axis-tela-paineis.js');
+        ok(/function saude\(ctx\)/.test(PN) && /if \(ctx\.aba === 'saude'\) return saude\(ctx\);/.test(PN) && /etapaDe: H\.colunaDe, etapaEfetiva: H\.etapaDe, pontosDe: H\.pontosDe/.test(PN) &&
+           /<script src="saude-backlog\.js\?v=/.test(lerTela('axis.html')),
+           'Paineis ganhou a aba Saude, com as regras das outras telas injetadas');
+      }
     }
     const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
     ok(/if \(sprint && \(!EST\.sprintPadrao \|\|[^\n]*\)\) \{\s*EST\.sprintPadrao = true; EST\.sprint = sprint; EST\.sprintAuto = sprint;/.test(INI) &&
