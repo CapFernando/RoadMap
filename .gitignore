@@ -46,3 +46,7 @@ node_modules/
 
 # Metadado do Finder (macOS).
 .DS_Store
+
+# PRDs, tech specs e tarefas (skills criar-prd/criar-techspec/criar-tasks):
+# ficam so na maquina. O repositorio e publico e eles citam pessoas e problemas internos.
+.tasks/
