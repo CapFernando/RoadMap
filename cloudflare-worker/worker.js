@@ -2744,6 +2744,86 @@ function podeMarcarComite(ident) {
  *
  *  Compara pelo conteudo, e nao por presenca: quem nao mexeu reenvia igual, e
  *  igual nao e tentativa. */
+/* ═══ A PAUSA POR TERCEIRO ABRE E FECHA O ACOMPANHAMENTO (PRD RF-18 e RF-19) ═
+ *
+ * "Cobrar o fornecedor no dia certo": aprovada uma pausa por terceiro, nasce
+ * um acompanhamento (data/follow.json) com o fornecedor e o retorno prometido;
+ * retomada a demanda, ele e encerrado. Feito AQUI, depois de a base gravar, e
+ * nao na tela: vale igual para quem aprova pelo app ou pelo admin antigo.
+ *
+ * IDEMPOTENTE pela chave `pausa:<id>:<pausado_em>` em `origem.chave`: rodar de
+ * novo nao duplica, e uma pausa nova da mesma demanda (outro `pausado_em`) e
+ * outro acompanhamento. So mexe nos acompanhamentos que ELE criou
+ * (`origem.tipo === 'pausa_terceiro'`) — os escritos a mao nao se tocam.
+ *
+ * Sem data prometida, o retorno fica para daqui a 7 dias, com a observacao
+ * dizendo isso: o follow exige data, e "nunca cobrar" seria pior.
+ *
+ * `pausasParaAcompanhar(melhorias, hoje)` e a regra pura (testada lado a lado);
+ * `sincronizaAcompanhamentosDaPausa` le e grava o arquivo. Falha aqui NUNCA
+ * desfaz nem atrasa a gravacao da base: so registra no log. */
+function chavePausaTerceiro(m) { return 'pausa:' + m.id + ':' + String(m.pausado_em || '').slice(0, 10); }
+function pausasParaAcompanhar(melhorias, itens, hoje) {
+  const dia = String(hoje || '').slice(0, 10);
+  const mais7 = (() => { const q = dia.split('-').map(Number); return new Date(Date.UTC(q[0], q[1] - 1, q[2] + 7)).toISOString().slice(0, 10); })();
+  const desejadas = new Map();
+  for (const m of melhorias || []) {
+    if (!m || !m.id || m.oculto || m.mesclado_em) continue;
+    const t = m.pausa_terceiro;
+    if (!String(m.pausado_em || '').trim() || !t || typeof t !== 'object' || !String(t.nome || '').trim()) continue;
+    desejadas.set(chavePausaTerceiro(m), { m, t });
+  }
+  const daPausa = (itens || []).filter(it => it && it.origem && it.origem.tipo === 'pausa_terceiro');
+  const existentes = new Set(daPausa.map(it => it.origem.chave));
+  const criar = [];
+  for (const [chave, { m, t }] of desejadas) {
+    if (existentes.has(chave)) continue;
+    const prometido = /^\d{4}-\d{2}-\d{2}$/.test(String(t.retorno || '')) ? String(t.retorno) : '';
+    criar.push({
+      id: 'fw-pausa-' + String(m.id).slice(-12) + '-' + String(m.pausado_em).slice(0, 10).replace(/-/g, ''),
+      atividade: limpaTexto('Retorno de ' + t.nome + ' sobre ' + (m.codigo ? m.codigo + ' ' : '') + (m.titulo || ''), 200),
+      pessoa: limpaTexto(t.nome, 80),
+      retorno: prometido || mais7,
+      observacao: limpaTexto([m.pausa_motivo ? 'O que se espera: ' + m.pausa_motivo : '',
+                              t.contato ? 'Contato: ' + t.contato : '',
+                              prometido ? '' : 'Sem data prometida: cobrar em uma semana.'].filter(Boolean).join('\n'), 2000),
+      concluido: false, concluido_em: '', criado_em: new Date().toISOString(),
+      origem: { tipo: 'pausa_terceiro', melhoria_id: m.id, chave },
+    });
+  }
+  const encerrar = daPausa.filter(it => !it.concluido && !desejadas.has(it.origem.chave)).map(it => it.id);
+  return { criar, encerrar };
+}
+async function sincronizaAcompanhamentosDaPausa(gh, melhorias, hoje) {
+  try {
+    const temTerceiro = (melhorias || []).some(m => m && m.pausa_terceiro);
+    for (let tentativa = 0; tentativa < 2; tentativa++) {
+      const meta = await gh('contents/' + FOLLOW_PATH + '?t=' + Date.now());
+      if (!meta.ok && meta.status !== 404) return;
+      const sha = meta.ok ? (await meta.json()).sha : null;
+      let doc = { itens: [] };
+      if (sha) {
+        const raw = await gh('contents/' + FOLLOW_PATH + '?raw=' + Date.now(), { headers: { Accept: 'application/vnd.github.raw' } });
+        if (!raw.ok) return;
+        try { doc = JSON.parse(await raw.text()) || { itens: [] }; } catch (_) { return; }
+      }
+      const itens = Array.isArray(doc.itens) ? doc.itens : [];
+      if (!temTerceiro && !itens.some(it => it && it.origem && it.origem.tipo === 'pausa_terceiro' && !it.concluido)) return;
+      const { criar, encerrar } = pausasParaAcompanhar(melhorias, itens, hoje);
+      if (!criar.length && !encerrar.length) return;
+      const agora = new Date().toISOString();
+      const fecha = new Set(encerrar);
+      const novos = itens.map(it => (it && fecha.has(it.id) ? Object.assign({}, it, { concluido: true, concluido_em: agora }) : it)).concat(criar);
+      const novoDoc = { itens: novos, atualizado_em: agora };
+      const corpo = { message: 'chore: acompanhamentos da pausa por terceiro ' + agora, content: toB64(JSON.stringify(novoDoc, null, 2)) };
+      if (sha) corpo.sha = sha;
+      const put = await gh('contents/' + FOLLOW_PATH, { method: 'PUT', body: JSON.stringify(corpo) });
+      if (put.ok) return;
+      if (put.status !== 409 && put.status !== 422) { console.log('[acompanhamento da pausa] falha ' + put.status); return; }
+    }
+  } catch (e) { console.log('[acompanhamento da pausa] ' + (e && e.message || e)); }
+}
+
 function preservaComite(recebido, servidor, autorizado) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const antes = new Map();
@@ -6939,6 +7019,12 @@ async function rotear(request, env, _histFila) {
           concluido: !!it.concluido,
           concluido_em: it.concluido ? (String(it.concluido_em || '') || new Date().toISOString()) : '',
           criado_em: String(it.criado_em || '') || new Date().toISOString(),
+          /* A MARCA DE QUEM CRIOU (PRD RF-18): o acompanhamento nascido de uma
+             pausa por terceiro carrega `origem`. Editado na tela, ele volta
+             com ela — sem isto a marca sumia e a sincronizacao o recriava. */
+          ...(it.origem && it.origem.tipo === 'pausa_terceiro'
+            ? { origem: { tipo: 'pausa_terceiro', melhoria_id: limpaTexto(it.origem.melhoria_id, 60),
+                          chave: limpaTexto(it.origem.chave, 120) } } : {}),
         });
       }
 
@@ -8568,6 +8654,8 @@ async function rotear(request, env, _histFila) {
                     409, headers);
       }
       if (!gravou.ok) return json({ error: 'Falha ao salvar', detail: gravou.detalhe }, 502, headers);
+      // A pausa por terceiro abre e fecha o acompanhamento (PRD RF-18/19); falha aqui nao desfaz nada.
+      await sincronizaAcompanhamentosDaPausa(gh, data.melhorias, hojeBR());
       // `espelhos_descartados` vai na resposta para o descarte nao ser silencioso:
       // se uma tela voltar a mandar espelho, aparece aqui em vez de virar um dado
       // que ninguem sabe explicar de onde veio.
@@ -8863,6 +8951,7 @@ async function rotear(request, env, _histFila) {
                     409, headers);
       }
       if (!gravouDev.ok) return json({ error: 'Falha ao salvar', detail: gravouDev.detalhe }, 502, headers);
+      await sincronizaAcompanhamentosDaPausa(gh, data.melhorias, hojeBR());
       // Diz o que foi revertido: gravar diferente do que a tela mandou e recusar em
       // silencio, e a pessoa so descobriria no proximo F5.
       return json({ ok: true, datas_revertidas: datasRevertidas,
