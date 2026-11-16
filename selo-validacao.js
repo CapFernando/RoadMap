@@ -228,7 +228,7 @@
    *
    *   papel `admin`   é o PM/PO. Paullymax JÁ ENTRA por aqui — a conta dele é
    *                   admin —, então ele não precisa da lista.
-   *   `COMITE_LOGINS` a liderança que NÃO é PM/PO. Hoje só o Guilherme
+   *   `marca_comite`  a liderança que NÃO é PM/PO (marca da conta). Hoje só o Guilherme
    *                   Augusto, cuja conta é `dev`.
    *
    * ═══════════════════════════════════════════════════════════════════════════
@@ -239,7 +239,9 @@
    * comitê — e ninguém notaria, porque a marca sairia igual. O login é único
    * por construção; o nome de exibição não é.
    */
-  var COMITE_LOGINS = ['guilherme.augusto'];
+  /* 16/11/2026 (PRD RF-23): a lista de logins virou a marca `marca_comite` da
+     conta, que vem no login e no quem-sou (`u.marca_comite`). Continua por
+     CONTA, e nao por nome: o outro Guilherme segue de fora. */
 
   /** `u` é `{ login, papel }` — o que as telas têm em `_eu` e o Worker em
    *  `ident.usuario`. Sem identidade, não autoriza: marcar comitê é uma
@@ -247,8 +249,8 @@
   function podeComite(u) {
     if (!u) return false;
     if (texto(u.papel).toLowerCase() === 'admin') return true;
-    var l = texto(u.login).toLowerCase();
-    return !!l && COMITE_LOGINS.indexOf(l) >= 0;
+    // 16/11/2026 (PRD RF-23): a segunda porta e a marca `marca_comite` da conta.
+    return !!u.marca_comite;
   }
 
   function comite(m) {
@@ -411,6 +413,6 @@
                 cobertura: cobertura, pct: pct,
                 comite: comite, tituloComite: tituloComite,
                 badgeComite: badgeComite, badges: badges,
-                podeComite: podeComite, COMITE_LOGINS: COMITE_LOGINS };
+                podeComite: podeComite };
   if (typeof module !== 'undefined' && module.exports) module.exports = raiz.SELO;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

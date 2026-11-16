@@ -22764,9 +22764,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const QUEM = [
       ['Fernando (PM/PO)', { login: 'fernando', papel: 'admin' }, true],
       ['Paullymax (lideranca, ja admin)', { login: 'paullymax.faria', papel: 'admin' }, true],
-      ['Guilherme Augusto (lideranca, dev)', { login: 'guilherme.augusto', papel: 'dev' }, true],
-      /* O OUTRO GUILHERME DEV. Casar por primeiro nome o autorizaria, e
-         ninguem notaria — a marca sairia igual. Por isso a regra e por LOGIN. */
+      // 16/11/2026 (PRD RF-23): a lideranca entra pela marca `marca_comite` da conta, e nao pela lista de logins.
+      ['Guilherme Augusto (lideranca, dev, com a marca)', { login: 'guilherme.augusto', papel: 'dev', marca_comite: true }, true],
+      ['Guilherme Augusto sem a marca (desligada pelo admin)', { login: 'guilherme.augusto', papel: 'dev' }, false],
+      /* O OUTRO GUILHERME DEV. A regra e por CONTA (a marca), nao por nome:
+         o mesmo primeiro nome nao autoriza. */
       ['Guilherme Eloi (outro Guilherme dev)', { login: 'guilherme.oliveira', papel: 'dev' }, false],
       ['um dev qualquer', { login: 'leite', papel: 'dev' }, false],
       ['analista', { login: 'x', papel: 'analista' }, false],
@@ -22869,11 +22871,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const srcPode = corpo(W, 'function podeMarcarComite(');
     ok(!!srcPode, 'o Worker tem a sua copia de quem pode marcar');
     if (srcPode) {
-      const doW = new Function('ident',
-        "const COMITE_LOGINS = ['guilherme.augusto'];\n" +
-        srcPode + '\nreturn podeMarcarComite(ident);');
+      const doW = new Function('ident', srcPode + '\nreturn podeMarcarComite(ident);');
       const divergem = QUEM.filter(([nome, u]) => {
-        const ident = u ? { papel: u.papel, usuario: { login: u.login } } : null;
+        const ident = u ? { papel: u.papel, usuario: { login: u.login, marca_comite: !!u.marca_comite } } : null;
         return doW(ident) !== SELOM.podeComite(u);
       });
       ok(!divergem.length,
@@ -26468,6 +26468,29 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(/!EST\.sprintManual && EST\.sprintAuto !== sprint && EST\.sprint === EST\.sprintAuto/.test(lerTela('axis-tela-inicio.js')) &&
          /spr\.onchange = function \(\) \{ EST\.sprint = spr\.value; EST\.sprintManual = true;/.test(lerTela('axis-tela-inicio.js')),
          'e o Meu trabalho do app tambem: o padrao vira com a semana enquanto a pessoa nao escolhe outra sprint');
+      /* KANBAN SEM TRAVAS E MARCA DO COMITE (PRD RF-22 a RF-25, tarefa 5.0): as
+         duas listas fixas viram marcas da conta, com a primeira carga igual. */
+      {
+        const WK = lerTela('cloudflare-worker/worker.js');
+        ok(/colunaSeFaltar\(db, 'usuario', 'kanban_livre'/.test(WK) && /colunaSeFaltar\(db, 'usuario', 'marca_comite'/.test(WK) &&
+           /\['josias', 'rikelme'\]\.includes\(primeiro\(u\.nome \|\| u\.login\)\)/.test(WK) &&
+           /SELECT 1 AS x FROM usuario WHERE kanban_livre = 1 LIMIT 1/.test(WK) &&
+           /WHERE login = 'guilherme\.augusto'\s+AND NOT EXISTS \(SELECT 1 FROM usuario WHERE marca_comite = 1\)/.test(WK),
+           'a primeira carga marca quem as listas marcavam, e so enquanto ninguem tem a marca');
+        ok(/kanban_livre: !!r\.kanban_livre,\s+marca_comite: !!r\.marca_comite/.test(WK) && /kanban_livre: !!u\.kanban_livre,\s+marca_comite: !!u\.marca_comite/.test(WK) &&
+           /if \(op === 'kanban-livre' \|\| op === 'marca-comite'\)/.test(WK),
+           'as marcas vem na sessao e no login, e qualquer admin as liga em Usuarios');
+        const semLista = (f) => !/SALES_OPS_LIVRES\s*=|COMITE_LOGINS\s*=|function ehSalesOpsLivre/.test(lerTela(f));
+        ok(['cloudflare-worker/worker.js', 'dev.html', 'axis-acoes.js', 'selo-validacao.js'].every(semLista),
+           'nenhuma lista de nomes ou logins sobra nessas regras (Worker, painel do dev, app e selo)');
+        const ACk = require('./axis-acoes.js');
+        const m = { id: 'x', status_planejamento: 'backlog', dados_bi: false };
+        ok(ACk.salesOpsLivre(m, { papel: 'dev', eu: { kanban_livre: true } }) && !ACk.salesOpsLivre(m, { papel: 'dev', quem: 'Rikelme Santos', eu: {} }) &&
+           !ACk.salesOpsLivre(Object.assign({}, m, { dados_bi: true }), { papel: 'dev', eu: { kanban_livre: true } }),
+           'no app, a liberacao vem da marca da conta na sessao; o nome nao libera, e Dados/BI segue fora');
+        ok(/e\.kanban_livre = !!j\.usuario\.kanban_livre;/.test(lerTela('axis-interface.js')) && /eu: AX\.APP\.eu \|\| null/.test(lerTela('axis-acoes.js')),
+           'uma sessao aberta pega a marca nova pelo quem-sou, e o contexto das acoes a carrega');
+      }
     }
     const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
     ok(/if \(sprint && \(!EST\.sprintPadrao \|\|[^\n]*\)\) \{\s*EST\.sprintPadrao = true; EST\.sprint = sprint; EST\.sprintAuto = sprint;/.test(INI) &&
@@ -30075,14 +30098,17 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const i0 = W.indexOf('const SALES_OPS_SEM_TRAVA'), i1 = W.indexOf('function faltaHoras(m) {');
     ok(i0 > 0 && i1 > i0, 'a liberacao do Sales Ops existe no Worker');
     if (i0 > 0 && i1 > i0) {
-      const T = new Function(W.slice(i0, i1) + '\nreturn { salesOpsForaDasTravas, ehSalesOpsLivre };')();
+      const T = new Function(W.slice(i0, i1) + '\nreturn { salesOpsForaDasTravas, contaKanbanLivre };')();
       /* 10/11/2026: todo o kanban de dev/sales sai das travas; so Dados/BI fica. */
       const d = { melhorias: [{ id: '1', dev: 'Josias Bueno' }, { id: '2', dev: 'Marina', dados_bi: true }, { id: '3', dev: '', sales_ops: true }, { id: '4', dev: 'Hugo' }, { id: '5', dev: 'Ana', dados_bi: false }] };
       const sv = { melhorias: [{ id: '1', dev: 'Josias Bueno' }, { id: '2', dev: 'Marina', dados_bi: true }, { id: '4', dev: 'Hugo' }, { id: '5', dev: 'Ana', dados_bi: true }] };
-      const g = T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Josias Bueno' } });
-      ok(g.melhorias.map(m => m.id).join(',') === '2,5', 'todo o kanban de dev/sales sai das travas para eles; a de Dados/BI (antes ou depois) nao',
+      // 16/11/2026 (PRD RF-22): quem sai das travas e a CONTA com a marca `kanban_livre`, e nao o primeiro nome.
+      const g = T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Josias Bueno', kanban_livre: true } });
+      ok(g.melhorias.map(m => m.id).join(',') === '2,5', 'todo o kanban de dev/sales sai das travas para a conta com a marca; a de Dados/BI (antes ou depois) nao',
          g.melhorias.map(m => m.id).join(','));
-      ok(T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Marina' } }) === d, 'e para quem nao e do Sales Ops nada muda');
+      ok(T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Marina' } }) === d, 'e para quem nao tem a marca nada muda');
+      ok(T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Josias Bueno' } }) === d && T.salesOpsForaDasTravas(d, sv, { usuario: null }) === d,
+         'o nome sozinho nao libera mais nada, nem a senha compartilhada (sem conta)');
     }
     const dp = W.slice(W.indexOf("body.action === 'dev-publish'"), W.indexOf('const voltaramDev = preservaChaves(data, antesDev);'));
     const iT = dp.indexOf('data.melhorias = salesOpsForaDasTravas(data, antesDev, _ident).melhorias;');
@@ -30090,7 +30116,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(iT > 0 && iT < iD && /data\.melhorias = _todasDev;/.test(W.slice(W.indexOf("body.action === 'dev-publish'"), W.indexOf('const voltaramDev = preservaChaves(data, antesDev);') + 60)),
        'na rota do painel do dev as travas conferem sem o Sales Ops, e a lista volta inteira antes de gravar');
     const DV = require('fs').readFileSync(__dirname + '/dev.html', 'utf8');
-    ok(/const SALES_OPS_SEM_TRAVA = true;/.test(DV) && /salesOpsLivre\(m\)\)\) \{ setTimeout\(\(\) => updateStatus\(id, colKey\), 0\); return; \}/.test(DV) &&
+    ok(/const SALES_OPS_SEM_TRAVA = true;/.test(DV) && /!\(_eu && _eu\.kanban_livre\)/.test(DV) && /salesOpsLivre\(m\)\)\) \{ setTimeout\(\(\) => updateStatus\(id, colKey\), 0\); return; \}/.test(DV) &&
        /id="ms-sprint-sel"/.test(DV), 'e a tela do dev libera o arraste e a escolha de sprint para eles');
   }
 

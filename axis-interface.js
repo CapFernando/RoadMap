@@ -100,6 +100,8 @@
         e.interface_nova = !!j.usuario.interface_nova;
         // A area de produto tambem muda sem novo login (Usuarios, no admin).
         e.area_produto = !!j.usuario.area_produto;
+        e.kanban_livre = !!j.usuario.kanban_livre;
+        e.marca_comite = !!j.usuario.marca_comite;
         if (j.papel) e.papel = j.papel;
         ['login', 'nome', 'email', 'nome_demandas'].forEach(function (k) { if (j.usuario[k] != null && e[k] == null) e[k] = j.usuario[k]; });
         try { sessionStorage.setItem('rm_eu', JSON.stringify(e)); } catch (_) {}

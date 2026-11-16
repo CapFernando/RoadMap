@@ -91,13 +91,9 @@
      demandas deles (ou sem dono e marcadas Sales Ops). Desligar: false aqui,
      no dev.html e no Worker. */
   var SALES_OPS_SEM_TRAVA = true;
-  var SALES_OPS_LIVRES = ['josias', 'rikelme'];
-  function ehSalesOpsLivre(nome) {
-    var n = txt(nome).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/\s+/)[0] || '';
-    return SALES_OPS_LIVRES.indexOf(n) >= 0;
-  }
-  /** A CONTA e uma das liberadas (Josias, Rikelme)? */
-  function contaLivre(c) { return SALES_OPS_SEM_TRAVA && ehDev(c) && ehSalesOpsLivre((c || {}).quem); }
+  /** A CONTA tem a marca `kanban_livre` (PRD RF-22, 16/11/2026)? Era a lista
+   *  de primeiros nomes (Josias, Rikelme); agora vem da sessao, em `c.eu`. */
+  function contaLivre(c) { return SALES_OPS_SEM_TRAVA && ehDev(c) && !!((c || {}).eu && c.eu.kanban_livre); }
   /* 10/11/2026: "movimentarem todo o kanban sem bloqueios (dev/sales)" — qualquer
      demanda de Desenvolvimento ou Sales Ops; so a de Dados/BI fica de fora. */
   function salesOpsLivre(m, c) {
@@ -1302,7 +1298,7 @@
     var D = AX.APP.D || {};
     return { papel: AX.APP.papel, quem: quem(), hoje: H.hoje(), agora: new Date().toISOString(), dono: H.donoDaSprint(),
              lista: D.melhorias || [], aprovadores: Array.isArray(D.spike_aprovadores) ? D.spike_aprovadores : null,
-             D: D, nomes: H.meusNomes(), times: _times };
+             D: D, nomes: H.meusNomes(), times: _times, eu: AX.APP.eu || null };
   }
   function porId(id) { return ((AX.APP.D || {}).melhorias || []).find(function (x) { return x && x.id === id; }) || null; }
 

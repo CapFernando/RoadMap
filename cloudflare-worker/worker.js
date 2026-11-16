@@ -2655,11 +2655,13 @@ function entrandoEmValidacaoSemHoras(recebido, servidor) {
  * a demanda cujo responsavel e um deles, ou sem responsavel e marcada Sales Ops.
  * A espelho mora no `dev.html` (`salesOpsLivre`). Desligar: false aqui e la. */
 const SALES_OPS_SEM_TRAVA = true;
-const SALES_OPS_LIVRES = ['josias', 'rikelme'];
-function ehSalesOpsLivre(nome) {
-  const n = String(nome == null ? '' : nome).normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase().trim().split(/\s+/)[0] || '';
-  return SALES_OPS_LIVRES.includes(n);
+/* 16/11/2026 (PRD RF-22): QUEM tem essa liberacao deixou de ser uma lista de
+   primeiros nomes no codigo e virou a marca `kanban_livre` da conta, ligada em
+   Usuarios (admin) e em Configuracoes > Pessoas (app). A primeira carga marca
+   as contas que a lista marcava (Josias e Rikelme), entao no deploy ninguem
+   ganha nem perde. Senha compartilhada nao tem conta, logo nao tem a marca. */
+function contaKanbanLivre(ident) {
+  return !!(ident && ident.usuario && ident.usuario.kanban_livre);
 }
 /* 10/11/2026: "reveja os acessos do Rikelme e Josias para movimentarem todo o
    kanban sem bloqueios (dev/sales)". Vale para QUALQUER demanda das frentes
@@ -2668,8 +2670,7 @@ function demandaSalesOpsLivre(m) {
   return !!m && m.dados_bi !== true;
 }
 function salesOpsForaDasTravas(data, servidor, ident) {
-  const quem = ident && ident.usuario ? (ident.usuario.nome || ident.usuario.login || '') : '';
-  if (!SALES_OPS_SEM_TRAVA || !ehSalesOpsLivre(quem) || !data || !Array.isArray(data.melhorias)) return data;
+  if (!SALES_OPS_SEM_TRAVA || !contaKanbanLivre(ident) || !data || !Array.isArray(data.melhorias)) return data;
   const antes = new Map(((servidor && servidor.melhorias) || []).map(v => [v && v.id, v]));
   return Object.assign({}, data, { melhorias: data.melhorias.filter(m => {
     const v = antes.get(m && m.id);
@@ -2714,16 +2715,18 @@ function entrandoEmConcluidoSemHoras(recebido, servidor) {
  * `guilherme.augusto` e `guilherme.oliveira` (Guilherme Eloi). Casar por
  * primeiro nome autorizaria o Eloi, e ninguem notaria — a marca sairia igual.
  *
- * Paullymax nao esta na lista porque a conta dele JA E admin: ele entra pela
- * primeira porta. A lista e para a lideranca que nao e PM/PO.
+ * Paullymax nao precisa da marca porque a conta dele JA E admin: ele entra
+ * pela primeira porta. A marca e para a lideranca que nao e PM/PO.
+ *
+ * 16/11/2026 (PRD RF-23): a segunda porta deixou de ser a lista de logins
+ * (`guilherme.augusto`) e virou a marca `marca_comite` da conta — continua por
+ * CONTA, e nao por nome, entao o outro Guilherme segue de fora. A primeira
+ * carga marca a conta que a lista marcava.
  */
-const COMITE_LOGINS = ['guilherme.augusto'];
-
 function podeMarcarComite(ident) {
   if (!ident) return false;
   if (String(ident.papel || '').toLowerCase() === 'admin') return true;
-  const l = String((ident.usuario && ident.usuario.login) || '').trim().toLowerCase();
-  return !!l && COMITE_LOGINS.includes(l);
+  return !!(ident.usuario && ident.usuario.marca_comite);
 }
 
 /** A MARCA DO COMITE VOLTA AO QUE ESTAVA quando quem gravou nao pode muda-la.
@@ -3710,6 +3713,30 @@ async function contasMigrarAgora(db) {
                        WHERE login IN ('fernando', 'mateus.viana')
                          AND NOT EXISTS (SELECT 1 FROM usuario WHERE area_produto = 1)`).run();
   } catch (_) {}
+  /* KANBAN SEM TRAVAS E MARCA DO COMITE (PRD RF-22 e RF-23, 16/11/2026): as
+     duas listas fixas do codigo viram marcas da conta. A PRIMEIRA CARGA
+     reproduz exatamente as listas de antes, e so enquanto ninguem tem a marca:
+       kanban_livre  quem a lista SALES_OPS_LIVRES liberava — o PRIMEIRO NOME
+                     (do nome, ou do login) sem acento: josias, rikelme;
+       marca_comite  o login da lista COMITE_LOGINS: guilherme.augusto.
+     Depois disso, quem decide e a tela (Usuarios / Configuracoes > Pessoas). */
+  await colunaSeFaltar(db, 'usuario', 'kanban_livre', 'INTEGER NOT NULL DEFAULT 0');
+  await colunaSeFaltar(db, 'usuario', 'marca_comite', 'INTEGER NOT NULL DEFAULT 0');
+  try {
+    const jaK = await db.prepare('SELECT 1 AS x FROM usuario WHERE kanban_livre = 1 LIMIT 1').first();
+    if (!jaK) {
+      const todos = (await db.prepare('SELECT id, nome, login FROM usuario').all()).results || [];
+      const primeiro = v => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().trim().split(/[\s.]+/)[0] || '';
+      for (const u of todos) {
+        if (['josias', 'rikelme'].includes(primeiro(u.nome || u.login))) {
+          await db.prepare('UPDATE usuario SET kanban_livre = 1 WHERE id = ?').bind(u.id).run();
+        }
+      }
+    }
+    await db.prepare(`UPDATE usuario SET marca_comite = 1 WHERE login = 'guilherme.augusto'
+                       AND NOT EXISTS (SELECT 1 FROM usuario WHERE marca_comite = 1)`).run();
+  } catch (_) {}
   // E-mail unico, mas so entre quem tem e-mail (contas antigas ficam com NULL).
   try { await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_usuario_email ON usuario(email) WHERE email IS NOT NULL').run(); } catch (_) {}
 }
@@ -3773,7 +3800,9 @@ async function identifica(env, body) {
                                            email: r.email || '',
                                            nome_demandas: r.nome_demandas || '',
                                            interface_nova: !!r.interface_nova,
-                                           area_produto: !!r.area_produto } };
+                                           area_produto: !!r.area_produto,
+                                           kanban_livre: !!r.kanban_livre,
+                                           marca_comite: !!r.marca_comite } };
       }
     } catch (_) {}
   }
@@ -7382,7 +7411,9 @@ async function rotear(request, env, _histFila) {
                     usuario: { login: u.login, nome: u.nome, papel: u.papel,
                                nome_demandas: u.nome_demandas || '',
                                interface_nova: !!u.interface_nova,
-                               area_produto: !!u.area_produto } }, 200, headers);
+                               area_produto: !!u.area_produto,
+                               kanban_livre: !!u.kanban_livre,
+                               marca_comite: !!u.marca_comite } }, 200, headers);
     }
 
     // ── Meu vinculo: o nome que EU uso nas demandas ─────────────────
@@ -7826,7 +7857,8 @@ async function rotear(request, env, _histFila) {
         // nenhuma, nao havia nada certo para escolher.
         const r = await env.POKER_DB.prepare(
           `SELECT id, login, nome, email, papel, ativo, pendente, criado_em, ultimo_acesso,
-                  nome_demandas, reset_em, aprova_spike, interface_nova, area_produto
+                  nome_demandas, reset_em, aprova_spike, interface_nova, area_produto,
+                  kanban_livre, marca_comite
              FROM usuario ORDER BY pendente DESC, nome`).all();
         // Pedidos de senha em aberto, para o admin resolver na mesma tela.
         const p = await env.POKER_DB.prepare(
@@ -8045,6 +8077,19 @@ async function rotear(request, env, _histFila) {
         const qP = await env.POKER_DB.prepare(
           'SELECT COUNT(*) AS n FROM usuario WHERE area_produto = 1 AND ativo = 1').first();
         return json({ ok: true, login: loginP, produto: !!ligaP, area_produto: (qP && qP.n) || 0 }, 200, headers);
+      }
+
+      /* KANBAN SEM TRAVAS E MARCA DO COMITE (PRD RF-24): qualquer admin liga ou
+         desliga, em qualquer conta, como as outras marcas. A do comite so faz
+         diferenca em conta que nao e admin (admin ja marca). */
+      if (op === 'kanban-livre' || op === 'marca-comite') {
+        const col = op === 'kanban-livre' ? 'kanban_livre' : 'marca_comite';
+        const loginK = String(body.login || '').trim().toLowerCase();
+        const uK = await env.POKER_DB.prepare('SELECT id FROM usuario WHERE login = ?').bind(loginK).first();
+        if (!uK) return json({ error: 'nao_encontrado' }, 404, headers);
+        const ligaK = body.liga ? 1 : 0;
+        await env.POKER_DB.prepare('UPDATE usuario SET ' + col + ' = ? WHERE id = ?').bind(ligaK, uK.id).run();
+        return json({ ok: true, login: loginK, [col]: !!ligaK }, 200, headers);
       }
 
       if (op === 'aprova-spike') {
