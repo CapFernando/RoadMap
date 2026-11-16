@@ -249,7 +249,7 @@
   /** "AX-288, AX-725 e mais 3" — a nota do prototipo. */
   function codigos(lista, n) {
     n = n || 2;
-    var c = lista.slice(0, n).map(function (m) { return H.esc(m.codigo || '—'); }).join(', ');
+    var c = lista.slice(0, n).map(function (m) { return H.esc(m.codigo || (m._salvando ? 'salvando…' : '—')); }).join(', ');
     return lista.length > n ? c + ' e mais ' + (lista.length - n) : c;
   }
 
@@ -434,7 +434,7 @@
     var href = link(m, ctx);
     var tag = href ? 'a href="' + href + '"' : 'div';
     return '<' + tag + ' class="ini-it' + (alerta ? ' dg' : '') + '">' +
-      '<span class="cd">' + H.esc(m.codigo || '—') + '</span>' +
+      '<span class="cd">' + H.esc(m.codigo || (m._salvando ? 'salvando…' : '—')) + '</span>' +
       '<span class="tt"><b title="' + H.esc(m.titulo) + '">' + H.esc(m.titulo || '(sem título)') + '</b><span>' + sub + '</span></span>' +
       '<span class="st">' + chips + '</span>' +
       '<span class="pz" style="color:' + pz.cor + '">' + H.esc(pz.txt) + '</span>' +
@@ -546,7 +546,7 @@
     var href = link(m, ctx);
     return '<div class="ini-card' + (href ? '' : ' ro') + '"' + (href ? ' data-href="' + href + '"' : '') + '>' +
       (fl.length ? '<span class="fl">' + fl.join('') + '</span>' : '') +
-      '<span class="code" style="font-size:11px">' + H.esc(m.codigo || '—') + '</span>' +
+      '<span class="code" style="font-size:11px">' + H.esc(m.codigo || (m._salvando ? 'salvando…' : '—')) + '</span>' +
       '<span class="t">' + H.esc(m.titulo || '(sem título)') + '</span>' +
       '<span class="note" style="font-size:11.5px">' + H.esc(H.caminho(m.tema_id) || '—') + (o.comDev ? ' · ' + H.esc(m.dev || 'sem dev') : '') + '</span>' +
       '<span class="rd"><span>' + H.esc(datas || '') + '</span><span class="mono" style="color:var(--ac-t)">' + (p ? p + ' pts' : '—') + '</span></span>' +
@@ -1048,7 +1048,7 @@
       var href = link(m, ctx);
       var tit = (m.codigo ? m.codigo + ' · ' : '') + (m.titulo || '') + ' — ' + N.rot + (m.entrega ? ' (' + H.dma(m.entrega) + ')' : '');
       return '<div class="ln" style="grid-template-columns:' + colunas + '">' +
-        '<span class="rot"><span class="code" style="font-size:11px">' + H.esc(m.codigo || '—') + (!dev && m.dev ? ' <span style="color:var(--tx3);font-family:var(--font-ui)">· ' + H.esc(m.dev) + '</span>' : '') + '</span>' +
+        '<span class="rot"><span class="code" style="font-size:11px">' + H.esc(m.codigo || (m._salvando ? 'salvando…' : '—')) + (!dev && m.dev ? ' <span style="color:var(--tx3);font-family:var(--font-ui)">· ' + H.esc(m.dev) + '</span>' : '') + '</span>' +
         '<span class="t" title="' + H.esc(m.titulo) + '">' + H.esc(m.titulo || '(sem título)') + '</span></span>' +
         (iHoje >= 0 ? '<span class="hjc" style="grid-column:' + (iHoje + 2) + '"></span>' : '') +
         '<' + (href ? 'a href="' + href + '"' : 'span') + ' class="br' + (href ? '' : ' ro') + '" title="' + H.esc(tit) + '" style="grid-column:' + (i0 + 2) + ' / ' + (i1 + 3) + ';background:' + N.cor +

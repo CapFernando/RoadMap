@@ -52,7 +52,8 @@
    *  em memoria — `capacidade.js`, `abertura.js` e `selo-validacao.js` a leem
    *  para calcular —; o que muda e so o que atravessa o fio. */
   function semTrilha(chave, valor) {
-    return chave === 'historico' ? undefined : valor;
+    // '_salvando' e marca de tela (demanda nova ainda na fila, 16/11/2026): nunca vai ao servidor.
+    return (chave === 'historico' || chave === '_salvando') ? undefined : valor;
   }
 
   var api = { semTrilha: semTrilha };

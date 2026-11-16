@@ -651,7 +651,7 @@
       ' title="' + attr((m.codigo || '') + ' · prioridade ' + prio + (meu ? ' · é seu' : '') + (arrasta ? ' · arraste para mover' : '')) + '">' +
       (grill ? '<span class="qd-grill" title="O PM/PO pediu seu parecer antes de esta demanda entrar no planejamento. Abra e responda.">' + H.ico('flame') + ' Grill — dê seu parecer</span>' : '') +
       (marca ? '<span class="qd-dono">' + marca + '</span>' : '') +
-      '<span class="qd-top"><span class="qd-cod">' + H.esc(m.codigo || '—') + '</span>' + estrela +
+      '<span class="qd-top"><span class="qd-cod">' + H.esc(m.codigo || (m._salvando ? 'salvando…' : '—')) + '</span>' + estrela +
       (tipo ? H.chip(H.esc(tipo.rotulo), 'bk') : '') + '</span>' +
       '<span class="qd-tit">' + H.esc(m.titulo || '(sem título)') + '</span>' +
       (m.tema_id ? '<span class="qd-sys">' + H.esc(H.caminho(m.tema_id)) + '</span>' : '<span class="qd-sys" style="color:var(--tx4)">sem sistema</span>') +

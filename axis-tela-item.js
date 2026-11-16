@@ -1442,7 +1442,7 @@
     var eu = window.ENTREGAUSU ? ENTREGAUSU.data(m) : '';
 
     var h = '<header style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px">' +
-      '<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span class="note"><a href="' + H.hrefItem(m) + '">' + H.esc(m.codigo || '—') + '</a> › Conversa</span>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span class="note"><a href="' + H.hrefItem(m) + '">' + H.esc(m.codigo || (m._salvando ? 'salvando…' : '—')) + '</a> › Conversa</span>' +
       '<h1 class="h1" style="font-size:24px;overflow-wrap:anywhere">' + H.esc(m.titulo || '(sem título)') + '</h1>' +
       '<span class="sub">Conversa do item com o PM/PO, o solicitante e o time, e tudo o que mudou nele.</span></div>' +
       (quem.length ? '<div class="row" style="flex-wrap:wrap"><span class="row" style="gap:4px">' + quem.slice(0, 6).map(function (n) { return H.av(n); }).join('') + '</span></div>' : '') + '</header>';

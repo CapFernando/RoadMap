@@ -353,7 +353,17 @@
     l.forEach(function (it) {
       try { D = raiz.GRAVACAO.aplicar(D, filaDecodifica(it.patch), it.raiz); } catch (_) {}
     });
+    return marcaSalvando(D);
+  }
+  /* O NUMERO AX NASCE NO SERVIDOR (16/11/2026: "a task foi criada porem sem
+     numero"). Enquanto a demanda nova esta na fila, o card diz "salvando…" em
+     vez de "—". O campo comeca com "_": o servidor o descarta (limpaEspelhos). */
+  function marcaSalvando(D) {
+    ((D || {}).melhorias || []).forEach(function (m) { if (m && !m.codigo) m._salvando = true; });
     return D;
+  }
+  function temNovaSemCodigo() {
+    return ((APP.D || {}).melhorias || []).some(function (m) { return m && m._salvando; });
   }
   function filaEntra(patch, raizTopo, okMsg) {
     var l = filaLer();
@@ -393,6 +403,7 @@
         if (r && r.ok) {
           if (i >= 0) { l.splice(i, 1); filaSalvar(l); }
           try { if (raiz.AXIS_ACOES && raiz.AXIS_ACOES.avisaRevertidos) raiz.AXIS_ACOES.avisaRevertidos(r); } catch (_) {}
+          if (l.length && temNovaSemCodigo()) { try { await carregar(); desenhar(true); } catch (_) {} }
           if (!l.length) {
             try { await carregar(); desenhar(true); } catch (_) {}
             // So avisa quando demorou: no caminho normal o "Salvo." ja saiu na hora.
@@ -538,7 +549,7 @@
   function enfileira(patch, o) {
     filaEntra(patch, o.raiz, typeof o.ok === 'string' ? o.ok : '');
     try {
-      if (APP.D && raiz.GRAVACAO && raiz.GRAVACAO.aplicar) APP.D = raiz.GRAVACAO.aplicar(APP.D, patch, o.raiz);
+      if (APP.D && raiz.GRAVACAO && raiz.GRAVACAO.aplicar) APP.D = marcaSalvando(raiz.GRAVACAO.aplicar(APP.D, patch, o.raiz));
     } catch (_) {}
     desenhar(true);
     if (o.ok !== false) toast(o.ok || 'Salvo.');
@@ -677,7 +688,7 @@
     return '<span class="av" title="' + esc(nome) + '" style="background:' + bg + (eu ? ';color:var(--on-ac)' : '') +
       (tam ? ';width:' + tam + 'px;height:' + tam + 'px;border-radius:' + (tam / 2) + 'px' : '') + '">' + esc(iniciais(nome)) + '</span>';
   }
-  function cod(m) { return '<span class="code">' + esc(m.codigo || '—') + '</span>'; }
+  function cod(m) { return '<span class="code">' + esc(m.codigo || (m._salvando ? 'salvando…' : '—')) + '</span>'; }
   function hrefItem(m) { return '#item/' + encodeURIComponent(m.codigo || m.id); }
   /** Prazo em texto curto, com a cor que o prototipo usa (vermelho = atrasado ou hoje). */
   function prazoTxt(m) {

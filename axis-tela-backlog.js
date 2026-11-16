@@ -304,7 +304,7 @@
     var spEst = W.SPRINTPO && W.SPRINTPO.estiloSprint ? W.SPRINTPO.estiloSprint(m) : '';
     // Celulas com `data-label`: no celular a linha vira cartao (tabela-cartao do nucleo).
     return '<a class="bk-ln tc-ln' + (eDev && H.minha(m) ? ' minha' : '') + (spEst ? ' comsp' : '') + '" href="' + H.hrefItem(m) + '"' + (spEst ? ' style="' + H.esc(spEst) + '"' : '') + '>' +
-      '<span class="ci" data-tc="topo">' + H.esc(m.codigo || '—') + '</span>' +
+      '<span class="ci" data-tc="topo">' + H.esc(m.codigo || (m._salvando ? 'salvando…' : '—')) + '</span>' +
       '<span style="display:flex;flex-direction:column;min-width:0" data-tc="titulo"><span class="tt">' + H.esc(m.titulo || '(sem título)') + '</span>' +
       // Com quem esta e a entrega ao usuario: a linha da lista de Melhorias do admin (372b92f).
       '<span class="cm">' + (cam ? H.esc(cam) : 'Sem sistema') + (W.AXIS_SPRINTS ? ' · ' + W.AXIS_SPRINTS.comQuem(m) : '') + '</span>' +
@@ -617,7 +617,7 @@
     var m = v.m;
     var velho = v.dias != null && v.dias >= 5;
     return '<a class="bk-vl' + (sel ? ' on' : '') + '" href="#backlog/validacao/' + encodeURIComponent(m.codigo || m.id) + '"' + (sel ? ' aria-current="true"' : '') + '>' +
-      '<span class="row" style="justify-content:space-between"><span class="code" style="font-size:11px">' + H.esc(m.codigo || '—') + '</span>' +
+      '<span class="row" style="justify-content:space-between"><span class="code" style="font-size:11px">' + H.esc(m.codigo || (m._salvando ? 'salvando…' : '—')) + '</span>' +
       '<span class="mono" style="font-size:11px;color:' + (velho ? 'var(--dg-t)' : 'var(--tx3)') + '">' + idade(v.dias) + '</span></span>' +
       '<span class="t">' + H.esc(m.titulo || '(sem título)') + '</span>' +
       '<span class="note" style="font-size:11.5px;line-height:16px">' + H.esc((v.quem || 'sem dev').split(' ')[0]) + ' · ' + H.esc(H.caminho(m.tema_id) || 'sem sistema') + '</span></a>';
@@ -672,7 +672,7 @@
       : 'entregue por ' + H.esc(v.quem || 'dev não informado') + (H.ehISO(v.quando) ? ' · ' + H.dm(v.quando) : '') + (v.dias != null ? ' · ' + (v.dias === 0 ? 'hoje' : 'há ' + H.plural(v.dias, 'dia', 'dias')) : '');
 
     return '<section class="pnh" style="gap:14px">' +
-      '<div class="row" style="justify-content:space-between;flex-wrap:wrap"><span class="row" style="flex-wrap:wrap;gap:8px"><a class="code" style="font-size:13px;text-decoration:none" href="' + H.hrefItem(m) + '">' + H.esc(m.codigo || '—') + '</a>' +
+      '<div class="row" style="justify-content:space-between;flex-wrap:wrap"><span class="row" style="flex-wrap:wrap;gap:8px"><a class="code" style="font-size:13px;text-decoration:none" href="' + H.hrefItem(m) + '">' + H.esc(m.codigo || (m._salvando ? 'salvando…' : '—')) + '</a>' +
       (H.caminho(m.tema_id) ? H.chip(H.esc(H.caminho(m.tema_id)), 'bk') : '') +
       (isFinite(pts) && m.poker_pontos != null && m.poker_pontos !== '' ? H.chip(pts + ' pts', 'ac') : '') + H.chipTipo(m) + '</span>' +
       '<span class="note">' + quem + '</span></div>' +
@@ -810,7 +810,7 @@
             : AC.botao('pausar', m, 'Pausar', 'btns" style="height:28px', { titulo: 'Suspende o prazo: os dias parados não contam como atraso' })) + '</span>';
       } else if (eDev && H.minha(m)) acao = '<a class="btns" href="' + H.hrefItem(m) + '" title="Entregar ou pedir pausa pelo item">Abrir</a>';
       return '<tr class="click" data-href="' + H.hrefItem(m) + '"' + (eDev && H.minha(m) ? ' style="box-shadow:inset 3px 0 0 var(--ac)"' : '') + '>' +
-        '<td style="max-width:420px" data-tc="titulo"><span class="row" style="gap:8px;min-width:0"><span class="code">' + H.esc(m.codigo || '—') + '</span>' +
+        '<td style="max-width:420px" data-tc="titulo"><span class="row" style="gap:8px;min-width:0"><span class="code">' + H.esc(m.codigo || (m._salvando ? 'salvando…' : '—')) + '</span>' +
         '<span style="display:flex;flex-direction:column;min-width:0"><span class="ell" style="color:var(--tx);font-weight:700">' + H.esc(m.titulo || '(sem título)') + '</span>' +
         '<span class="ell" style="font-size:11.5px;color:var(--tx3)">' + H.esc(H.caminho(m.tema_id) || 'Sem sistema') + (m.projeto_id && H.projeto(m.projeto_id) ? ' · ' + H.esc(H.projeto(m.projeto_id).codigo || '') : '') + '</span></span></span></td>' +
         '<td data-label="Dev"><span class="row" style="gap:8px">' + (ds.length ? H.av(ds[0], 26) + '<span class="ell" style="max-width:150px">' + H.esc(ds.join(' / ')) + '</span>' : H.av('', 26) + '<span style="color:var(--tx4)">sem dev</span>') + '</span></td>' +
