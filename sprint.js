@@ -849,10 +849,13 @@
        o trabalho já alocado a alguém aparece para essa pessoa, com o chip da
        sprint dizendo para qual semana vai. Iniciar continua sendo o que leva
        o sem-dono ao backlog do time (`naPoolDoTime`).
-       É TRANSIÇÃO, COM DATA DE FIM: "após o fechamento da S1-11 essa regra de
-       visualização vem à tona". Fechada a S1-11, a montagem volta a esconder
-       também o que tem dev — sem ninguém precisar lembrar de desligar nada. */
-    if (txt((m || {}).dev) && !estaFechada(dados, VISAO_PLENA_ATE)) return false;
+       16/11/2026: DEIXOU DE SER TRANSIÇÃO. Era "até fechar a S1-11"; fechada
+       ela, as tarefas da S3-11 (montando na segunda de manhã) e as mandadas para
+       uma sprint futura sumiram do Meu trabalho de quem tinha de fazê-las —
+       "algumas tarefas não estão aparecendo para os usuários". Decisão: o que
+       tem dev aparece SEMPRE para essa pessoa, com o chip da sprint. Esconder a
+       montagem continua valendo só para o SEM DONO. */
+    if (txt((m || {}).dev)) return false;
     return situacaoDaSprint(dados, s) === 'montando';
   }
 
@@ -867,8 +870,6 @@
    * o PO alocou em Planejado continua escondido até ele iniciar, que é o ponto
    * de separar montar de iniciar.                                           */
   var ETAPAS_VITRINE = ['backlog', 'levantar_req', 'planning'];
-  /** Até esta sprint FECHAR, o que tem dev não se esconde na montagem. */
-  var VISAO_PLENA_ATE = 'S1-11-2026';
 
   function naVitrine(m, etapa) {
     if (!doPO(m)) return false;

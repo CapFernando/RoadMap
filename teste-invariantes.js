@@ -24877,8 +24877,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o que tem dev aparece para ele mesmo com a sprint montando (o caso da AX-1151)');
     const dPos = { sprints: [{ rotulo: 'S1-11-2026', iniciada_em: '2026-11-02', em: '2026-11-06' }],
                    melhorias: [] };
-    ok(SP.escondidaDoTime(dPos, { sprint_po: 'S2-11-2026', dev: 'Ana', status_planejamento: 'planejado' }),
-       'fechada a S1-11, a montagem volta a esconder tambem o que tem dev — a transicao tem fim');
+    // 16/11/2026: a transicao virou regra — com dev, aparece mesmo depois de fechada a S1-11.
+    ok(!SP.escondidaDoTime(dPos, { sprint_po: 'S2-11-2026', dev: 'Ana', status_planejamento: 'planejado' }) &&
+       SP.escondidaDoTime(dPos, { sprint_po: 'S2-11-2026', dev: '', status_planejamento: 'planejado' }),
+       'fechada a S1-11, o que tem dev continua aparecendo para ele; so o sem dono da montagem se esconde');
     ok(!SP.naVitrine(d3.melhorias[1]),
        'e backlog sem sprint nao e vitrine: e o backlog de sempre');
     const bk = SP.backlogDaSprint(d3, S1);
@@ -25202,8 +25204,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
            'a regra roda nas tres portas: publish, dev-publish e a API');
       }
       // O PAINEL DO DEV ABRE NA SPRINT ATUAL (05/11/2026); Limpar volta para ela e ela nao conta como filtro.
-      ok(/if \(!_sprintPadraoAplicado && agora\) \{ _sprintPadraoAplicado = true; sel\.value = agora; return; \}/.test(DEV) &&
-         /if \(_fs && sprintAtualDev\(\)\) _fs\.value = sprintAtualDev\(\);/.test(DEV) &&
+      ok(/if \(agora && \(!_sprintPadraoAplicado \|\| \(!_sprintEscolhida && _sprintPadraoValor !== agora && antes === _sprintPadraoValor\)\)\) \{/.test(DEV) &&
+         /if \(_fs && sprintAtualDev\(\)\) _fs\.value = _sprintPadraoValor = sprintAtualDev\(\);\s*_sprintEscolhida = false;/.test(DEV) &&
+         /id="f-sprint" class="filter-select" onchange="_sprintEscolhida = true; renderKanban\(\)"/.test(DEV) &&
          /i === 'f-sprint' \? v !== sprintAtualDev\(\) : !!v/.test(DEV),
          'o painel do dev abre na sprint atual, outra sprint pelo filtro, e o Limpar volta para a atual');
       // O filtro opcional "Times" (05/11/2026) soma outro time sem mudar o padrao.
@@ -26428,14 +26431,14 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     {
       // As opcoes do filtro de sprint e o padrao na sprint atual (buildSprintSelect, 368342d).
       const selVelho = new Function('window', 'document', 'state', 'currentDev', 'SPRINTPO', 'DEVNOME', 'PRAZO',
-        'let _sprintPadraoAplicado = false;\n' + corte('function sprintAtualDev() {') + '\n' + corte('function escAttr(x) {') + '\n' +
-        corte('function buildSprintSelect() {') + '\nreturn buildSprintSelect;');
+        'let _sprintPadraoAplicado = false; let _sprintPadraoValor = ""; let _sprintEscolhida = false;\n' + corte('function sprintAtualDev() {') + '\n' + corte('function escAttr(x) {') + '\n' +
+        corte('function buildSprintSelect() {') + '\nreturn { build: buildSprintSelect, escolhe: () => { _sprintEscolhida = true; } };');
       const divS = [];
       [[EU, '2026-11-05'], [EU, '2026-11-10'], ['Bia', '2026-11-05'], ['Ninguem', '2026-11-20']].forEach(([quem, hoje]) => {
         const D = base(copia(FT));
         const sel = { value: '', innerHTML: '' };
         const PRZ = { hojeISO: () => hoje };
-        const build = selVelho({ SPRINTPO: SPm, PRAZO: PRZ }, { getElementById: (id) => (id === 'f-sprint' ? sel : null) }, D, quem, SPm, DNm, PRZ);
+        const build = selVelho({ SPRINTPO: SPm, PRAZO: PRZ }, { getElementById: (id) => (id === 'f-sprint' ? sel : null) }, D, quem, SPm, DNm, PRZ).build;
         build();
         const opV = [...sel.innerHTML.matchAll(/<option value="([^"]*)">[^<]*\((\d+)\)<\/option>/g)].map(a => a[1] + ':' + a[2]).join(' ');
         const agora = SPm.sprintCorrente(hoje, []);
@@ -26447,10 +26450,28 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       });
       ok(divS.length === 0, 'as opcoes do filtro de sprint do Meu trabalho = buildSprintSelect do painel (a atual mesmo vazia, Fora da sprint), e o padrao e a sprint atual so na primeira montagem',
          divS.join(' | '));
+      /* A VIRADA DA SEMANA COM A ABA ABERTA (16/11/2026): "as tarefas da S3-11
+         nao aparecem no Meu trabalho". O padrao era aplicado so uma vez; agora
+         vira com o calendario enquanto o dev nao escolhe outra sprint. */
+      {
+        const D = base(copia(FT));
+        const sel = { value: '', innerHTML: '' };
+        let hoje = '2026-11-13';
+        const PRZ = { hojeISO: () => hoje };
+        const vv = selVelho({ SPRINTPO: SPm, PRAZO: PRZ }, { getElementById: (id) => (id === 'f-sprint' ? sel : null) }, D, EU, SPm, DNm, PRZ);
+        vv.build(); const sexta = sel.value;
+        hoje = '2026-11-16'; vv.build(); const segunda = sel.value;
+        vv.escolhe(); sel.value = '__fora__'; hoje = '2026-11-23'; vv.build(); const escolhida = sel.value;
+        ok(sexta === 'S2-11-2026' && segunda === 'S3-11-2026' && escolhida === '__fora__',
+           'com a aba aberta de sexta para segunda, o filtro do painel vira para a sprint nova; a que o dev escolheu fica', [sexta, segunda, escolhida].join(' > '));
+      }
+      ok(/!EST\.sprintManual && EST\.sprintAuto !== sprint && EST\.sprint === EST\.sprintAuto/.test(lerTela('axis-tela-inicio.js')) &&
+         /spr\.onchange = function \(\) \{ EST\.sprint = spr\.value; EST\.sprintManual = true;/.test(lerTela('axis-tela-inicio.js')),
+         'e o Meu trabalho do app tambem: o padrao vira com a semana enquanto a pessoa nao escolhe outra sprint');
     }
     const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
-    ok(/if \(!EST\.sprintPadrao && sprint\) \{ EST\.sprintPadrao = true; EST\.sprint = sprint; \}/.test(INI) &&
-       /AC\.casaSprintDoPainel\(m, cx, EST\.sprint\)/.test(INI) && /if \(q === 'limpar'\) \{ EST\.sprint = H\.sprintAtual\(\) \|\| ''; [^\n]*AXIS_ACOES\.times\(''\)/.test(INI) &&
+    ok(/if \(sprint && \(!EST\.sprintPadrao \|\|[^\n]*\)\) \{\s*EST\.sprintPadrao = true; EST\.sprint = sprint; EST\.sprintAuto = sprint;/.test(INI) &&
+       /AC\.casaSprintDoPainel\(m, cx, EST\.sprint\)/.test(INI) && /if \(q === 'limpar'\) \{ EST\.sprint = EST\.sprintAuto = H\.sprintAtual\(\) \|\| ''; EST\.sprintManual = false;[^\n]*AXIS_ACOES\.times\(''\)/.test(INI) &&
        /var filtrosAtivos = \(EST\.sprint !== \(sprint \|\| ''\) \? 1 : 0\) \+ \(times \? 1 : 0\);/.test(INI) && /data-ini="times"/.test(INI),
        'Meu trabalho do dev abre na sprint atual, a atual nao conta como filtro, e o Limpar volta para ela e para o seu time');
     ok(/if \(!F\.sprintPadrao && ctx\.papel === 'dev'\) \{ F\.sprintPadrao = true; if \(sprintPadraoDev\(ctx\)\) F\.sprint = sprintPadraoDev\(ctx\); \}/.test(QDT) &&

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="f643c39329">
+<html lang="pt-BR" data-build="c46ab36c3b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -758,7 +758,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=c050a20701"></script>
+<script src="sprint.js?v=abef7b11fb"></script>
 <!-- A frente de cada um (`pipelines.js`): a vitrine e o backlog sem dono da
      sprint aparecem só para o time da mesma frente — ver `doMeuTime`. -->
 <script src="requisitos.js?v=cac792c192"></script>
@@ -934,7 +934,7 @@
          "Todas" ou "Fora da sprint" se escolhem aqui. -->
     <div class="filter-sep"></div>
     <label>Sprint:</label>
-    <select id="f-sprint" class="filter-select" onchange="renderKanban()"
+    <select id="f-sprint" class="filter-select" onchange="_sprintEscolhida = true; renderKanban()"
             title="Mostra só o que o PM/PO repassou para a sprint escolhida.">
       <option value="">Todas</option>
     </select>
@@ -4603,6 +4603,11 @@ function buildTemaSelect() {
    So a PRIMEIRA montagem escolhe — depois a escolha dele sobrevive ao
    redesenho, e o Limpar volta para a sprint atual, que e o padrao. */
 let _sprintPadraoAplicado = false;
+/* A SPRINT PADRAO ACOMPANHA O CALENDARIO (16/11/2026): com a aba aberta de uma
+   semana para a outra, o filtro seguia na sprint passada e as tarefas da nova
+   nao apareciam. Enquanto o dev nao escolhe outra, o padrao vira com a semana. */
+let _sprintPadraoValor = '';
+let _sprintEscolhida = false;
 function sprintAtualDev() {
   return window.SPRINTPO ? SPRINTPO.sprintCorrente(window.PRAZO ? PRAZO.hojeISO() : null, state.feriados || []) : '';
 }
@@ -4632,7 +4637,9 @@ function buildSprintSelect() {
   /* A ESCOLHA SOBREVIVE AO REDESENHO — a nao ser que a sprint tenha ficado sem
      demanda nenhuma. Ai ela sai da lista, e manter o valor deixaria o painel
      vazio sem opcao visivel que explicasse por que. */
-  if (!_sprintPadraoAplicado && agora) { _sprintPadraoAplicado = true; sel.value = agora; return; }
+  if (agora && (!_sprintPadraoAplicado || (!_sprintEscolhida && _sprintPadraoValor !== agora && antes === _sprintPadraoValor))) {
+    _sprintPadraoAplicado = true; _sprintPadraoValor = agora; sel.value = agora; return;
+  }
   sel.value = [...rotulos, '__fora__', ''].includes(antes) ? antes : '';
 }
 
@@ -4647,7 +4654,8 @@ function limparFiltrosDev() {
   buildSprintSelect();
   // O padrao do filtro de sprint e a sprint atual, e nao "Todas".
   const _fs = document.getElementById('f-sprint');
-  if (_fs && sprintAtualDev()) _fs.value = sprintAtualDev();
+  if (_fs && sprintAtualDev()) _fs.value = _sprintPadraoValor = sprintAtualDev();
+  _sprintEscolhida = false;
   renderKanban();
 }
 
