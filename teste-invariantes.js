@@ -30414,6 +30414,43 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        /id="ms-sprint-sel"/.test(DV), 'e a tela do dev libera o arraste e a escolha de sprint para eles');
   }
 
+  /* A COLUNA DO KANBAN ROLA POR DENTRO (16/11/2026). Sem teto, a coluna mais
+     longa decidia a altura da pagina inteira: no Meu trabalho, Em andamento com
+     cinco cards chegou a 1781px numa tela de 827px. No computador a coluna para
+     na altura da tela e rola sozinha, com o titulo preso no topo; no celular o
+     quadro ja mostra uma coluna por vez, entao a regra nao vale ali. */
+  {
+    const QD = require('fs').readFileSync(__dirname + '/axis-tela-quadro.js', 'utf8');
+    const i = QD.indexOf('/* COLUNA COM ROLAGEM PROPRIA */');
+    const trecho = i > 0 ? QD.slice(i, i + 900) : '';
+    ok(/@container app \(min-width: 761px\)\{\.axa \.qd-col\{max-height:calc\(100dvh - \d+px\);overflow-y:auto;overscroll-behavior:contain/.test(trecho),
+       'no computador a coluna do kanban tem teto na altura da tela e rola por dentro');
+    ok(/\.axa \.qd-col(:not\(\.vazia\))?>\.qd-ch\{position:sticky;top:-12px/.test(trecho),
+       'e o titulo da coluna fica preso no topo enquanto os cards rolam');
+    /* E A BARRA DE FILTROS DO QUADRO E COMPACTA: em largura media ela quebrava em quatro
+       linhas tortas (busca recuada, Mostrar cortado) e sobrava espaco para um card so. */
+    const j = QD.indexOf('/* FILTROS EM GRADE COMPACTA */');
+    const grade = j > 0 ? QD.slice(j, j + 1400) : '';
+    ok(/\.axa \.qd-ferr\{display:grid;grid-template-columns:repeat\(auto-fill,minmax\(\d+px,1fr\)\)/.test(grade) &&
+       /\.axa \.qd-ferr \.qd-par:not\(\.qd-so-cel\)\{position:relative/.test(grade) && /\.axa \.qd-ferr \.qd-fl\{position:absolute[^}]*pointer-events:none/.test(grade) &&
+       /\.axa \.qd-ferr \.fsp \.fsp-btn\.in\{min-width:0/.test(grade),
+       'no computador os filtros do Quadro ficam numa grade alinhada, com o nome dentro da caixa, o seletor de sprint cabe na celula e o filtro so de celular continua escondido');
+    /* E A ESTEIRA ANDA NA BORDA DURANTE O ARRASTE: com a coluna de destino fora da tela,
+       segurar o card perto da borda rola o quadro (e a coluna longa) ate ela aparecer. */
+    const k0 = QD.indexOf('function passoNaBorda('), k1 = QD.indexOf('/* FIM passoNaBorda */');
+    ok(k0 > 0 && k1 > k0, 'o passo da rolagem na borda existe no Quadro');
+    if (k0 > 0 && k1 > k0) {
+      const passo = new Function(QD.slice(k0, k1) + '\nreturn passoNaBorda;')();
+      ok(passo(500, 0, 1000) === 0, 'longe da borda o quadro fica parado');
+      ok(passo(990, 0, 1000) > 0 && passo(10, 0, 1000) < 0, 'perto da borda direita anda para a direita, perto da esquerda para a esquerda');
+      ok(passo(995, 0, 1000) > passo(930, 0, 1000), 'quanto mais perto da borda, mais rapido');
+      ok(passo(1400, 0, 1000) === 20 && passo(-400, 0, 1000) === -20, 'e o passo tem teto, mesmo com o ponteiro fora do quadro');
+    }
+    const dov = QD.slice(QD.indexOf("el.addEventListener('dragover'"), QD.indexOf("el.addEventListener('dragleave'"));
+    ok(dov.indexOf('rolaNaBorda(e)') > 0 && dov.indexOf('rolaNaBorda(e)') < dov.indexOf("closest('[data-solta]')"),
+       'o arraste rola a esteira antes de procurar a coluna, entao anda tambem sobre o vao entre colunas');
+  }
+
   /* O ENDERECO SEM ".html" TAMBEM LEVA AO APP (09/11/2026). */
   {
     const AXI = require('./axis-interface.js');

@@ -35,8 +35,8 @@
     '.axa a.pj-nm{color:var(--tx);text-decoration:none} .axa a.pj-nm:hover{color:var(--ac-t)}',
     '.axa .pj-card.dest{grid-row:span 2;padding:20px;border-radius:18px;background:rgba(var(--sf-rgb),.8);border-color:rgba(var(--ac-rgb),.35);gap:14px}',
     '.axa .pj-card.dest:hover{border-color:rgba(var(--ac-rgb),.6)}',
-    '.axa .pj-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}',
-    '.axa .pj-top > span:first-child{display:flex;flex-direction:column;gap:3px;min-width:0}',
+    '.axa .pj-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:6px 10px}',
+    '.axa .pj-top > span:first-child{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 160px}',
     '.axa .pj-nm{display:block;font-size:15px;line-height:20px;font-weight:800}',
     '.axa .pj-card.dest .pj-nm{font-family:var(--font-title);font-size:19px;line-height:24px}',
     '.axa .pj-st{font-size:10.5px;font-weight:800;letter-spacing:.02em}',
@@ -96,18 +96,29 @@
     '.axa .pja-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0}',
     '.axa .pja-top .dir{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px;align-items:center}',
     '.axa .pja-top .chip{gap:5px}',
-    '.axa .pja-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}',
+    /* LINKS FORA DA LINHA DO TEMPO (16/11/2026): no celular cada codigo tinha 45px de toque com 19px entre
+       linhas, e o toque de um caia no vizinho. Agora e uma fileira com altura de toque propria. */
+    '.axa .pj-lks{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:4px}',
+    '.axa .pj-lks .pj-lk{color:var(--ac-t);text-decoration:underline;text-underline-offset:2px}',
+    '@container app (max-width: 760px){.axa .pj-lks{gap:0 14px}.axa .pj-lks .pj-lk{display:inline-flex;align-items:center;min-height:40px}}',
+    '.axa .pja-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;align-items:start}',
     '.axa .pja-col{display:flex;flex-direction:column;gap:2px;min-width:0;padding:10px;border-radius:12px;background:var(--sf2)}',
+    /* A COLUNA ROLA POR DENTRO (16/11/2026), como no Quadro: a Feitas de um projeto longo esticava a pagina. */
+    '.axa .pja-col{max-height:min(70dvh,520px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}',
+    '.axa .pja-col>.hd{position:sticky;top:-10px;z-index:1;background:var(--sf2);margin-top:-10px;padding-top:12px !important}',
     '.axa .pja-col .hd{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;letter-spacing:.1em;color:var(--tx2);padding:2px 4px 8px;border-bottom:1px solid var(--bd);margin-bottom:4px}',
     '.axa .pja-col .hd .n{margin-left:auto;font-family:var(--font-mono);font-weight:600;color:var(--tx4);letter-spacing:0}',
     '.axa .pja-col .cb{display:flex;justify-content:space-between;gap:8px;font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--tx4);padding:0 6px 2px}',
-    '.axa .pja-ln{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px;border-radius:8px;text-decoration:none;color:var(--tx);font-size:12.5px}',
+    '.axa .pja-ln{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 8px;align-items:center;padding:6px;border-radius:8px;text-decoration:none;color:var(--tx);font-size:12.5px}',
+    '.axa .pja-ln .t{flex:1 1 110px;flex-wrap:wrap;row-gap:4px}.axa .pja-ln .t .chip{white-space:normal;max-width:100%;box-sizing:border-box;line-height:14px;padding-top:2px;padding-bottom:2px}',
     '.axa a.pja-ln:hover{background:var(--sf4);color:var(--tx)}',
     '.axa .pja-ln .t{display:flex;align-items:center;gap:6px;min-width:0}',
     '.axa .pja-ln .t span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}',
     '.axa .pja-ln .t b{font-family:var(--font-mono);font-weight:600;font-size:11.5px;color:var(--tx3);flex-shrink:0}',
     '.axa .pja-ln .d{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11.5px;color:var(--tx2);white-space:nowrap}',
     '.axa .pja-ln .chip{height:18px;font-size:10px;padding:0 6px;gap:4px}',
+    // Data e chip quebram dentro da coluna estreita, em vez de vazar (16/11/2026).
+    '.axa .pja-ln .d{flex-wrap:wrap;min-width:0;max-width:100%;row-gap:4px}.axa .pja-ln .chip{height:auto;min-height:18px}',
     '.axa .pja-vz{font-size:12px;color:var(--tx4);padding:6px}',
     // Formulario do projeto e a faixa da aprovacao.
     '.axa .pjf{max-width:620px}',
@@ -732,9 +743,9 @@
 
     var notas = [];
     if (fora) notas.push(H.plural(fora, 'projeto fica', 'projetos ficam') + ' fora desta janela' + (F.janela !== 'tudo' ? ' — veja em <button type="button" class="link" data-pj-jan="tudo">Tudo</button>' : ''));
-    if (semData.length) notas.push('Sem início ou data alvo, fora da linha do tempo: ' + semData.map(function (p) {
-      return '<a href="' + hrefProjeto(p) + '">' + esc(p.codigo || p.nome) + '</a>';
-    }).join(', '));
+    if (semData.length) notas.push('Sem início ou data alvo, fora da linha do tempo:<span class="pj-lks">' + semData.map(function (p) {
+      return '<a class="pj-lk" href="' + hrefProjeto(p) + '">' + esc(p.codigo || p.nome) + '</a>';
+    }).join('') + '</span>');
 
     var painel = dentro.length
       ? '<section class="pn" style="padding:0;gap:0"><div class="tl-wrap"><div class="tl">' + trilhaCab(J, 'PROJETO') + linhas + '</div></div></section>'

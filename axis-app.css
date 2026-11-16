@@ -25,6 +25,8 @@
 .axa .tb-ico .dot{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:9px;background:var(--ac);color:var(--on-ac);font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center}
 .axa .tb-av{width:40px;height:40px;border-radius:20px;display:inline-flex;align-items:center;justify-content:center;background:var(--ac);color:var(--on-ac);font-size:13px;font-weight:800;text-decoration:none}
 .axa .tabs{display:flex;gap:4px;border-bottom:1px solid var(--bd);margin-top:-4px}
+/* Abas que nao cabem rolam de lado, em vez de empurrar a pagina (16/11/2026). */
+@container app (max-width: 900px){.axa .tabs:not(.vert){overflow-x:auto;overflow-y:hidden;scrollbar-width:none}.axa .tabs:not(.vert)::-webkit-scrollbar{display:none}.axa .tabs:not(.vert) .tab{margin-bottom:0;flex-shrink:0}}
 .axa .tab{height:40px;padding:0 14px;border:0;background:transparent;color:var(--tx3);font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
 .axa .tab.on{color:var(--tx);font-weight:800;border-bottom-color:var(--ac)}
 .axa .cfg{display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px;align-items:start}

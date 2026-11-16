@@ -190,8 +190,18 @@
       '.axa .pl-fil select{height:34px;padding:0 30px 0 10px;border-radius:9px;border:1px solid var(--bd2);background:var(--sf);color:var(--tx);font:inherit;font-size:12.5px;max-width:220px}',
       '.axa .pl-fil select.on{border-color:rgba(var(--ac-rgb),.55);color:var(--ac-t);font-weight:700}',
       '.axa .pl-fil .ct{font-size:12px;color:var(--tx3);margin-left:4px}',
+      // O select ganhou a classe `in` (appearance:none); o `background` acima apagaria a seta em qualquer largura.
+      '.axa .pl-fil select.in{background-image:linear-gradient(45deg,transparent 50%,var(--tx3) 50%),linear-gradient(135deg,var(--tx3) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:30px}',
+      /* FILTROS NO PADRAO DO QUADRO (16/11/2026): no computador, grade de colunas iguais, a mesma
+         altura e a mesma seta do select do app, e 12px entre caixas. */
+      '@container app (min-width: 761px){.axa .pl-fil{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}' +
+        '.axa .pl-fil select.in{width:100%;max-width:none;height:40px;padding:0 34px 0 12px;border-radius:10px;font-size:12.5px;background-color:var(--sf)}' +
+        '.axa .pl-fil .btns{height:40px;justify-content:center}.axa .pl-fil .ct{grid-column:1 / -1;margin-left:0}}',
       '.axa .pl-lay{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px;align-items:start}',
       '.axa .pl-lay.so{grid-template-columns:minmax(0,1fr)}',
+      /* A FILA DESCE ANTES DO CELULAR (16/11/2026): com 260px fixos ao lado, o gantt ficava com menos de 300px
+         de vista em tela media, e as barras viravam pedacos com o codigo cortado. */
+      '@container app (max-width: 1100px){.axa .pl-lay{grid-template-columns:minmax(0,1fr)}}',
       // Apresentacao (`body.apresentando`, gantt.html): o texto cresce, que a sala le de longe.
       '.axa .pl-lay.so .pl-br{font-size:13.5px}',
       '.axa .pl-lay.so .pl-lb .nm{font-size:15px}',
@@ -243,6 +253,14 @@
       '.axa .pl-ch i{width:8px;height:8px;border-radius:50%;flex-shrink:0}',
       '.axa .pl-ch b{font-family:var(--font-mono);color:var(--tx)}',
       '.axa .pl-ch.on{border-color:rgba(var(--ac-rgb),.7);background:rgba(var(--ac-rgb),.12);color:var(--ac-t)}',
+      /* CHIPS LEVES (16/11/2026): quatorze pilulas com borda pareciam badges soltos e ocupavam cinco
+         linhas. No computador viram uma barra de dados: texto com o ponto e a contagem, sem moldura,
+         so o escolhido destacado; situacao e origem ficam depois de um divisor. */
+      '@container app (min-width: 761px){.axa .pl-chs{gap:2px 4px}.axa .pl-ch{height:28px;padding:0 9px;border-color:transparent;background:transparent;border-radius:8px;font-size:12px}' +
+        '.axa .pl-ch:hover{background:var(--sf3);border-color:transparent}.axa .pl-ch.on{border-color:rgba(var(--ac-rgb),.55)}' +
+        '.axa .pl-chs .sep{width:1px;height:18px;background:var(--bd2);margin:0 6px}}',
+      '.axa .pl-chs .sep{display:none}',
+      '@container app (min-width: 761px){.axa .pl-chs .sep{display:block}}',
       // A agenda do celular.
       '.axa .pl-ag{display:flex;flex-direction:column;gap:14px}',
       '.axa .pl-agmodo{display:grid;grid-template-columns:1fr 1fr;gap:8px}',
@@ -302,6 +320,10 @@
       '.axa .pl-br.gr{border-width:2px}',
       '.axa .pl-br.sv{opacity:.65}',
       '.axa .pl-br .c{font-family:var(--font-mono);font-size:10.5px;color:var(--k-t);flex-shrink:0}',
+      /* BARRA DE UM DIA (16/11/2026): o codigo nao cabia em 52px e ficava cortado, como se o dado tivesse sumido.
+         Na barra curta a barra cresce ate caber o codigo, sobre o dia seguinte; se outra barra da raia comeca ali, ela fica por cima. */
+      '.axa .pl-br.curta{justify-self:start;width:max-content;min-width:calc(100% - 6px);padding:0 8px}.axa .pl-br.curta .c{white-space:nowrap}',
+      '.axa .pl-br.curta .t,.axa .pl-br.curta .s,.axa .pl-br.curta .x{display:none}',
       '.axa .pl-br .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}',
       '.axa .pl-br .x{font-size:10.5px;color:var(--k-t);flex-shrink:0;display:inline-flex;align-items:center;gap:2px}',
       '.axa .pl-h{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;z-index:2}',
@@ -349,6 +371,7 @@
       '.axa .pl-cap > summary .note{font-weight:600}',
       '.axa .pl-cap .cb{padding:0 18px 18px;display:flex;flex-direction:column;gap:12px}',
       '.axa .pl-cap .tw{overflow-x:auto}',
+      '.axa .pl-cap .tw td{white-space:nowrap}',
       '.axa .pl-cap table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px}',
       '.axa .pl-cap th{text-align:left;font-size:10.5px;font-weight:800;letter-spacing:.1em;color:var(--tx4);padding:0 8px 8px;border-bottom:1px solid var(--bd)}',
       '.axa .pl-cap td{padding:8px;border-bottom:1px solid var(--bd3);color:var(--tx2);vertical-align:middle}',
@@ -1024,7 +1047,7 @@
     vivas.forEach(function (m) { var s = SP().doPO(m); if (s) sps[s] = true; });
     M.J.sprints.forEach(function (r) { sps[r] = true; });
     var projs = (D.projetos || []).slice().sort(function (a, b) { return String(a.codigo || '').localeCompare(String(b.codigo || '')); });
-    var s = function (k, rot, ops) { return '<select data-plf="' + k + '" aria-label="' + rot + '"' + (F[k] ? ' class="on"' : '') + '>' + ops + '</select>'; };
+    var s = function (k, rot, ops) { return '<select class="in' + (F[k] ? ' on' : '') + '" data-plf="' + k + '" aria-label="' + rot + '">' + ops + '</select>'; };
     var n = nFiltros();
     // No celular os filtros recolhem no botao "Filtros (n)" (H.filtros); a contagem fica a mostra.
     return '<div class="pl-fil" role="group" aria-label="Filtros">' + H.filtros(
@@ -1073,7 +1096,7 @@
       (sl ? '\n' + raiz.SELO.titulo(sl) : '') + (cm ? '\n' + raiz.SELO.tituloComite(cm) : '') +
       (viaApi ? '\nNasceu pela API, sem passar pelo planejamento.' : viaPainel ? '\nAberta no Painel Dev, sem passar pelo planejamento.' : '');
     var cls = 'pl-br k-' + corDe(m) + (paus ? ' pa' : '') + (x.her ? ' he' : '') + (x.grupo ? ' gr' : '') + (arr ? ' ed' : '') + (EST.pend[m.id] ? ' sv' : '') +
-      (viaApi ? ' api' : viaPainel ? ' painel' : '') + (js === 0 ? ' jpri' : js > 0 ? ' jsel' : '');
+      (viaApi ? ' api' : viaPainel ? ' painel' : '') + (js === 0 ? ' jpri' : js > 0 ? ' jsel' : '') + (x.e - x.s < 1 ? ' curta' : '');
     var sprintsFora = x.her && raiz.PRAZO ? raiz.PRAZO.sprintsEstouradas(m, etapaGravada(m), M.hoje) : 0;
     return '<a class="' + cls + '" href="' + H.hrefItem(m) + '" draggable="false" data-id="' + esc(m.id) + '" data-ln="' + esc(l.nome) + '"' +
       ' data-s="' + x.s + '" data-e="' + x.e + '"' + (x.cs ? ' data-cs="1"' : '') + (arr ? ' data-arr="1"' : '') + (ed ? ' data-ed="1"' : '') +
@@ -1169,6 +1192,7 @@
     var h = ch('', 'Todos', c.todos, 'var(--tx3)', 'Todas as etapas');
     ETAPAS_CHIP.forEach(function (k) { var e = H.ETAPA_POR_ID[k] || { rotulo: k, dot: 'var(--tx4)' }; h += ch(k, e.rotulo, c.etapas[k], e.dot); });
     var p = c.paralelos;
+    if (p.__pausada__ || p.__herdada__ || p.__api__ || p.__painel__) h += '<span class="sep" aria-hidden="true"></span>';
     if (p.__pausada__) h += ch('__pausada__', 'Pausada', p.__pausada__, 'var(--mg, var(--pu))', 'Prazo suspenso. A entrega fica oculta e volta empurrada pelos dias parados.');
     if (p.__herdada__) h += ch('__herdada__', '⇥ Veio de antes', p.__herdada__, 'var(--tx2)', 'Ainda na esteira, com o prazo antes do início do período. O prazo NÃO foi movido.');
     if (p.__api__) h += ch('__api__', 'Inclusão via API', p.__api__, 'var(--wn)', 'Nasceram pelo endpoint da API — script ou integração. Conta procedência.');

@@ -68,7 +68,7 @@
       '.axa .sp-faixa .dir{margin-left:auto;display:flex;gap:10px;align-items:center}',
       '.axa .sp-trl{display:flex;flex-wrap:wrap;gap:6px}',
       '.axa .sp-trl .btns .n{margin-left:6px;font-size:11px;color:var(--tx4);font-weight:800}',
-      '.axa .sp-k5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}',
+      '.axa .sp-k5{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}',
       '.axa .sp-k{padding:16px;border-radius:14px;background:rgba(var(--sf-rgb),.75);border:1px solid var(--bd);display:flex;flex-direction:column;gap:4px;min-width:0}',
       '.axa .sp-k.x-wn{border-color:rgba(var(--wn-rgb),.32)}',
       '.axa .sp-k.x-ok{border-color:rgba(var(--ok-rgb),.32)}',
@@ -79,10 +79,14 @@
       '.axa .sp-k .s{font-size:11.5px;line-height:16px;color:var(--tx3)}',
       '.axa .sp-2{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:20px;align-items:start}',
       '.axa .sp-2e{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}',
+      // Paineis lado a lado so com espaco: abaixo de 900px a tabela de pontos por pessoa nao cabia (16/11/2026).
+      '@container app (max-width: 900px){.axa .sp-2,.axa .sp-2e{grid-template-columns:minmax(0,1fr)}}',
       '.axa .sp-pn{padding:20px;border-radius:16px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd);display:flex;flex-direction:column;gap:10px;min-width:0}',
       '.axa .sp-pn .h2{font-size:17px}',
       '.axa .sp-pn .hh{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center}',
-      '.axa .sp-pp{display:grid;grid-template-columns:140px minmax(0,1fr) 64px 84px;gap:12px;align-items:center;font-size:13px}',
+      '.axa .sp-pp{display:grid;grid-template-columns:minmax(80px,140px) minmax(32px,1fr) 56px 72px;gap:12px;align-items:center;font-size:13px}',
+      // Cada linha e uma grade propria: colunas de numero com largura fixa mantem barras e numeros alinhados entre as linhas, e o numero nao quebra (16/11/2026).
+      '.axa .sp-pp .pt,.axa .sp-pp .lv,.axa .sp-pp-hd>span{white-space:nowrap}',
       '.axa .sp-pp-hd{font-size:11px;color:var(--tx4);font-weight:700;letter-spacing:.04em;text-transform:uppercase}',
       '.axa .sp-pp .pt{font-family:var(--font-mono);font-size:12px;color:var(--tx3);text-align:right}',
       '.axa .sp-pp .tr{height:8px;border-radius:4px;background:var(--sf5);overflow:hidden}',
@@ -100,6 +104,8 @@
       '.axa .sp-esc .x{display:contents}',
       '.axa .sp-esc .wy{font-size:12px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.axa .sp-esc .pt{font-family:var(--font-mono);font-size:12px;text-align:right}',
+      // A linha compacta do celular vale ate 1100px: as seis colunas fixas somavam 630px e empurravam a pagina (16/11/2026).
+      '@container app (max-width: 1100px){.axa .sp-esc{grid-template-columns:62px minmax(0,1fr) 34px;row-gap:6px}.axa .sp-esc .x{display:flex;flex-wrap:wrap;gap:6px;align-items:center;grid-column:2/4;grid-row:2}}',
       '.axa .sp-rs{display:inline-flex;gap:4px;flex-wrap:wrap}',
       '.axa .sp-rs .chip{height:18px;font-size:10px;padding:0 6px}',
       '.axa .sp-fl{display:flex;flex-wrap:wrap;gap:6px}',

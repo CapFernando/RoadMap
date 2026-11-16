@@ -161,6 +161,22 @@
       '.axa .qd-trava{display:none;align-items:flex-start;gap:6px;padding:8px 10px;border-radius:10px;background:rgba(var(--dg-rgb),.1);color:var(--dg-t);font-size:12px;line-height:17px}',
       '.axa .qd-col.trava .qd-trava{display:flex}',
       '.axa .qd-ch{display:flex;align-items:center;gap:8px;padding:2px 4px}',
+      /* COLUNA COM ROLAGEM PROPRIA */
+      // Sem teto, a coluna mais longa decidia a altura da pagina. No computador a coluna
+      // para na altura da tela e rola por dentro, com o titulo preso no topo. A coluna
+      // vazia (estreita, titulo na vertical) fica de fora; no celular o quadro ja mostra
+      // uma coluna por vez e a pagina rola normalmente.
+      '@container app (min-width: 761px){.axa .qd-col{max-height:calc(100dvh - 140px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--sf5) transparent}' +
+        '.axa .qd-col:not(.vazia)>.qd-ch{position:sticky;top:-12px;z-index:2;margin-top:-12px;padding-top:14px;padding-bottom:8px;background:var(--qd-col)}}',
+      /* FILTROS EM GRADE COMPACTA */
+      // Em largura media a barra quebrava em quatro linhas tortas e empurrava o quadro para
+      // baixo. No computador os filtros viram uma grade de colunas iguais, e o nome de cada
+      // um vira legenda pequena dentro da propria caixa: cabe em duas linhas alinhadas.
+      '@container app (min-width: 761px){.axa .qd-ferr{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px;flex:1 1 100%;align-items:stretch}' +
+        '.axa .qd-ferr .qd-par:not(.qd-so-cel){position:relative;display:block;min-width:0}' +
+        '.axa .qd-ferr .qd-fl{position:absolute;left:13px;top:5px;z-index:1;font-size:10px;line-height:12px;letter-spacing:.03em;pointer-events:none}' +
+        '.axa .qd-ferr .qd-sel{width:100%;max-width:none;height:40px;padding-top:13px}' +
+        '.axa .qd-ferr .fsp{display:flex;width:100%}.axa .qd-ferr .fsp .fsp-btn.in{min-width:0;max-width:none;width:100%}.axa .qd-ferr>.btns{height:40px;justify-content:center}}',
       '.axa .qd-ch h2{margin:0;font-family:var(--font-ui);font-size:11.5px;font-weight:800;letter-spacing:.12em;color:var(--tx)}',
       '.axa .qd-ch .n{margin-left:auto;font-family:var(--font-mono);font-size:11.5px;color:var(--tx3)}',
       '.axa .qd-card{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:13px;background:var(--qd-card);border:1px solid var(--qd-cbd);text-decoration:none;color:var(--tx);cursor:pointer}',
@@ -173,6 +189,8 @@
       // Nao e do dev (fila ou do time): borda tracejada e fundo apagado (`kcard-fila`, dev.html).
       '.axa .qd-card.fila{border-style:dashed;border-color:rgba(var(--in-rgb),.45);background:rgba(var(--in-rgb),.05)}',
       '.axa .qd-dono{display:flex;flex-wrap:wrap;gap:5px}',
+      // Chip de dono mais largo que o card: uma linha, corta com reticencias; o title explica de quem e (16/11/2026).
+      '.axa .qd-dono .chip{display:block;max-width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:20px}.axa .qd-dono .chip i{margin-right:4px;vertical-align:-1px}',
       '.axa .qd-acao{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}',
       '.axa .qd-card .qd-pega{height:28px;padding:0 10px;font-size:12px}',
       '.axa .qd-top{display:flex;justify-content:space-between;align-items:center;gap:6px}',
@@ -878,11 +896,10 @@
     }
     h += avisoSprintPendente(ctx);
     /* Os filtros sao um bloco so, empurrado para a direita: quando nao cabem
-       ao lado dos alertas, descem juntos para a linha de baixo. A busca fica
-       fora do H.filtros: no celular ela continua a mao, ao lado do botao. */
-    h += '</div><div class="qd-ferr">' +
-      '<input type="search" id="qd-busca" class="in qd-busca" value="' + attr(F.busca) + '" placeholder="AX-179, título, dev, solicitante…"' +
-      ' aria-label="Buscar no quadro por código, título, descrição, dev ou solicitante" autocomplete="off" enterkeyhint="search">';
+       ao lado dos alertas, descem juntos para a linha de baixo. A BUSCA DO QUADRO
+       SAIU (16/11/2026): havia duas, esta e a global da barra do topo (Ctrl K), e
+       fica so a global. `F.busca` continua no estado, sempre vazio. */
+    h += '</div><div class="qd-ferr">';
     // No celular os filtros recolhem no botao "Filtros (n)" (H.filtros); `h` volta depois.
     var antesFl = h; h = '';
     // A frente, que no computador e o seletor do cabecalho, no celular vai para a gaveta.
@@ -1141,6 +1158,29 @@
     return false;
   }
 
+  /* A ESTEIRA ANDA NA BORDA (16/11/2026). Arrastando um card, a coluna de destino
+     pode estar fora da tela. Perto da borda (80px) o quadro rola para aquele lado,
+     mais rapido quanto mais perto, com teto de 20px por evento. O navegador repete
+     o dragover com o mouse parado, entao segurar na borda faz a esteira andar. */
+  function passoNaBorda(p, ini, fim) {
+    var z = 80;
+    if (p < ini + z) return -Math.min(20, Math.ceil((ini + z - p) / 4));
+    if (p > fim - z) return Math.min(20, Math.ceil((p - (fim - z)) / 4));
+    return 0;
+  }
+  /* FIM passoNaBorda */
+  function rolaNaBorda(e) {
+    var rolo = e.target.closest && e.target.closest('.qd-rolo');
+    if (!rolo) return;
+    var r = rolo.getBoundingClientRect();
+    var dx = passoNaBorda(e.clientX, r.left, r.right);
+    if (dx) rolo.scrollLeft += dx;
+    var col = e.target.closest('.qd-col');
+    if (!col || col.scrollHeight <= col.clientHeight) return;
+    var c = col.getBoundingClientRect();
+    var dy = passoNaBorda(e.clientY, c.top, c.bottom);
+    if (dy) col.scrollTop += dy;
+  }
   var ARR = null;
   /** Liga os gestos comuns do Quadro e do Meu trabalho, uma vez por vista.
    *  `o` = { estado (guarda a etapa do celular), abre(k) (coluna que ainda
@@ -1175,6 +1215,7 @@
     });
     el.addEventListener('dragover', function (e) {
       if (!ARR) return;
+      rolaNaBorda(e);
       var alvo = e.target.closest('[data-solta]');
       if (!alvo || !el.contains(alvo)) return;
       var k = alvo.getAttribute('data-solta');
