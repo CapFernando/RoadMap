@@ -178,6 +178,8 @@
       '.axa .it-conv-d,.axa .it-conv-m{display:flex;flex-direction:column;min-width:0}',
       '.axa .it-conv-m{display:none}',
       // A demanda de outra pessoa, aberta para leitura (`ms-leitura`, dev.html).
+      '.axa .it-rasc{display:flex;flex-direction:column;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--bd)}',
+      '.axa .it-rasc textarea{resize:vertical;min-height:96px;font-size:13.5px;line-height:20px}',
       '.axa .it-leitura{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;border:1px solid rgba(var(--in-rgb),.35);background:rgba(var(--in-rgb),.08);color:var(--in-t);font-size:13px;font-weight:600}',
       // Os botoes da lateral (Sprint, Solicitante) e os votos do Poker.
       '.axa .it-props .it-pbt{height:26px;padding:0 9px;font-size:12px;margin-left:4px;vertical-align:middle}',
@@ -474,6 +476,39 @@
   }
 
   // ── Pedacos do Detalhe ───────────────────────────────────────────────
+  /* O RASCUNHO DA ENTREGA (PRD RF-09 e RF-10): o dono vai escrevendo o que
+     implementou enquanto trabalha; salva sozinho ao parar de digitar, no
+     servidor (rota `rascunho-*`, D1), visivel so para ele e em qualquer
+     aparelho. Ao entregar, a caixa ja vem com o texto. */
+  function areaRascunho(m, col) {
+    // A ETAPA decide, e nao `entregue_em`: a devolvida volta com a data da entrega anterior e precisa de nova entrega.
+    if (!H.minha(m) || ['planejado', 'em_andamento', 'atrasado'].indexOf(col) < 0) return '';
+    return '<div class="it-rasc"><label class="lab" for="it-rasc">RASCUNHO DA ENTREGA <span class="note" style="text-transform:none;letter-spacing:0">· só você vê</span></label>' +
+      '<textarea class="in" id="it-rasc" rows="4" maxlength="8000" placeholder="Vá anotando o que foi implementado. Ao entregar, este texto já vem preenchido." data-id="' + H.esc(m.id) + '"></textarea>' +
+      '<span class="note" id="it-rasc-st" aria-live="polite">Carregando o rascunho…</span></div>';
+  }
+  function ligarRascunho(el) {
+    var ta = el.querySelector('#it-rasc'), st = el.querySelector('#it-rasc-st');
+    if (!ta) return;
+    var id = ta.getAttribute('data-id'), tm = null, ultimo = '';
+    var hora = function (iso) { var d = new Date(iso); return isNaN(d) ? '' : String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+    H.api('rascunho-ler', { id: id }).then(function (j) {
+      if (document.activeElement !== ta || !ta.value) { ta.value = (j && j.texto) || ''; ultimo = ta.value; }
+      st.textContent = j && j.atualizado_em ? 'Salvo às ' + hora(j.atualizado_em) + '.' : 'Nada escrito ainda.';
+    }).catch(function () { st.textContent = 'Não foi possível ler o rascunho agora.'; });
+    var salva = function () {
+      var v = ta.value;
+      if (v === ultimo) return;
+      st.textContent = 'Salvando…';
+      H.api('rascunho-gravar', { id: id, texto: v }).then(function (j) {
+        ultimo = v;
+        st.textContent = j && j.apagado ? 'Rascunho apagado.' : 'Salvo às ' + hora(j && j.atualizado_em) + '.';
+      }).catch(function () { st.textContent = 'Não foi possível salvar. O texto continua aqui; tente de novo.'; });
+    };
+    ta.addEventListener('input', function () { clearTimeout(tm); tm = setTimeout(salva, 1200); });
+    ta.addEventListener('blur', function () { clearTimeout(tm); salva(); });
+  }
+
   function sec(titulo, corpo, direita) {
     return '<section class="it-sec">' +
       (direita ? '<div class="row" style="justify-content:space-between"><h2 class="it-h2">' + titulo + '</h2>' + direita + '</div>'
@@ -727,7 +762,8 @@
       dod(!!m.entregue_em, m.entregue_em ? 'Entregue pelo dev em ' + H.esc(H.dma(m.entregue_em)) : 'Entregue pelo dev') +
       dod(!!hom, hom ? 'Homologado por ' + H.esc(hom.quem) + (hom.em ? ' em ' + H.esc(H.dma(hom.em)) : '') : 'Homologado pela área' + (exigeArea ? '' : ' (opcional em sustentação, com registro)')) +
       dod(!!m.validado_por || col === 'concluido', m.validado_por ? 'Validado por ' + H.esc(m.validado_por) + (m.validado_em ? ' em ' + H.esc(H.dma(m.validado_em)) : '') : 'Validado pelo PM/PO') +
-      dod(!!m.em_producao, m.em_producao ? 'Em produção' + (m.producao_por ? ' (' + H.esc(m.producao_por) + ')' : '') : 'Em produção'));
+      dod(!!m.em_producao, m.em_producao ? 'Em produção' + (m.producao_por ? ' (' + H.esc(m.producao_por) + ')' : '') : 'Em produção') +
+      areaRascunho(m, col));
 
     var refs = window.REFERENCIA ? REFERENCIA.daDemanda(m) : [];
     if (refs.length) {
@@ -1563,6 +1599,7 @@
       if (alvo && ctx.rota.aba === 'conversa') ligarCompositor(el, alvo);
       if (alvo) ligarTasks(el, alvo);
       if (!alvo) return;
+      ligarRascunho(el);
       var AC = window.AXIS_ACOES;
       // A zona de colar e arrastar (anexo-cola.js): o arquivo vai pelo mesmo `anexarArquivos`.
       if (window.ligaZonaAnexo && AC && el.querySelector('#it-anx-arq')) {
