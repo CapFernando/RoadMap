@@ -26493,6 +26493,13 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           ok(r2.encerrar.join() === r1.criar[0].id && !r2.criar.length, 'retomada a demanda, so o acompanhamento DELA e encerrado; o escrito a mao nao se toca', JSON.stringify(r2));
           const nova = mel.map((m) => (m.id === 'a1' ? Object.assign({}, m, { pausado_em: '2026-11-25' }) : m));
           ok(PA(nova, itens, '2026-11-25').criar.some((x) => x.origem.chave === 'pausa:a1:2026-11-25'), 'uma pausa nova da mesma demanda e outro acompanhamento');
+          // Pausar, retomar e pausar de novo NO MESMO DIA: a chave se repete, mas o encerrado nao conta.
+          const fechados = itens.map((it) => (it.id === r1.criar[0].id ? Object.assign({}, it, { concluido: true, concluido_em: '2026-11-10' }) : it));
+          const r3 = PA(mel, fechados, '2026-11-10');
+          const novoA1 = r3.criar.find((x) => x.origem.chave === 'pausa:a1:2026-11-10');
+          ok(!!novoA1 && novoA1.id === r1.criar[0].id + '-2' && !novoA1.concluido,
+             'segunda pausa por terceiro no mesmo dia abre outro acompanhamento (o encerrado da primeira nao impede), com id proprio', JSON.stringify(r3.criar.map((x) => x.id)));
+          ok(!PA(mel, fechados.concat([novoA1]), '2026-11-10').criar.length, 'e rodar de novo nao duplica o novo');
         }
         ok((WP.match(/await sincronizaAcompanhamentosDaPausa\(gh, data\.melhorias, hojeBR\(\)\);/g) || []).length === 2,
            'a sincronizacao roda depois de gravar, no publish e no dev-publish');

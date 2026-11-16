@@ -2766,13 +2766,21 @@ function pausasParaAcompanhar(melhorias, itens, hoje) {
     desejadas.set(chavePausaTerceiro(m), { m, t });
   }
   const daPausa = (itens || []).filter(it => it && it.origem && it.origem.tipo === 'pausa_terceiro');
-  const existentes = new Set(daPausa.map(it => it.origem.chave));
+  /* So o ABERTO conta como "ja existe". A chave e pelo DIA da pausa: pausar,
+     retomar e pausar de novo no mesmo dia repete a chave, e o acompanhamento
+     encerrado da primeira nao pode impedir o da segunda — o fornecedor ficaria
+     sem cobranca. A nova linha ganha um id proprio (`-2`, `-3`...). */
+  const abertas = new Set(daPausa.filter(it => !it.concluido).map(it => it.origem.chave));
+  const ids = new Set((itens || []).map(it => it && it.id));
   const criar = [];
   for (const [chave, { m, t }] of desejadas) {
-    if (existentes.has(chave)) continue;
+    if (abertas.has(chave)) continue;
+    const idBase = 'fw-pausa-' + String(m.id).slice(-12) + '-' + String(m.pausado_em).slice(0, 10).replace(/-/g, '');
+    let id = idBase;
+    for (let n = 2; ids.has(id); n++) id = idBase + '-' + n;
     const prometido = /^\d{4}-\d{2}-\d{2}$/.test(String(t.retorno || '')) ? String(t.retorno) : '';
     criar.push({
-      id: 'fw-pausa-' + String(m.id).slice(-12) + '-' + String(m.pausado_em).slice(0, 10).replace(/-/g, ''),
+      id,
       atividade: limpaTexto('Retorno de ' + t.nome + ' sobre ' + (m.codigo ? m.codigo + ' ' : '') + (m.titulo || ''), 200),
       pessoa: limpaTexto(t.nome, 80),
       retorno: prometido || mais7,
