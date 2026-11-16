@@ -257,6 +257,15 @@ const LIMITES = {
   'recuperar':      { max: 5,   janela: 60 },
   'usuarios':       { max: 40,  janela: 60 },
   'quem-sou':       { max: 60,  janela: 60 },
+  // Uma por aba e por pagina antiga aberta com ?antiga=1 (a tela deduplica).
+  'uso-antiga':     { max: 30,  janela: 60 },
+  'uso-antiga-relatorio': { max: 20, janela: 60 },
+  // Avisos lidos: uma leitura ao abrir e uma marcacao por clique no sino.
+  'avisos-lidos':   { max: 60,  janela: 60 },
+  // Rascunho da entrega: salvo ao parar de digitar, lido ao abrir a demanda.
+  'rascunho-ler':   { max: 60,  janela: 60 },
+  'rascunho-gravar': { max: 60, janela: 60 },
+  'espelho-d1':     { max: 30,  janela: 60 },   // admin: status, comparar e a carga em fatias
   // Uma por pagina aberta: a tela pede a lista ao carregar e guarda.
   'colaboradores':  { max: 20,  janela: 60 },
   'demanda-nova':   { max: 20,  janela: 60 },   // abertura por HTTP: 20/min por IP
@@ -1088,7 +1097,200 @@ function textoDaBaseFila(data, fila) {
   if (!HIST_NA_BASE && data && Array.isArray(data.melhorias)) {
     for (const m of data.melhorias) { if (m && 'historico' in m) delete m.historico; }
   }
+  /* O ESPELHO NO D1 (PRD RF-35/36, passo 1) pede o texto de cada demanda.
+     Montado aqui, ele sai DO MESMO stringify do arquivo — nenhuma demanda e
+     serializada duas vezes — e o arquivo fica identico ao de sempre (a
+     invariante compara). Desligado, o caminho e o de antes. */
+  if (fila && fila.espelhoLigado && data && Array.isArray(data.melhorias)) {
+    const r = textoComEspelho(data);
+    fila.espelho = r.espelho;
+    return r.texto;
+  }
   return JSON.stringify(data);
+}
+
+/* ═══ O ESPELHO DA BASE NO D1 (PRD RF-35 e RF-36, passo 1) ═══════════════════
+ *
+ * GRAVACAO DUPLA: o `melhorias.json` segue sendo a fonte; depois de cada
+ * gravacao bem-sucedida, as demandas que mudaram sao copiadas para a tabela
+ * `demanda` (uma linha por demanda, o JSON inteiro em `corpo`) e as chaves de
+ * topo para `base_meta`. Uma comparacao diaria (cron) confere os dois.
+ *
+ * LIGADO POR `ESPELHO_D1=1`. Sem a variavel, nada disto roda: nenhum custo e
+ * nenhuma consulta a mais em gravacao alguma.
+ *
+ * O PLANO E O FREE (10 ms de CPU por requisicao; 50 consultas ao D1 por
+ * requisicao; 100 parametros por consulta). Por isso:
+ *   • o texto de cada demanda sai do stringify que o arquivo ja faz;
+ *   • "mudou?" e o SHA-1 do texto (nativo, `crypto.subtle`) contra o guardado,
+ *     lido numa consulta so (`id, hash`);
+ *   • so o que mudou e gravado, 20 linhas por INSERT (5 parametros cada) e no
+ *     maximo ESPELHO_MAX_LINHAS por requisicao — o resto fica para a proxima
+ *     gravacao, a sincronizacao manual ou o cron, e a comparacao acusa;
+ *   • roda no `waitUntil`, depois da resposta: a tela nao espera o espelho.
+ * Falha no D1 so vai para o log: a gravacao no GitHub ja aconteceu e vale. */
+const ESPELHO_MAX_LINHAS = 200;
+const ESPELHO_LINHAS_POR_INSERT = 20;
+const ESPELHO_MARCA = '__espelho_d1_melhorias__';
+const ESPELHO_META_FORA = ['melhorias'];
+
+function espelhoLigado(env) { return String((env && env.ESPELHO_D1) || '').trim() === '1'; }
+
+/** O texto do arquivo e, de brinde, o de cada demanda e de cada chave de topo.
+ *  A saida e a MESMA de `JSON.stringify(data)`: `melhorias` vira uma marca, o
+ *  resto e serializado normalmente e a marca e trocada pelo array montado a mao
+ *  (troca por funcao, para um `$` no texto nao ser lido como padrao). */
+function textoComEspelho(data) {
+  const ms = data.melhorias;
+  const partes = ms.map(m => { const t = JSON.stringify(m); return t === undefined ? 'null' : t; });
+  data.melhorias = ESPELHO_MARCA;
+  let texto;
+  try { texto = JSON.stringify(data); } finally { data.melhorias = ms; }
+  const arr = '[' + partes.join(',') + ']';
+  const marca = JSON.stringify(ESPELHO_MARCA);
+  const i = texto.indexOf(marca);
+  texto = texto.slice(0, i) + arr + texto.slice(i + marca.length);
+  const demandas = [];
+  ms.forEach((m, k) => { if (m && m.id) demandas.push({ id: String(m.id), codigo: m.codigo == null ? '' : String(m.codigo), corpo: partes[k] }); });
+  const meta = {};
+  Object.keys(data).forEach(k => {
+    if (ESPELHO_META_FORA.indexOf(k) >= 0) return;
+    const t = JSON.stringify(data[k]);
+    if (t !== undefined) meta[k] = t;
+  });
+  return { texto, espelho: { demandas, meta } };
+}
+
+async function espelhoHash(texto) {
+  const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(String(texto)));
+  return [...new Uint8Array(buf)].map(b => (b < 16 ? '0' : '') + b.toString(16)).join('');
+}
+
+let _criouEspelho = false;
+async function espelhoTabelas(db) {
+  if (_criouEspelho) return;
+  await db.batch([
+    db.prepare('CREATE TABLE IF NOT EXISTS demanda (id TEXT PRIMARY KEY, codigo TEXT, corpo TEXT NOT NULL, ' +
+      'hash TEXT NOT NULL, versao INTEGER NOT NULL DEFAULT 1, atualizado_em TEXT NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS base_meta (chave TEXT PRIMARY KEY, corpo TEXT NOT NULL, ' +
+      'hash TEXT NOT NULL, atualizado_em TEXT NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS espelho_execucao (em TEXT NOT NULL, origem TEXT NOT NULL, ' +
+      'diferencas INTEGER NOT NULL, detalhe TEXT NOT NULL)'),
+  ]);
+  _criouEspelho = true;
+}
+
+/** O QUE FALTA NO D1 para ele bater com a base — puro (a suite o executa).
+ *  `base` = { demandas: [{id, hash}], meta: {chave: hash} }; `d1` = as mesmas
+ *  formas lidas do banco. `atualizado_em` muda a cada gravacao e nao conta. */
+function espelhoDiferencas(base, d1) {
+  const naBase = new Map((base.demandas || []).map(x => [x.id, x.hash]));
+  const noD1 = new Map((d1.demandas || []).map(x => [x.id, x.hash]));
+  const faltando = [], diferentes = [], sobrando = [];
+  naBase.forEach((h, id) => { if (!noD1.has(id)) faltando.push(id); else if (noD1.get(id) !== h) diferentes.push(id); });
+  noD1.forEach((_h, id) => { if (!naBase.has(id)) sobrando.push(id); });
+  const meta = [];
+  const bm = base.meta || {}, dm = d1.meta || {};
+  Object.keys(bm).forEach(k => { if (k !== 'atualizado_em' && bm[k] !== dm[k]) meta.push(k); });
+  Object.keys(dm).forEach(k => { if (k !== 'atualizado_em' && !(k in bm)) meta.push(k); });
+  return { faltando, diferentes, sobrando, meta,
+           total: faltando.length + diferentes.length + sobrando.length + meta.length };
+}
+
+async function espelhoLerD1(db) {
+  const r = await db.batch([
+    db.prepare('SELECT id, hash FROM demanda'),
+    db.prepare('SELECT chave, hash FROM base_meta'),
+  ]);
+  const meta = {};
+  ((r[1] && r[1].results) || []).forEach(x => { meta[x.chave] = x.hash; });
+  return { demandas: ((r[0] && r[0].results) || []).map(x => ({ id: x.id, hash: x.hash })), meta };
+}
+
+/** Hash de tudo o que a gravacao (ou a leitura do arquivo) produziu. */
+async function espelhoComHash(espelho) {
+  const demandas = await Promise.all((espelho.demandas || []).map(async d => Object.assign({ hash: await espelhoHash(d.corpo) }, d)));
+  const meta = {}, metaTxt = espelho.meta || {};
+  await Promise.all(Object.keys(metaTxt).map(async k => { meta[k] = await espelhoHash(metaTxt[k]); }));
+  return { demandas, meta, metaTxt };
+}
+
+/** Leva ao D1 o que difere, ate o teto. Devolve o que ficou por fazer. */
+async function espelhoSincroniza(db, espelho, max) {
+  await espelhoTabelas(db);
+  const base = await espelhoComHash(espelho);
+  const dif = espelhoDiferencas(base, await espelhoLerD1(db));
+  const porId = new Map(base.demandas.map(d => [d.id, d]));
+  const teto = max == null ? ESPELHO_MAX_LINHAS : max;
+  const gravar = dif.faltando.concat(dif.diferentes).slice(0, teto).map(id => porId.get(id));
+  const agora = new Date().toISOString();
+  const stmts = [];
+  for (let i = 0; i < gravar.length; i += ESPELHO_LINHAS_POR_INSERT) {
+    const lote = gravar.slice(i, i + ESPELHO_LINHAS_POR_INSERT);
+    stmts.push(db.prepare('INSERT INTO demanda (id, codigo, corpo, hash, atualizado_em) VALUES ' +
+      lote.map(() => '(?, ?, ?, ?, ?)').join(', ') +
+      ' ON CONFLICT(id) DO UPDATE SET codigo = excluded.codigo, corpo = excluded.corpo, hash = excluded.hash, ' +
+      'versao = demanda.versao + 1, atualizado_em = excluded.atualizado_em')
+      .bind(...lote.flatMap(d => [d.id, d.codigo, d.corpo, d.hash, agora])));
+  }
+  const apagar = dif.sobrando.slice(0, 90);
+  if (apagar.length) stmts.push(db.prepare('DELETE FROM demanda WHERE id IN (' + apagar.map(() => '?').join(',') + ')').bind(...apagar));
+  dif.meta.forEach(k => {
+    if (k in base.metaTxt) {
+      stmts.push(db.prepare('INSERT INTO base_meta (chave, corpo, hash, atualizado_em) VALUES (?, ?, ?, ?) ' +
+        'ON CONFLICT(chave) DO UPDATE SET corpo = excluded.corpo, hash = excluded.hash, atualizado_em = excluded.atualizado_em')
+        .bind(k, base.metaTxt[k], base.meta[k], agora));
+    } else stmts.push(db.prepare('DELETE FROM base_meta WHERE chave = ?').bind(k));
+  });
+  if (stmts.length) await db.batch(stmts);
+  const restam = (dif.faltando.length + dif.diferentes.length - gravar.length) + (dif.sobrando.length - apagar.length);
+  return { gravadas: gravar.length, apagadas: apagar.length, meta: dif.meta.length, restam, total: base.demandas.length };
+}
+
+/** Le a base do arquivo e devolve o mesmo formato que a gravacao produz. */
+async function espelhoDaBaseNoArquivo(gh) {
+  const r = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(), { headers: { Accept: 'application/vnd.github.raw' } });
+  if (!r.ok) throw new Error('arquivo: HTTP ' + r.status);
+  const data = JSON.parse(await r.text());
+  if (!data || !Array.isArray(data.melhorias)) throw new Error('arquivo sem melhorias');
+  return textoComEspelho(data).espelho;
+}
+
+/** A COMPARACAO (cron diario e o botao de Configuracoes): grava uma linha em
+ *  `espelho_execucao` com o numero de diferencas e as primeiras de cada tipo. */
+async function espelhoCompara(env, gh, origem) {
+  const db = env.POKER_DB;
+  await espelhoTabelas(db);
+  const base = await espelhoComHash(await espelhoDaBaseNoArquivo(gh));
+  const dif = espelhoDiferencas(base, await espelhoLerD1(db));
+  const detalhe = { demandas: base.demandas.length, faltando: dif.faltando.slice(0, 20), diferentes: dif.diferentes.slice(0, 20),
+                    sobrando: dif.sobrando.slice(0, 20), meta: dif.meta.slice(0, 20),
+                    n: { faltando: dif.faltando.length, diferentes: dif.diferentes.length, sobrando: dif.sobrando.length, meta: dif.meta.length } };
+  const em = new Date().toISOString();
+  await db.batch([
+    db.prepare('INSERT INTO espelho_execucao (em, origem, diferencas, detalhe) VALUES (?, ?, ?, ?)').bind(em, origem, dif.total, JSON.stringify(detalhe)),
+    db.prepare('DELETE FROM espelho_execucao WHERE rowid NOT IN (SELECT rowid FROM espelho_execucao ORDER BY em DESC LIMIT 60)'),
+  ]);
+  console.log(JSON.stringify({ acao: 'espelho-comparar', ok: true, origem, diferencas: dif.total, demandas: base.demandas.length }));
+  return { em, origem, diferencas: dif.total, detalhe };
+}
+
+async function espelhoUltima(db) {
+  try {
+    await espelhoTabelas(db);
+    const r = await db.prepare('SELECT em, origem, diferencas, detalhe FROM espelho_execucao ORDER BY em DESC LIMIT 1').first();
+    if (!r) return null;
+    let detalhe = {}; try { detalhe = JSON.parse(r.detalhe); } catch (_) {}
+    return { em: r.em, origem: r.origem, diferencas: r.diferencas, detalhe };
+  } catch (_) { return null; }
+}
+
+function ghCliente(env) {
+  const nome = env.DATA_REPO || REPO_NAME_PADRAO;
+  return (path, opts = {}) => fetch('https://api.github.com/repos/' + REPO_OWNER + '/' + nome + (path ? '/' + path : ''), {
+    ...opts,
+    headers: { Authorization: 'token ' + env.GH_TOKEN, Accept: 'application/vnd.github.v3+json', 'User-Agent': 'audax-roadmap-worker', ...(opts.headers || {}) },
+  });
 }
 
 /* Junta duas trilhas sem repetir evento: a mesma entrada pode chegar pela copia
@@ -2655,11 +2857,13 @@ function entrandoEmValidacaoSemHoras(recebido, servidor) {
  * a demanda cujo responsavel e um deles, ou sem responsavel e marcada Sales Ops.
  * A espelho mora no `dev.html` (`salesOpsLivre`). Desligar: false aqui e la. */
 const SALES_OPS_SEM_TRAVA = true;
-const SALES_OPS_LIVRES = ['josias', 'rikelme'];
-function ehSalesOpsLivre(nome) {
-  const n = String(nome == null ? '' : nome).normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase().trim().split(/\s+/)[0] || '';
-  return SALES_OPS_LIVRES.includes(n);
+/* 16/11/2026 (PRD RF-22): QUEM tem essa liberacao deixou de ser uma lista de
+   primeiros nomes no codigo e virou a marca `kanban_livre` da conta, ligada em
+   Usuarios (admin) e em Configuracoes > Pessoas (app). A primeira carga marca
+   as contas que a lista marcava (Josias e Rikelme), entao no deploy ninguem
+   ganha nem perde. Senha compartilhada nao tem conta, logo nao tem a marca. */
+function contaKanbanLivre(ident) {
+  return !!(ident && ident.usuario && ident.usuario.kanban_livre);
 }
 /* 10/11/2026: "reveja os acessos do Rikelme e Josias para movimentarem todo o
    kanban sem bloqueios (dev/sales)". Vale para QUALQUER demanda das frentes
@@ -2668,8 +2872,7 @@ function demandaSalesOpsLivre(m) {
   return !!m && m.dados_bi !== true;
 }
 function salesOpsForaDasTravas(data, servidor, ident) {
-  const quem = ident && ident.usuario ? (ident.usuario.nome || ident.usuario.login || '') : '';
-  if (!SALES_OPS_SEM_TRAVA || !ehSalesOpsLivre(quem) || !data || !Array.isArray(data.melhorias)) return data;
+  if (!SALES_OPS_SEM_TRAVA || !contaKanbanLivre(ident) || !data || !Array.isArray(data.melhorias)) return data;
   const antes = new Map(((servidor && servidor.melhorias) || []).map(v => [v && v.id, v]));
   return Object.assign({}, data, { melhorias: data.melhorias.filter(m => {
     const v = antes.get(m && m.id);
@@ -2714,16 +2917,18 @@ function entrandoEmConcluidoSemHoras(recebido, servidor) {
  * `guilherme.augusto` e `guilherme.oliveira` (Guilherme Eloi). Casar por
  * primeiro nome autorizaria o Eloi, e ninguem notaria — a marca sairia igual.
  *
- * Paullymax nao esta na lista porque a conta dele JA E admin: ele entra pela
- * primeira porta. A lista e para a lideranca que nao e PM/PO.
+ * Paullymax nao precisa da marca porque a conta dele JA E admin: ele entra
+ * pela primeira porta. A marca e para a lideranca que nao e PM/PO.
+ *
+ * 16/11/2026 (PRD RF-23): a segunda porta deixou de ser a lista de logins
+ * (`guilherme.augusto`) e virou a marca `marca_comite` da conta — continua por
+ * CONTA, e nao por nome, entao o outro Guilherme segue de fora. A primeira
+ * carga marca a conta que a lista marcava.
  */
-const COMITE_LOGINS = ['guilherme.augusto'];
-
 function podeMarcarComite(ident) {
   if (!ident) return false;
   if (String(ident.papel || '').toLowerCase() === 'admin') return true;
-  const l = String((ident.usuario && ident.usuario.login) || '').trim().toLowerCase();
-  return !!l && COMITE_LOGINS.includes(l);
+  return !!(ident.usuario && ident.usuario.marca_comite);
 }
 
 /** A MARCA DO COMITE VOLTA AO QUE ESTAVA quando quem gravou nao pode muda-la.
@@ -2736,6 +2941,126 @@ function podeMarcarComite(ident) {
  *
  *  Compara pelo conteudo, e nao por presenca: quem nao mexeu reenvia igual, e
  *  igual nao e tentativa. */
+/* ═══ A PAUSA POR TERCEIRO ABRE E FECHA O ACOMPANHAMENTO (PRD RF-18 e RF-19) ═
+ *
+ * "Cobrar o fornecedor no dia certo": aprovada uma pausa por terceiro, nasce
+ * um acompanhamento (data/follow.json) com o fornecedor e o retorno prometido;
+ * retomada a demanda, ele e encerrado. Feito AQUI, depois de a base gravar, e
+ * nao na tela: vale igual para quem aprova pelo app ou pelo admin antigo.
+ *
+ * IDEMPOTENTE pela chave `pausa:<id>:<pausado_em>` em `origem.chave`: rodar de
+ * novo nao duplica, e uma pausa nova da mesma demanda (outro `pausado_em`) e
+ * outro acompanhamento. So mexe nos acompanhamentos que ELE criou
+ * (`origem.tipo === 'pausa_terceiro'`) — os escritos a mao nao se tocam.
+ *
+ * Sem data prometida, o retorno fica para daqui a 7 dias, com a observacao
+ * dizendo isso: o follow exige data, e "nunca cobrar" seria pior.
+ *
+ * `pausasParaAcompanhar(melhorias, hoje)` e a regra pura (testada lado a lado);
+ * `sincronizaAcompanhamentosDaPausa` le e grava o arquivo. Falha aqui NUNCA
+ * desfaz nem atrasa a gravacao da base: so registra no log. */
+function chavePausaTerceiro(m) { return 'pausa:' + m.id + ':' + String(m.pausado_em || '').slice(0, 10); }
+function pausasParaAcompanhar(melhorias, itens, hoje) {
+  const dia = String(hoje || '').slice(0, 10);
+  const mais7 = (() => { const q = dia.split('-').map(Number); return new Date(Date.UTC(q[0], q[1] - 1, q[2] + 7)).toISOString().slice(0, 10); })();
+  const desejadas = new Map();
+  for (const m of melhorias || []) {
+    if (!m || !m.id || m.oculto || m.mesclado_em) continue;
+    const t = m.pausa_terceiro;
+    if (!String(m.pausado_em || '').trim() || !t || typeof t !== 'object' || !String(t.nome || '').trim()) continue;
+    desejadas.set(chavePausaTerceiro(m), { m, t });
+  }
+  const daPausa = (itens || []).filter(it => it && it.origem && it.origem.tipo === 'pausa_terceiro');
+  /* So o ABERTO conta como "ja existe". A chave e pelo DIA da pausa: pausar,
+     retomar e pausar de novo no mesmo dia repete a chave, e o acompanhamento
+     encerrado da primeira nao pode impedir o da segunda — o fornecedor ficaria
+     sem cobranca. A nova linha ganha um id proprio (`-2`, `-3`...). */
+  const abertas = new Set(daPausa.filter(it => !it.concluido).map(it => it.origem.chave));
+  const ids = new Set((itens || []).map(it => it && it.id));
+  const criar = [];
+  for (const [chave, { m, t }] of desejadas) {
+    if (abertas.has(chave)) continue;
+    const idBase = 'fw-pausa-' + String(m.id).slice(-12) + '-' + String(m.pausado_em).slice(0, 10).replace(/-/g, '');
+    let id = idBase;
+    for (let n = 2; ids.has(id); n++) id = idBase + '-' + n;
+    const prometido = /^\d{4}-\d{2}-\d{2}$/.test(String(t.retorno || '')) ? String(t.retorno) : '';
+    criar.push({
+      id,
+      atividade: limpaTexto('Retorno de ' + t.nome + ' sobre ' + (m.codigo ? m.codigo + ' ' : '') + (m.titulo || ''), 200),
+      pessoa: limpaTexto(t.nome, 80),
+      retorno: prometido || mais7,
+      observacao: limpaTexto([m.pausa_motivo ? 'O que se espera: ' + m.pausa_motivo : '',
+                              t.contato ? 'Contato: ' + t.contato : '',
+                              prometido ? '' : 'Sem data prometida: cobrar em uma semana.'].filter(Boolean).join('\n'), 2000),
+      concluido: false, concluido_em: '', criado_em: new Date().toISOString(),
+      origem: { tipo: 'pausa_terceiro', melhoria_id: m.id, chave },
+    });
+  }
+  const encerrar = daPausa.filter(it => !it.concluido && !desejadas.has(it.origem.chave)).map(it => it.id);
+  return { criar, encerrar };
+}
+async function sincronizaAcompanhamentosDaPausa(gh, melhorias, hoje) {
+  try {
+    const temTerceiro = (melhorias || []).some(m => m && m.pausa_terceiro);
+    for (let tentativa = 0; tentativa < 2; tentativa++) {
+      const meta = await gh('contents/' + FOLLOW_PATH + '?t=' + Date.now());
+      if (!meta.ok && meta.status !== 404) return;
+      const sha = meta.ok ? (await meta.json()).sha : null;
+      let doc = { itens: [] };
+      if (sha) {
+        const raw = await gh('contents/' + FOLLOW_PATH + '?raw=' + Date.now(), { headers: { Accept: 'application/vnd.github.raw' } });
+        if (!raw.ok) return;
+        try { doc = JSON.parse(await raw.text()) || { itens: [] }; } catch (_) { return; }
+      }
+      const itens = Array.isArray(doc.itens) ? doc.itens : [];
+      if (!temTerceiro && !itens.some(it => it && it.origem && it.origem.tipo === 'pausa_terceiro' && !it.concluido)) return;
+      const { criar, encerrar } = pausasParaAcompanhar(melhorias, itens, hoje);
+      if (!criar.length && !encerrar.length) return;
+      const agora = new Date().toISOString();
+      const fecha = new Set(encerrar);
+      const novos = itens.map(it => (it && fecha.has(it.id) ? Object.assign({}, it, { concluido: true, concluido_em: agora }) : it)).concat(criar);
+      const novoDoc = { itens: novos, atualizado_em: agora };
+      const corpo = { message: 'chore: acompanhamentos da pausa por terceiro ' + agora, content: toB64(JSON.stringify(novoDoc, null, 2)) };
+      if (sha) corpo.sha = sha;
+      const put = await gh('contents/' + FOLLOW_PATH, { method: 'PUT', body: JSON.stringify(corpo) });
+      if (put.ok) return;
+      if (put.status !== 409 && put.status !== 422) { console.log('[acompanhamento da pausa] falha ' + put.status); return; }
+    }
+  } catch (e) { console.log('[acompanhamento da pausa] ' + (e && e.message || e)); }
+}
+
+/* A DEMANDA E DESTA CONTA? O criterio da API (`meuDono`): o nome da conta, os
+ * nomes declarados (`nome_demandas`) e o derivado do e-mail, todos por
+ * igualdade sem acento e sem caixa, contra cada nome do campo `dev`. */
+function demandaDaConta(m, ident) {
+  const u = (ident && ident.usuario) || null;
+  if (!u || !m) return false;
+  const norm = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const eu = nomeNaDemanda(ident);
+  const declarados = String(u.nome_demandas || '').split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
+  const aceitos = [...declarados, nomeDemandasDoEmail(u.email || '', eu), eu].filter(Boolean).map(norm);
+  return String(m.dev || '').split('/').map(x => norm(x)).filter(Boolean).some(n => aceitos.includes(n));
+}
+
+/* QUEM TENTA TOMAR A DEMANDA DE OUTRO (PRD RF-14): no servidor ela ja tem
+ * dono, esse dono nao e quem grava, e o envio poe a demanda no nome de quem
+ * grava. Devolve [{ codigo, dono }]. Tirar o proprio nome (devolver a fila) e
+ * mexer em demanda sem dono nao entram. */
+function tomandoDemandaDeOutro(recebido, servidor, ident) {
+  if (!recebido || !Array.isArray(recebido.melhorias) || !ident || !ident.usuario) return [];
+  const antes = new Map(((servidor && servidor.melhorias) || []).map(v => [v && v.id, v]));
+  const fora = [];
+  for (const m of recebido.melhorias) {
+    const v = m && antes.get(m.id);
+    if (!v || !String(v.dev || '').trim()) continue;                 // sem dono no servidor: livre
+    if (String(m.dev || '') === String(v.dev || '')) continue;       // dono nao mudou
+    if (demandaDaConta(v, ident)) continue;                          // o dono era quem grava
+    if (!demandaDaConta(m, ident)) continue;                         // nao esta se pondo no nome
+    fora.push({ codigo: v.codigo || v.titulo || v.id, dono: String(v.dev).trim() });
+  }
+  return fora;
+}
+
 function preservaComite(recebido, servidor, autorizado) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const antes = new Map();
@@ -3705,10 +4030,55 @@ async function contasMigrarAgora(db) {
      Viana), e so enquanto ninguem tem a marca: no dia do deploy ninguem perde
      nem ganha poder, e depois disso quem decide e a tela. */
   await colunaSeFaltar(db, 'usuario', 'area_produto', 'INTEGER NOT NULL DEFAULT 0');
+  /* USO DA SAIDA DE EMERGENCIA `?antiga=1` (PRD RF-33). E o dado que decide
+     quando as telas antigas podem sair: cada linha = uma aba que abriu uma
+     pagina antiga pedindo a interface de antes. `usuario_id` vazio = sessao
+     pela senha compartilhada, sem pessoa por tras. */
+  await db.prepare(`CREATE TABLE IF NOT EXISTS uso_antiga (
+    usuario_id TEXT, pagina TEXT NOT NULL, em TEXT NOT NULL)`).run();
+  /* AVISOS LIDOS (PRD RF-07). Os avisos do sino sao derivados da base, com uma
+     chave estavel (`tipo:id:carimbo`, `avisosDoDev` em axis-acoes.js); aqui fica
+     so QUAIS chaves cada conta ja leu — e e isso que faz o lido valer em
+     qualquer aparelho. */
+  await db.prepare(`CREATE TABLE IF NOT EXISTS aviso_lido (
+    usuario_id TEXT NOT NULL, chave TEXT NOT NULL, lido_em TEXT NOT NULL,
+    PRIMARY KEY (usuario_id, chave))`).run();
+  /* RASCUNHO DA ENTREGA (PRD RF-09 e RF-10). O texto do que foi implementado,
+     escrito aos poucos pelo dev, fica AQUI e nao na base de demandas: a base e
+     lida inteira por todas as telas e pelo painel publico, e o rascunho e so
+     do dono ate ele entregar. Uma linha por conta e demanda. */
+  await db.prepare(`CREATE TABLE IF NOT EXISTS entrega_rascunho (
+    usuario_id TEXT NOT NULL, melhoria_id TEXT NOT NULL,
+    texto TEXT NOT NULL, horas REAL, atualizado_em TEXT NOT NULL,
+    PRIMARY KEY (usuario_id, melhoria_id))`).run();
   try {
     await db.prepare(`UPDATE usuario SET area_produto = 1
                        WHERE login IN ('fernando', 'mateus.viana')
                          AND NOT EXISTS (SELECT 1 FROM usuario WHERE area_produto = 1)`).run();
+  } catch (_) {}
+  /* KANBAN SEM TRAVAS E MARCA DO COMITE (PRD RF-22 e RF-23, 16/11/2026): as
+     duas listas fixas do codigo viram marcas da conta. A PRIMEIRA CARGA
+     reproduz exatamente as listas de antes, e so enquanto ninguem tem a marca:
+       kanban_livre  quem a lista SALES_OPS_LIVRES liberava — o PRIMEIRO NOME
+                     (do nome, ou do login) sem acento: josias, rikelme;
+       marca_comite  o login da lista COMITE_LOGINS: guilherme.augusto.
+     Depois disso, quem decide e a tela (Usuarios / Configuracoes > Pessoas). */
+  await colunaSeFaltar(db, 'usuario', 'kanban_livre', 'INTEGER NOT NULL DEFAULT 0');
+  await colunaSeFaltar(db, 'usuario', 'marca_comite', 'INTEGER NOT NULL DEFAULT 0');
+  try {
+    const jaK = await db.prepare('SELECT 1 AS x FROM usuario WHERE kanban_livre = 1 LIMIT 1').first();
+    if (!jaK) {
+      const todos = (await db.prepare('SELECT id, nome, login FROM usuario').all()).results || [];
+      const primeiro = v => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().trim().split(/[\s.]+/)[0] || '';
+      for (const u of todos) {
+        if (['josias', 'rikelme'].includes(primeiro(u.nome || u.login))) {
+          await db.prepare('UPDATE usuario SET kanban_livre = 1 WHERE id = ?').bind(u.id).run();
+        }
+      }
+    }
+    await db.prepare(`UPDATE usuario SET marca_comite = 1 WHERE login = 'guilherme.augusto'
+                       AND NOT EXISTS (SELECT 1 FROM usuario WHERE marca_comite = 1)`).run();
   } catch (_) {}
   // E-mail unico, mas so entre quem tem e-mail (contas antigas ficam com NULL).
   try { await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_usuario_email ON usuario(email) WHERE email IS NOT NULL').run(); } catch (_) {}
@@ -3773,7 +4143,9 @@ async function identifica(env, body) {
                                            email: r.email || '',
                                            nome_demandas: r.nome_demandas || '',
                                            interface_nova: !!r.interface_nova,
-                                           area_produto: !!r.area_produto } };
+                                           area_produto: !!r.area_produto,
+                                           kanban_livre: !!r.kanban_livre,
+                                           marca_comite: !!r.marca_comite } };
       }
     } catch (_) {}
   }
@@ -4283,14 +4655,33 @@ export default {
   /* A FILA DO HISTORICO E POR REQUISICAO. As rotas recolhem as entradas novas
      ao gravar (`textoDaBase`); elas so vao para o D1 se a rota terminou bem —
      gravacao recusada ou com conflito nao deixa evento que nao aconteceu. */
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const _histFila = [];
+    _histFila.espelhoLigado = espelhoLigado(env) && !!(env && env.POKER_DB);
     const resp = await rotear(request, env, _histFila);
     if (_histFila.length && resp && resp.status >= 200 && resp.status < 300) {
       try { await guardaHistorico(env, _histFila); }
       catch (e) { console.log('historico: ' + ((e && e.message) || e)); }
     }
+    /* A GRAVACAO DUPLA: so se a rota terminou bem (como o historico) e depois
+       da resposta. Erro aqui nao volta para a tela: a base ja foi gravada. */
+    if (_histFila.espelho && resp && resp.status >= 200 && resp.status < 300) {
+      const t0 = Date.now();
+      const tarefa = espelhoSincroniza(env.POKER_DB, _histFila.espelho)
+        .then(r => console.log(JSON.stringify({ acao: 'espelho-gravar', ok: true, ms: Date.now() - t0, gravadas: r.gravadas, apagadas: r.apagadas, meta: r.meta, restam: r.restam })))
+        .catch(e => console.log(JSON.stringify({ acao: 'espelho-gravar', ok: false, ms: Date.now() - t0, motivo: String((e && e.message) || e) })));
+      if (ctx && ctx.waitUntil) ctx.waitUntil(tarefa); else await tarefa;
+    }
     return resp;
+  },
+
+  /* A COMPARACAO DIARIA (wrangler.toml, [triggers] crons). Desligada junto com
+     o espelho: sem ESPELHO_D1=1 o cron acorda e volta. */
+  async scheduled(event, env, ctx) {
+    if (!espelhoLigado(env) || !env.POKER_DB) return;
+    const tarefa = espelhoCompara(env, ghCliente(env), 'cron')
+      .catch(e => console.log(JSON.stringify({ acao: 'espelho-comparar', ok: false, origem: 'cron', motivo: String((e && e.message) || e) })));
+    if (ctx && ctx.waitUntil) ctx.waitUntil(tarefa); else await tarefa;
   },
 };
 
@@ -6892,6 +7283,12 @@ async function rotear(request, env, _histFila) {
           concluido: !!it.concluido,
           concluido_em: it.concluido ? (String(it.concluido_em || '') || new Date().toISOString()) : '',
           criado_em: String(it.criado_em || '') || new Date().toISOString(),
+          /* A MARCA DE QUEM CRIOU (PRD RF-18): o acompanhamento nascido de uma
+             pausa por terceiro carrega `origem`. Editado na tela, ele volta
+             com ela — sem isto a marca sumia e a sincronizacao o recriava. */
+          ...(it.origem && it.origem.tipo === 'pausa_terceiro'
+            ? { origem: { tipo: 'pausa_terceiro', melhoria_id: limpaTexto(it.origem.melhoria_id, 60),
+                          chave: limpaTexto(it.origem.chave, 120) } } : {}),
         });
       }
 
@@ -7382,7 +7779,9 @@ async function rotear(request, env, _histFila) {
                     usuario: { login: u.login, nome: u.nome, papel: u.papel,
                                nome_demandas: u.nome_demandas || '',
                                interface_nova: !!u.interface_nova,
-                               area_produto: !!u.area_produto } }, 200, headers);
+                               area_produto: !!u.area_produto,
+                               kanban_livre: !!u.kanban_livre,
+                               marca_comite: !!u.marca_comite } }, 200, headers);
     }
 
     // ── Meu vinculo: o nome que EU uso nas demandas ─────────────────
@@ -7666,11 +8065,145 @@ async function rotear(request, env, _histFila) {
     }
 
     // Quem sou eu — o painel usa para saber o papel e mostrar so o que cabe.
+    /* ═══ ?antiga=1: REGISTRO E RELATORIO (PRD RF-33) ══════════════════════
+     * `uso-antiga`: qualquer sessao valida registra que abriu uma pagina antiga
+     * com a saida de emergencia. A pagina vem de uma lista fechada — o campo
+     * nao vira deposito de texto livre. `uso-antiga-relatorio`: so admin. */
+    if (body.action === 'uso-antiga') {
+      // Qualquer papel registra: a pergunta e so "ha sessao", e exigePapel ja responde.
+      const permUso = await exigePapel(env, body, ['admin', 'analista', 'dev', 'consulta'], headers);
+      if (permUso.recusa) return permUso.recusa;
+      const identUA = permUso.ident;
+      const PAGINAS_ANTIGAS = ['admin.html', 'dev.html', 'gantt.html', 'poker.html', 'follow.html',
+                               'importar.html', 'mensageria.html', 'projetos.html'];
+      const pg = String(body.pagina || '').trim().toLowerCase();
+      if (!PAGINAS_ANTIGAS.includes(pg)) return json({ error: 'pagina' }, 400, headers);
+      if (!env.POKER_DB) return json({ ok: true, registrado: false }, 200, headers);
+      await contasMigrar(env.POKER_DB);
+      await env.POKER_DB.prepare('INSERT INTO uso_antiga (usuario_id, pagina, em) VALUES (?, ?, ?)')
+        .bind(identUA.usuario ? identUA.usuario.id : null, pg, new Date().toISOString()).run();
+      return json({ ok: true, registrado: true }, 200, headers);
+    }
+    if (body.action === 'uso-antiga-relatorio') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      const permUA = await exigePapel(env, body, ['admin'], headers);
+      if (permUA.recusa) return permUA.recusa;
+      await contasMigrar(env.POKER_DB);
+      const dias = Math.min(180, Math.max(1, parseInt(body.dias, 10) || 30));
+      const desde = new Date(Date.now() - dias * 86400 * 1000).toISOString();
+      const r = await env.POKER_DB.prepare(
+        `SELECT u.login AS login, u.nome AS nome, x.pagina AS pagina, COUNT(*) AS vezes, MAX(x.em) AS ultima
+           FROM uso_antiga x LEFT JOIN usuario u ON u.id = x.usuario_id
+          WHERE x.em >= ? GROUP BY x.usuario_id, x.pagina ORDER BY ultima DESC LIMIT 500`).bind(desde).all();
+      return json({ ok: true, dias, linhas: r.results || [] }, 200, headers);
+    }
+
+    /* ═══ AVISOS LIDOS (PRD RF-07) ════════════════════════════════════════
+     * `op: 'listar'` devolve as chaves lidas pela conta (as 1000 mais novas);
+     * `op: 'marcar'` grava ate 200 chaves. So conta propria: a senha
+     * compartilhada nao tem pessoa, e um lido sem dono nao serve a ninguem. */
+    if (body.action === 'avisos-lidos') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      const permAv = await exigePapel(env, body, ['admin', 'analista', 'dev', 'consulta'], headers);
+      if (permAv.recusa) return permAv.recusa;
+      const uAv = permAv.ident.usuario;
+      if (!uAv) return json({ error: 'sem_conta', detail: 'Avisos lidos exigem login com conta propria.' }, 400, headers);
+      await contasMigrar(env.POKER_DB);
+      if (String(body.op || 'listar') === 'marcar') {
+        const chaves = (Array.isArray(body.chaves) ? body.chaves : []).map(c => String(c || '').slice(0, 160)).filter(Boolean).slice(0, 200);
+        const agoraAv = new Date().toISOString();
+        for (const ch of chaves) {
+          await env.POKER_DB.prepare('INSERT OR IGNORE INTO aviso_lido (usuario_id, chave, lido_em) VALUES (?, ?, ?)')
+            .bind(uAv.id, ch, agoraAv).run();
+        }
+        return json({ ok: true, marcadas: chaves.length }, 200, headers);
+      }
+      const rAv = await env.POKER_DB.prepare(
+        'SELECT chave FROM aviso_lido WHERE usuario_id = ? ORDER BY lido_em DESC LIMIT 1000').bind(uAv.id).all();
+      return json({ ok: true, chaves: (rAv.results || []).map(x => x.chave) }, 200, headers);
+    }
+
+    /* ═══ RASCUNHO DA ENTREGA (PRD RF-09 e RF-10) ══════════════════════════
+     * `rascunho-ler { id }` e `rascunho-gravar { id, texto, horas }`. So o DONO
+     * da demanda (o mesmo criterio de nomes da API, `demandaDaConta`) le e grava
+     * o proprio rascunho; texto vazio apaga. Fica no D1, por conta: segue o dev
+     * em outro aparelho e nunca entra na base publica. */
+    if (body.action === 'rascunho-ler' || body.action === 'rascunho-gravar') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      const permR = await exigePapel(env, body, ['admin', 'analista', 'dev'], headers);
+      if (permR.recusa) return permR.recusa;
+      const uR = permR.ident.usuario;
+      if (!uR) return json({ error: 'sem_conta', detail: 'O rascunho exige login com conta propria.' }, 400, headers);
+      const idR = limpaTexto(body.id, 60);
+      if (!idR) return json({ error: 'id', detail: 'Informe o id da demanda.' }, 400, headers);
+      const baseR = JSON.parse(await (await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } })).text());
+      const mR = ((baseR && baseR.melhorias) || []).find(x => x && x.id === idR);
+      if (!mR) return json({ error: 'nao_encontrada' }, 404, headers);
+      if (!demandaDaConta(mR, permR.ident)) {
+        return json({ error: 'nao_sua', detail: 'O rascunho da entrega e de quem esta com a demanda (' + (mR.dev || 'sem responsavel') + ').' }, 403, headers);
+      }
+      await contasMigrar(env.POKER_DB);
+      if (body.action === 'rascunho-ler') {
+        const rr = await env.POKER_DB.prepare('SELECT texto, horas, atualizado_em FROM entrega_rascunho WHERE usuario_id = ? AND melhoria_id = ?')
+          .bind(uR.id, idR).first();
+        return json(Object.assign({ ok: true }, rr || {}), 200, headers);
+      }
+      const textoR = String(body.texto == null ? '' : body.texto).slice(0, 8000);
+      if (!textoR.trim()) {
+        await env.POKER_DB.prepare('DELETE FROM entrega_rascunho WHERE usuario_id = ? AND melhoria_id = ?').bind(uR.id, idR).run();
+        return json({ ok: true, apagado: true }, 200, headers);
+      }
+      const horasR = Number(body.horas);
+      const agoraR = new Date().toISOString();
+      await env.POKER_DB.prepare(`INSERT INTO entrega_rascunho (usuario_id, melhoria_id, texto, horas, atualizado_em) VALUES (?, ?, ?, ?, ?)
+                                   ON CONFLICT(usuario_id, melhoria_id) DO UPDATE SET texto = excluded.texto, horas = excluded.horas, atualizado_em = excluded.atualizado_em`)
+        .bind(uR.id, idR, textoR, Number.isFinite(horasR) && horasR >= 0 ? horasR : null, agoraR).run();
+      return json({ ok: true, atualizado_em: agoraR }, 200, headers);
+    }
+
     if (body.action === 'quem-sou') {
       const ident = await identifica(env, body);
       if (!ident) return json({ error: 'credencial' }, 401, headers);
+      /* DIFERENCA NO ESPELHO VIRA AVISO NO SINO DA AREA DE PRODUTO (PRD, Fase 4):
+         a ultima comparacao vai junto so para quem e da area, e so com o
+         espelho ligado — uma consulta curta, sem custo para os demais. */
+      let espelho_dif = 0;
+      if (espelhoLigado(env) && env.POKER_DB && ident.usuario && ident.usuario.area_produto) {
+        const u = await espelhoUltima(env.POKER_DB);
+        espelho_dif = u ? Number(u.diferencas) || 0 : 0;
+      }
       return json({ ok: true, papel: ident.papel, usuario: ident.usuario,
-                    legado: !ident.usuario }, 200, headers);
+                    legado: !ident.usuario, espelho_dif }, 200, headers);
+    }
+
+    /* ═══ O ESPELHO DA BASE NO D1 (PRD RF-35/36, passo 1) — so admin ═══════
+     *   op `status`      → a ultima comparacao e se o espelho esta ligado;
+     *   op `comparar`    → compara agora (o mesmo do cron) e grava o resultado;
+     *   op `sincronizar` → leva ao D1 o que difere, ate o teto por chamada; a
+     *                      tela repete enquanto `restam` > 0 (a carga inicial
+     *                      e esta mesma operacao com o D1 vazio). */
+    if (body.action === 'espelho-d1') {
+      const permE = await exigePapel(env, body, ['admin'], headers);
+      if (permE.recusa) return permE.recusa;
+      const db = env.POKER_DB;
+      if (!db) return json({ error: 'indisponivel', detail: 'O banco D1 não está disponível neste ambiente.' }, 503, headers);
+      const ligado = espelhoLigado(env);
+      const op = String(body.op || 'status');
+      try {
+        if (op === 'status') return json({ ok: true, ligado, ultima: await espelhoUltima(db) }, 200, headers);
+        if (!ligado) return json({ error: 'desligado', detail: 'O espelho no D1 está desligado (variável ESPELHO_D1 do Worker).' }, 409, headers);
+        if (op === 'comparar') return json({ ok: true, ligado, ultima: await espelhoCompara(env, gh, 'manual') }, 200, headers);
+        if (op === 'sincronizar') {
+          const r = await espelhoSincroniza(db, await espelhoDaBaseNoArquivo(gh));
+          console.log(JSON.stringify({ acao: 'espelho-sincronizar', ok: true, gravadas: r.gravadas, apagadas: r.apagadas, restam: r.restam }));
+          return json(Object.assign({ ok: true }, r), 200, headers);
+        }
+        return json({ error: 'op', detail: 'Operação desconhecida.' }, 400, headers);
+      } catch (e) {
+        console.log(JSON.stringify({ acao: 'espelho-d1', ok: false, op, motivo: String((e && e.message) || e) }));
+        return json({ error: 'espelho', detail: 'O espelho no D1 falhou: ' + String((e && e.message) || e).slice(0, 200) }, 502, headers);
+      }
     }
 
     // Gestao de usuarios — so admin.
@@ -7826,7 +8359,8 @@ async function rotear(request, env, _histFila) {
         // nenhuma, nao havia nada certo para escolher.
         const r = await env.POKER_DB.prepare(
           `SELECT id, login, nome, email, papel, ativo, pendente, criado_em, ultimo_acesso,
-                  nome_demandas, reset_em, aprova_spike, interface_nova, area_produto
+                  nome_demandas, reset_em, aprova_spike, interface_nova, area_produto,
+                  kanban_livre, marca_comite
              FROM usuario ORDER BY pendente DESC, nome`).all();
         // Pedidos de senha em aberto, para o admin resolver na mesma tela.
         const p = await env.POKER_DB.prepare(
@@ -8045,6 +8579,19 @@ async function rotear(request, env, _histFila) {
         const qP = await env.POKER_DB.prepare(
           'SELECT COUNT(*) AS n FROM usuario WHERE area_produto = 1 AND ativo = 1').first();
         return json({ ok: true, login: loginP, produto: !!ligaP, area_produto: (qP && qP.n) || 0 }, 200, headers);
+      }
+
+      /* KANBAN SEM TRAVAS E MARCA DO COMITE (PRD RF-24): qualquer admin liga ou
+         desliga, em qualquer conta, como as outras marcas. A do comite so faz
+         diferenca em conta que nao e admin (admin ja marca). */
+      if (op === 'kanban-livre' || op === 'marca-comite') {
+        const col = op === 'kanban-livre' ? 'kanban_livre' : 'marca_comite';
+        const loginK = String(body.login || '').trim().toLowerCase();
+        const uK = await env.POKER_DB.prepare('SELECT id FROM usuario WHERE login = ?').bind(loginK).first();
+        if (!uK) return json({ error: 'nao_encontrado' }, 404, headers);
+        const ligaK = body.liga ? 1 : 0;
+        await env.POKER_DB.prepare('UPDATE usuario SET ' + col + ' = ? WHERE id = ?').bind(ligaK, uK.id).run();
+        return json({ ok: true, login: loginK, [col]: !!ligaK }, 200, headers);
       }
 
       if (op === 'aprova-spike') {
@@ -8447,6 +8994,8 @@ async function rotear(request, env, _histFila) {
                     409, headers);
       }
       if (!gravou.ok) return json({ error: 'Falha ao salvar', detail: gravou.detalhe }, 502, headers);
+      // A pausa por terceiro abre e fecha o acompanhamento (PRD RF-18/19); falha aqui nao desfaz nada.
+      await sincronizaAcompanhamentosDaPausa(gh, data.melhorias, hojeBR());
       // `espelhos_descartados` vai na resposta para o descarte nao ser silencioso:
       // se uma tela voltar a mandar espelho, aparece aqui em vez de virar um dado
       // que ninguem sabe explicar de onde veio.
@@ -8682,6 +9231,20 @@ async function rotear(request, env, _histFila) {
                               'entrega não entra em nenhum relatório por pessoa.' },
                     400, headers);
       }
+      /* QUEM PEGOU PRIMEIRO FICA (PRD RF-13 e RF-14). O "Pegar da fila" grava
+         pela base mais nova: dois devs que viram a demanda sem dono ao mesmo
+         tempo gravariam os dois, e o segundo tiraria a demanda do primeiro em
+         silencio. Recusa quem tenta pôr no proprio nome uma demanda que, no
+         servidor, ja tem outro dono — e diz quem. */
+      const jaTemDono = tomandoDemandaDeOutro(data, antesDev, _ident);
+      if (jaTemDono.length) {
+        return json({ error: 'ja_tem_dono',
+                      itens: jaTemDono,
+                      codigos: jaTemDono.map(x => x.codigo),
+                      detail: jaTemDono.map(x => x.codigo + ' já está com ' + x.dono).join(' | ') +
+                              '. Outra pessoa pegou antes — a tela vai mostrar a fila atualizada' },
+                    409, headers);
+      }
       const comecaSemDev = entrandoNoTrabalhoSemDev(data, antesDev);
       if (comecaSemDev.length) {
         return json({ error: 'comecar_sem_dono',
@@ -8742,6 +9305,7 @@ async function rotear(request, env, _histFila) {
                     409, headers);
       }
       if (!gravouDev.ok) return json({ error: 'Falha ao salvar', detail: gravouDev.detalhe }, 502, headers);
+      await sincronizaAcompanhamentosDaPausa(gh, data.melhorias, hojeBR());
       // Diz o que foi revertido: gravar diferente do que a tela mandou e recusar em
       // silencio, e a pessoa so descobriria no proximo F5.
       return json({ ok: true, datas_revertidas: datasRevertidas,

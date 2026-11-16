@@ -38,6 +38,14 @@ binding = "POKER_DB"
 database_name = "roadmap_poker"
 database_id = "03dd80b0-ea64-4042-bc23-6e7ee438b7cc"
 
+# Comparacao diaria da base (melhorias.json) com o espelho no D1, as 9h UTC
+# (6h em Brasilia). O plano Free permite cron; o handler `scheduled` so trabalha
+# com a variavel ESPELHO_D1=1 — sem ela, acorda e volta, sem custo.
+# Para ligar o espelho: `wrangler secret put ESPELHO_D1` (valor 1) ou a
+# variavel no painel do Worker. Desligar e apagar a variavel: volta na hora.
+[triggers]
+crons = ["0 9 * * *"]
+
 # Repositorio DO DADO. O repo do site e publico (GitHub Pages) e servia
 # data/melhorias.json como arquivo estatico: qualquer pessoa com a URL lia a base
 # inteira, inclusive por raw.githubusercontent. Apontando para um repo PRIVADO, a

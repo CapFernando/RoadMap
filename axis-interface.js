@@ -33,7 +33,7 @@
     'poker.html': 'poker', 'follow.html': 'acompanhamentos',
     // projetos.html e a carteira de HORAS POR TEMA, e nao os projetos EP-: no
     // app, o mais proximo e a visao gerencial dos Paineis.
-    'projetos.html': 'paineis/visao',
+    'projetos.html': 'paineis/tema',
     'importar.html': 'importar', 'mensageria.html': 'api'
   };
 
@@ -100,6 +100,10 @@
         e.interface_nova = !!j.usuario.interface_nova;
         // A area de produto tambem muda sem novo login (Usuarios, no admin).
         e.area_produto = !!j.usuario.area_produto;
+        e.kanban_livre = !!j.usuario.kanban_livre;
+        e.marca_comite = !!j.usuario.marca_comite;
+        // Diferenca no espelho da base no D1 (so vem para a area de produto).
+        e.espelho_dif = Number(j.espelho_dif) || 0;
         if (j.papel) e.papel = j.papel;
         ['login', 'nome', 'email', 'nome_demandas'].forEach(function (k) { if (j.usuario[k] != null && e[k] == null) e[k] = j.usuario[k]; });
         try { sessionStorage.setItem('rm_eu', JSON.stringify(e)); } catch (_) {}
@@ -110,9 +114,24 @@
       .catch(function () { return null; });
   }
 
+  /* QUEM AINDA PRECISA DA SAIDA DE EMERGENCIA (PRD RF-33). Uma vez por aba e
+     por pagina: recarregar a mesma tela nao conta de novo. E o dado que diz
+     quando as telas antigas podem sair. Sem sessao com token, nao registra. */
+  function registrarUsoAntiga() {
+    var t = token(), pg = pagina();
+    if (!t || typeof fetch !== 'function') return;
+    var ja = [];
+    try { ja = JSON.parse(sessionStorage.getItem('rm_ui_antiga_log') || '[]'); } catch (_) {}
+    if (ja.indexOf(pg) >= 0) return;
+    try { sessionStorage.setItem('rm_ui_antiga_log', JSON.stringify(ja.concat([pg]))); } catch (_) {}
+    fetch(WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'uso-antiga', token: t, pagina: pg }) }).catch(function () {});
+  }
+
   function ligarNaTelaAntiga() {
     if (!ROTA_NOVA[pagina()]) return;
     if (/[?&]antiga=1\b/.test(location.search)) { try { sessionStorage.setItem('rm_ui_antiga', '1'); } catch (_) {} }
+    if (querAntiga()) registrarUsoAntiga();
     if (decidirNaTelaAntiga()) return;
     atualizar().then(function () { decidirNaTelaAntiga(); });
     // Login feito nesta tela: o `rm_eu` aparece ou muda, e a decisao e refeita.
@@ -121,7 +140,7 @@
     setInterval(function () {
       var agora = null;
       try { agora = sessionStorage.getItem('rm_eu'); } catch (_) {}
-      if (agora !== ultimo) { ultimo = agora; decidirNaTelaAntiga(); }
+      if (agora !== ultimo) { ultimo = agora; if (querAntiga()) registrarUsoAntiga(); decidirNaTelaAntiga(); }
     }, 800);
   }
 

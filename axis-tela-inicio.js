@@ -127,6 +127,21 @@
       '.axa .ini-rl{border:0;background:transparent;color:inherit;font:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:2px 0}',
       '.axa .ini-rl:hover{color:var(--tx)}',
       '.axa .ini-risco-esc{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}',
+      /* "Fora da tela" (PRD RF-01): informativo, e nao alarme — o tom do azul de informacao. */
+      '.axa .ini-fora{display:flex;flex-direction:column;gap:4px;padding:10px 14px;border-radius:12px;background:rgba(var(--in-rgb),.08);border:1px solid rgba(var(--in-rgb),.3);color:var(--tx2);font-size:13px;line-height:20px}',
+      '.axa .ini-fora-t{display:flex;align-items:center;gap:6px;font-weight:800;color:var(--tx)}',
+      '.axa .ini-fora-l{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}',
+      '.axa .ini-fora .ini-rl{color:var(--ac-t);min-height:32px}',
+      '@container app (max-width: 760px){.axa .ini-fora .ini-rl{min-height:44px}}',
+      /* A VIRADA DA SPRINT (PRD RF-15 a RF-17): um roteiro curto no topo do Inicio da area de produto. */
+      '.axa .ini-virada{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-radius:16px;background:rgba(var(--ac-rgb),.08);border:1px solid rgba(var(--ac-rgb),.4)}',
+      '.axa .ini-vir{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;justify-content:space-between}',
+      '.axa .ini-vir+.ini-vir{border-top:1px solid var(--bd);padding-top:10px}',
+      '.axa .ini-vir-t{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 280px;font-size:13px;color:var(--tx2);line-height:19px}',
+      '.axa .ini-vir-t b{color:var(--tx)}',
+      '.axa .ini-vir-t .h{font-size:14px;font-weight:800;color:var(--tx);display:flex;align-items:center;gap:6px}',
+      '.axa .ini-vir.dg .h{color:var(--dg-t)}',
+      '@container app (max-width: 760px){.axa .ini-vir .btnp,.axa .ini-vir .btns{min-height:44px;flex:1 1 100%;justify-content:center}}',
       /* Cronograma */
       '.axa .ini-cr{padding:0;gap:0;overflow-x:auto}',
       '.axa .ini-cr .ln{display:grid;border-bottom:1px solid var(--bd3);min-height:54px}',
@@ -419,7 +434,7 @@
     var dir = '<div style="display:flex;flex-direction:column;gap:20px;min-width:0">' +
       aguardando(ctx, vs, base) + painelSprint(ctx, sprint) + '</div>';
 
-    return h + kpis + '<div class="ini-dois">' + secLista + dir + '</div>';
+    return h + cartaoVirada(ctx) + kpis + '<div class="ini-dois">' + secLista + dir + '</div>';
   }
 
   function linhaItem(m, ctx, o) {
@@ -584,6 +599,68 @@
       r.minhas.slice(0, 3).map(link).join(' · ') + (n > 3 ? ' <span style="opacity:.8">e mais ' + (n - 3) + '</span>' : '') +
       (k ? '<span class="ini-risco-esc">' + H.ico('search') + ' <b>' + k + (k === 1 ? ' está' : ' estão') + ' escondida' + (k > 1 ? 's' : '') +
         ' pelos filtros ativos.</b> <button type="button" class="ini-rl" data-ini="risco-limpa">limpar os filtros</button></span>' : '') + '</div>';
+  }
+
+  /* A FAIXA "FORA DA TELA" (PRD RF-01 a RF-03): o que e do dev e o quadro nao
+     mostra, por motivo (`AXIS_ACOES.motivosFora`), cada linha com o gesto que
+     traz aquelas tarefas para a tela. Vazia, nao desenha nada. */
+  var FORA_TXT = {
+    sprint_futura: function (n, r) { return H.plural(n, 'tarefa sua', 'tarefas suas') + ' na <b>' + H.esc(rotCurto(r)) + '</b>, sprint que ainda não começou'; },
+    outra_sprint: function (n, r) { return H.plural(n, 'tarefa sua aberta', 'tarefas suas abertas') + ' na <b>' + H.esc(rotCurto(r)) + '</b>'; },
+    fora_da_sprint: function (n) { return H.plural(n, 'tarefa sua aberta', 'tarefas suas abertas') + ' <b>sem sprint</b>'; },
+    filtro: function (n) { return H.plural(n, 'tarefa sua escondida', 'tarefas suas escondidas') + ' pelo filtro de <b>tipo, tema ou período</b>'; },
+    mostrar: function (n) { return H.plural(n, 'tarefa no seu nome escondida', 'tarefas no seu nome escondidas') + ' por <b>"Só a fila do time"</b>'; },
+    concluida_fora_do_mes: function (n) { return H.plural(n, 'tarefa concluída', 'tarefas concluídas') + ' nesta seleção, <b>fora deste mês</b>'; }
+  };
+  var FORA_ACAO = { sprint_futura: 'Ver', outra_sprint: 'Ver', fora_da_sprint: 'Ver', filtro: 'Limpar o filtro', mostrar: 'Mostrar', concluida_fora_do_mes: 'Ver' };
+  function rotCurto(r) { return window.SPRINTPO && SPRINTPO.rotuloCurto ? SPRINTPO.rotuloCurto(r) : r; }
+  function faixaFora(fora) {
+    if (!fora || !fora.length) return '';
+    var total = fora.reduce(function (t, g) { return t + g.ids.length; }, 0);
+    return '<div class="ini-fora" id="ini-fora" role="status"><span class="ini-fora-t">' + H.ico('eye') + ' ' +
+      H.plural(total, 'tarefa sua não está nesta tela', 'tarefas suas não estão nesta tela') + '</span>' +
+      fora.map(function (g) {
+        return '<span class="ini-fora-l"><span>' + FORA_TXT[g.motivo](g.ids.length, g.rotulo) + '</span>' +
+          '<button type="button" class="ini-rl" data-ini="fora" data-m="' + H.esc(g.motivo) + '" data-r="' + H.esc(g.rotulo) + '"' +
+          (g.ids.length === 1 ? ' data-id="' + H.esc(g.ids[0]) + '"' : '') + '>' + FORA_ACAO[g.motivo] + '</button></span>';
+      }).join('') + '</div>';
+  }
+
+  /* O CARTAO DA VIRADA DA SPRINT (PRD RF-15 a RF-17), so para a area de
+     produto: sprint antiga sem fechar, o checklist do ultimo dia e o convite
+     para iniciar. A regra e `SPRINTPO.viradaDoDia`; os botoes levam aos
+     fluxos que ja existem em Sprints — aqui nada grava. */
+  function cartaoVirada(ctx) {
+    var S = window.SPRINTPO;
+    if (!S || !S.viradaDoDia || !H.donoDaSprint || !H.donoDaSprint()) return '';
+    var v = S.viradaDoDia(ctx.D, H.hoje(), feriados(ctx), H.colunaDe, { prazo: window.PRAZO });
+    var rc = function (r) { return H.esc(S.rotuloCurto(r)); };
+    var linhas = [];
+    v.vencidasAbertas.forEach(function (p) {
+      linhas.push('<div class="ini-vir dg"><span class="ini-vir-t"><span class="h">' + H.ico('alert') + ' A ' + rc(p.rotulo) + ' terminou e não foi fechada</span>' +
+        '<span>' + (p.pendentes ? H.plural(p.pendentes, 'demanda precisa', 'demandas precisam') + ' de destino e motivo.' : 'Nada pendente: só falta registrar o fechamento.') + '</span></span>' +
+        '<a class="btnp" href="#sprints/encerrar">Fechar a ' + rc(p.rotulo) + '</a></div>');
+    });
+    if (v.fecharHoje) {
+      var f = v.fecharHoje;
+      linhas.push('<div class="ini-vir"><span class="ini-vir-t"><span class="h">' + H.ico('flag') + ' A ' + rc(f.rotulo) + ' termina hoje</span>' +
+        '<span>' + (f.pendentes ? '<b>' + H.plural(f.pendentes, 'demanda sem entregar', 'demandas sem entregar') + '</b>: ' +
+          [f.pausadas ? H.plural(f.pausadas, 'pausada (já vai para a próxima sprint)', 'pausadas (já vão para a próxima sprint)') : '',
+           f.vencidas ? H.plural(f.vencidas, 'vencida', 'vencidas') : '',
+           f.semDestino ? H.plural(f.semDestino, 'sem destino', 'sem destino') + ', para decidir' : ''].filter(Boolean).join(' · ') + '.'
+          : 'Tudo o que entrou já foi entregue.') + '</span></span>' +
+        '<a class="btns" href="#sprints/encerrar">Preparar o fechamento</a></div>');
+    }
+    if (v.iniciarHoje) {
+      var i = v.iniciarHoje;
+      linhas.push('<div class="ini-vir"><span class="ini-vir-t"><span class="h">' + H.ico('refresh') + ' A ' + rc(i.rotulo) + ' começou e ainda não foi iniciada</span>' +
+        '<span>Ao iniciar entram <b>' + H.plural(i.comDono, 'demanda com dono', 'demandas com dono') + '</b>' +
+        (i.semDono ? ', ' + H.plural(i.semDono, 'sem dono (vai para a fila do time)', 'sem dono (vão para a fila do time)') : '') +
+        (i.vencidas ? ', ' + H.plural(i.vencidas, 'vencida que sobe como prioritária', 'vencidas que sobem como prioritárias') : '') +
+        (i.pausadas ? ', ' + H.plural(i.pausadas, 'pausada que transborda', 'pausadas que transbordam') : '') + '.</span></span>' +
+        '<a class="btnp" href="#sprints">Iniciar a ' + rc(i.rotulo) + '</a></div>');
+    }
+    return linhas.length ? '<section class="ini-virada" aria-label="Virada da sprint">' + linhas.join('') + '</section>' : '';
   }
 
   /* AS COLUNAS DO PAINEL DO DEV (`COLUMNS`, dev.html), com a ordem do quadro
@@ -877,15 +954,20 @@
       '<div class="qd-rolo" id="ini-rolo"><div class="qd-board">' + cols.map(function (c) {
         return Q.coluna(c.k, c.itens, { junto: c.junto, rotulo: c.rotulo || '', lim: EST.mais[c.k] ? Math.max(c.itens.length, 1) : POR_COLUNA, todos: true });
       }).join('') + '</div></div></div>';
-    // O Backlog sem sprint fica fora da sprint escolhida: o rodape diz quantas e mostra todas num clique.
-    var bkFora = minhas.filter(function (m) { return H.colunaDe(m) === 'backlog' && !visiveis[m.id]; }).length;
-    var rod = bkFora && EST.sprint ? '<span class="note">Mais ' + H.plural(bkFora, 'demanda sua', 'demandas suas') + ' no Backlog fora desta sprint. ' +
-      '<button type="button" class="ini-rl" data-ini="sprint-todas" style="color:var(--ac-t)">Ver todas as sprints</button></span>' : '';
+    /* O QUE E SEU E NAO ESTA AQUI (PRD RF-01): substitui o rodape "Mais N no
+       Backlog fora desta sprint", que cobria um motivo so. So entra o que o
+       quadro de fato nao desenhou (`visiveis`), para a faixa nunca contar uma
+       tarefa que esta na tela. */
+    var fora = (AC && AC.motivosFora ? AC.motivosFora(vs, cx, { sprint: EST.sprint, mostrar: EST.mostrar,
+      casaFiltro: function (m) { return casaMeu(m, ctx.D); }, noMes: noMes, colunaDe: H.colunaDe }, H.hoje()) : [])
+      .map(function (g) { return { motivo: g.motivo, rotulo: g.rotulo, ids: g.ids.filter(function (id) { return !visiveis[id]; }) }; })
+      .filter(function (g) { return g.ids.length; });
+    var rod = faixaFora(fora);
     if (!noQuadro.length && EST.mostrar === 'fila') {
-      return h + kp + faixaRisco(risco) + H.vazio('inbox', 'A fila do time está vazia', 'Nada na sprint em curso está sem dono agora.');
+      return h + kp + faixaRisco(risco) + rod + H.vazio('inbox', 'A fila do time está vazia', 'Nada na sprint em curso está sem dono agora.');
     }
     if (!noQuadro.length && doPainel.length) {
-      return h + kp + faixaRisco(risco) + H.vazio('inbox', 'Nada nesta sprint com estes filtros', 'Troque a sprint no filtro ou escolha Todas.') + rod;
+      return h + kp + faixaRisco(risco) + rod + H.vazio('inbox', 'Nada nesta sprint com estes filtros', 'Troque a sprint no filtro ou escolha Todas.');
     }
     if (!minhas.length && !noQuadro.length) {
       // O vinculo do 1o acesso (dev.html, `corrigirVinculo`): escolher como o nome aparece nas demandas.
@@ -893,7 +975,7 @@
         'O RoadMap procura por ' + (H.meusNomes().join(', ') || 'seu nome') + ' no campo dev. Se o nome nas demandas estiver diferente, escolha como ele aparece.',
         '<button type="button" class="btnp" data-ini="vinculo">Escolher meu nome nas demandas</button>');
     }
-    return h + kp + htmlProdutividade(ctx) + faixaRisco(risco) + quadro + rod;
+    return h + kp + htmlProdutividade(ctx) + faixaRisco(risco) + rod + quadro;
   }
 
   function meuTrabalhoPO(ctx) {
@@ -932,7 +1014,7 @@
       coluna('PRAZO VENCIDO', 'var(--dg)', atr, function (m) { return cartao(m, ctx, { comDev: true }); }) +
       coluna('PARA ESTIMAR', 'var(--in)', pok, function (m) { return cartao(m, ctx, { comDev: true, meta: 'sem pontos do Poker' }); }) +
       '</div>';
-    return h + kp + cols;
+    return h + cartaoVirada(ctx) + kp + cols;
   }
 
   // ═════════════════════════════════════════════════════════════════════
@@ -1112,7 +1194,7 @@
     var limite = maisDias(hoje, -14);
     var dev = ctx.papel === 'dev';
     var acao = A.notificacoes().map(function (n) {
-      return { tipo: 'acao', ico: n.ico, cor: n.cor, t: n.txt, d: 'Pede ação', href: n.href, em: '', nv: true };
+      return { tipo: 'acao', ico: n.ico, cor: n.cor, t: n.txt, d: 'Pede ação', href: n.href, em: '', nv: true, aviso: n.aviso || '' };
     });
     // As demandas "do usuario": as dele para o dev; o time para o PM/PO, que
     // e quem responde por todas.
@@ -1165,7 +1247,7 @@
       '<div class="row" style="flex-wrap:wrap">' + bt('acao', 'Pedem ação', it.acao.length) + bt('men', 'Menções', it.men.length) + bt('hist', 'Mudanças', it.hist.length) + bt('todas', 'Todas') + '</div></header>';
     var vazioTxt = { acao: 'Nada pendente com você agora.', men: 'Ninguém mencionou você nas mensagens das demandas.', hist: 'Nenhuma mudança feita por outra pessoa nos últimos 14 dias.', todas: 'Nada por aqui.' }[f];
     var corpo = mostra.length ? mostra.map(function (n) {
-      var tag = n.href ? 'a href="' + n.href + '"' : 'div';
+      var tag = n.href ? 'a href="' + n.href + '"' + (n.aviso ? ' data-aviso="' + H.esc(n.aviso) + '"' : '') : 'div';
       return '<' + tag + ' class="ini-nt' + (n.nv ? ' nv' : '') + '"><span class="ic" style="color:' + n.cor + '">' + H.ico(n.ico) + '</span>' +
         '<span class="cx"><span>' + n.t + '</span><span class="note" style="font-size:12.5px">' + n.d + '</span></span>' +
         '<span class="qd">' + (n.em ? H.esc(quando(n.em)) : '') + (n.nv ? '<span class="pt"></span>' : '') + '</span></' + (n.href ? 'a' : 'div') + '>';
@@ -1238,6 +1320,20 @@
         // O Limpar do Meu trabalho volta para a sprint atual e so o seu time (o padrao).
         if (q === 'limpar') { EST.sprint = EST.sprintAuto = H.sprintAtual() || ''; EST.sprintManual = false; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
         if (q === 'sprint-todas') { EST.sprint = ''; EST.sprintManual = true; redesenha(el, ctx); return; }
+        // "Fora da tela" (RF-02): cada motivo desfaz o que esconde aquelas tarefas.
+        if (q === 'fora') {
+          var mo2 = b.getAttribute('data-m'), r2 = b.getAttribute('data-r') || '', um2 = b.getAttribute('data-id');
+          if (mo2 === 'sprint_futura' || mo2 === 'outra_sprint') { EST.sprint = r2; EST.sprintManual = true; }
+          else if (mo2 === 'fora_da_sprint') { EST.sprint = '__fora__'; EST.sprintManual = true; }
+          else if (mo2 === 'filtro') { MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; }
+          else if (mo2 === 'mostrar') { EST.mostrar = ''; }
+          else if (mo2 === 'concluida_fora_do_mes') {
+            // Uma so abre direto; varias, o Periodo do ano corrente traz as concluidas de fora do mes.
+            if (um2) { irParaDemanda(el, ctx, um2); return; }
+            MEU.ano = String(H.hoje()).slice(0, 4);
+          }
+          redesenha(el, ctx); return;
+        }
         // A faixa e o numero do prazo vencido levam ate a demanda (dev.html: `devIrPara`, `limparFiltrosDev`).
         if (q === 'risco-abre') { irParaDemanda(el, ctx, b.getAttribute('data-id')); return; }
         if (q === 'risco-limpa') { EST.sprint = ''; EST.sprintManual = true; EST.mostrar = ''; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }

@@ -889,6 +889,7 @@
      recusado nao aceita demanda, e trazer uma que esta em outro projeto pede
      confirmacao, porque a tira de la. */
   function podeVincular(p) { return !!p && H.pode('editar') && aprovacao(p) === 'aprovado'; }
+  function podeCriarNoProjeto(p) { return !!p && H.pode('gravar') && aprovacao(p) === 'aprovado' && !!raiz.AXIS_FORM; }
   function normBusca(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
   function achadosParaVincular(D, p, termo) {
     var q = normBusca(termo).trim();
@@ -963,8 +964,12 @@
       ? '<div style="display:flex;flex-direction:column;gap:4px"><input class="in" type="search" data-pj-busca placeholder="Adicionar demanda: código ou parte do título" aria-label="Buscar demanda para adicionar ao projeto" value="' + esc(FD.busca || '') + '">' +
         '<div id="pj-achados">' + htmlAchados(D, pj, FD.busca) + '</div></div>'
       : '';
+    /* CRIAR JA NO PROJETO (PRD RF-29): abre o formulario de demanda nova com o
+       Projeto escolhido; so em projeto aprovado, que e o unico que aceita vinculo. */
+    var criar = podeCriarNoProjeto(pj)
+      ? '<button type="button" class="btnp" data-pj-criar title="Abre o formulário de demanda nova já com este projeto">+ Criar demanda neste projeto</button>' : '';
     return '<section class="pn"><div class="row" style="justify-content:space-between;flex-wrap:wrap"><h2 class="h2">Itens do projeto</h2>' +
-      '<div class="row" style="gap:6px;flex-wrap:wrap">' + btns + '</div></div>' + vincular + corpo + pager + '</section>';
+      '<div class="row" style="gap:6px;flex-wrap:wrap">' + btns + criar + '</div></div>' + vincular + corpo + pager + '</section>';
   }
 
   // ═══ GRAVAR PROJETO ══════════════════════════════════════════════════════
@@ -1300,6 +1305,11 @@
         else if (g.hasAttribute('data-pj-aprovar')) { g.disabled = true; aprovar(pj).then(function () { g.disabled = false; }); }
         else if (g.hasAttribute('data-pj-recusar')) recusar(pj);
         else if (g.hasAttribute('data-pj-anexo')) { var A = raiz.AXIS_ACOES; if (A && A.abrirAnexo) A.abrirAnexo(pj, +g.getAttribute('data-pj-anexo')); }
+        return;
+      }
+      if (e.target.closest('[data-pj-criar]')) {
+        var pc = acharProjeto(ctx.D, ctx.param);
+        if (pc && raiz.AXIS_FORM) raiz.AXIS_FORM.abrir(null, { projeto_id: pc.id });
         return;
       }
       var v = e.target.closest('[data-pj-add],[data-pj-tirar]');

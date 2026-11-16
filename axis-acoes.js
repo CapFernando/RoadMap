@@ -91,13 +91,9 @@
      demandas deles (ou sem dono e marcadas Sales Ops). Desligar: false aqui,
      no dev.html e no Worker. */
   var SALES_OPS_SEM_TRAVA = true;
-  var SALES_OPS_LIVRES = ['josias', 'rikelme'];
-  function ehSalesOpsLivre(nome) {
-    var n = txt(nome).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/\s+/)[0] || '';
-    return SALES_OPS_LIVRES.indexOf(n) >= 0;
-  }
-  /** A CONTA e uma das liberadas (Josias, Rikelme)? */
-  function contaLivre(c) { return SALES_OPS_SEM_TRAVA && ehDev(c) && ehSalesOpsLivre((c || {}).quem); }
+  /** A CONTA tem a marca `kanban_livre` (PRD RF-22, 16/11/2026)? Era a lista
+   *  de primeiros nomes (Josias, Rikelme); agora vem da sessao, em `c.eu`. */
+  function contaLivre(c) { return SALES_OPS_SEM_TRAVA && ehDev(c) && !!((c || {}).eu && c.eu.kanban_livre); }
   /* 10/11/2026: "movimentarem todo o kanban sem bloqueios (dev/sales)" — qualquer
      demanda de Desenvolvimento ou Sales Ops; so a de Dados/BI fica de fora. */
   function salesOpsLivre(m, c) {
@@ -724,6 +720,136 @@
     return f === '__fora__' ? SP.foraDaSprint(m) : SP.naSprint(m, f);
   }
 
+  /* "POR QUE NAO ESTOU VENDO?" (PRD RF-01 a RF-03, 16/11/2026). As tarefas no
+     nome do dev que o Meu trabalho NAO esta mostrando, agrupadas pelo motivo.
+     Nasceu de "as tarefas da S3-11 nao aparecem": o filtro escondia, e a tela
+     nao dizia nada — para quem olha, filtrado e sumido eram a mesma coisa.
+
+     `f` = os filtros DA TELA, como funcoes, para esta regra nao ter a sua copia
+     deles: { sprint, mostrar, casaFiltro(m) (tipo, tema e periodo),
+     noMes(m) (a concluida que entra no "Concluido no mes"), colunaDe(m) }.
+
+     Devolve [{ motivo, rotulo, ids }], na ordem em que a tela lista:
+       sprint_futura   aberta numa sprint que ainda nao comecou (rotulo = ela)
+       outra_sprint    aberta numa sprint que ja comecou, nao a escolhida
+       fora_da_sprint  aberta sem sprint, com uma sprint escolhida no filtro
+       filtro          escondida pelo Tipo, Tema ou Periodo
+       mostrar         escondida pelo "Mostrar: so a fila do time"
+       concluida_fora_do_mes  concluida que passaria nos filtros, mas fora do mes
+     A CONCLUIDA SO CONTA NO ULTIMO: centenas de concluidas de sprints passadas
+     estao fora de qualquer sprint escolhida, e lista-las seria ruido — o
+     que importa e a que o dev procura na sprint certa e nao acha. Negada,
+     mesclada e oculta nao contam: nao sao trabalho. */
+  var ORDEM_MOTIVOS = ['sprint_futura', 'outra_sprint', 'fora_da_sprint', 'filtro', 'mostrar', 'concluida_fora_do_mes'];
+  function motivosFora(lista, c, f, hoje) {
+    var SP = mod(c, 'SPRINTPO');
+    var o = f || {};
+    var col = typeof o.colunaDe === 'function' ? o.colunaDe : function (m) { return etapaGravada(m, c); };
+    var casaFiltro = typeof o.casaFiltro === 'function' ? o.casaFiltro : function () { return true; };
+    var noMes = typeof o.noMes === 'function' ? o.noMes : function () { return true; };
+    var feriados = (((c || {}).D || {}).feriados) || [];
+    var futura = function (s) {
+      var fx = SP && SP.faixaDaSprint ? SP.faixaDaSprint(s, feriados) : null;
+      return !!(fx && txt(hoje) && fx.de > txt(hoje));
+    };
+    var grupos = {};
+    var poe = function (motivo, rotulo, m) {
+      var k = motivo + '|' + rotulo;
+      (grupos[k] = grupos[k] || { motivo: motivo, rotulo: rotulo, ids: [] }).ids.push(m.id);
+    };
+    (lista || []).forEach(function (m) {
+      if (!m || !m.id || txt(m.mesclado_em) || m.oculto || !ehMeu(m, c)) return;
+      if (etapaGravada(m, c) === 'negada') return;
+      var mostra = o.mostrar !== 'fila';
+      var naSprint = casaSprintDoPainel(m, c, o.sprint);
+      var noFiltro = casaFiltro(m);
+      if (col(m) === 'concluido') {
+        if (mostra && naSprint && noFiltro && !noMes(m)) poe('concluida_fora_do_mes', '', m);
+        return;
+      }
+      if (!mostra) { poe('mostrar', '', m); return; }
+      if (!naSprint) {
+        var s = SP ? SP.doPO(m) : '';
+        if (!s) poe('fora_da_sprint', '', m);
+        else poe(futura(s) ? 'sprint_futura' : 'outra_sprint', s, m);
+        return;
+      }
+      if (!noFiltro) poe('filtro', '', m);
+    });
+    return Object.keys(grupos).map(function (k) { return grupos[k]; }).sort(function (a, b) {
+      return ORDEM_MOTIVOS.indexOf(a.motivo) - ORDEM_MOTIVOS.indexOf(b.motivo) || (a.rotulo < b.rotulo ? -1 : a.rotulo > b.rotulo ? 1 : 0);
+    });
+  }
+
+  /* ═══ OS AVISOS DO DEV (PRD RF-05 a RF-08, 16/11/2026) ════════════════════
+   *
+   * O que mudou no trabalho de quem olha e pede uma acao dele. DERIVADOS DA
+   * BASE, e nao de uma fila de eventos: cada aviso sai de um campo que a
+   * demanda ja tem, e a CHAVE e estavel (`tipo:id:carimbo`) — a mesma em
+   * qualquer aparelho, que e o que deixa o "lido" valer em todos (`aviso_lido`
+   * no Worker). Um aviso existe enquanto o estado que o gera existir.
+   *
+   *   nova            o historico registra o dev da demanda passando a ser voce,
+   *                   por outra pessoa (carimbo: a data da troca)
+   *   devolvida       o PM/PO devolveu com motivo e a demanda esta com voce
+   *                   (carimbo: o proprio motivo, resumido — muda se ele mudar)
+   *   pausa_aprovada  a pausa que voce pediu foi aprovada (carimbo: o dia do sim)
+   *   pausa_recusada  a ultima recusa de um pedido seu (carimbo: o dia do nao)
+   *   grill           o PM/PO pediu o seu parecer (carimbo: quando marcou)
+   *   terceiro        o retorno prometido pelo terceiro venceu (carimbo: a data)
+   *
+   * So os ultimos 30 dias entram (o que tem data): sem o corte, a primeira
+   * abertura despejaria meses de historico no sino. Mais novo primeiro. */
+  var AVISO_DIAS = 30;
+  function resumoTexto(t) {
+    var s = txt(t), h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 2147483647;
+    return s.length + '-' + h.toString(36);
+  }
+  function avisosDoDev(lista, c, hoje) {
+    var DN = mod(c, 'DEVNOME'), P = mod(c, 'PAUSA'), G = mod(c, 'GRILL'), DV = mod(c, 'DEVOLUCAO');
+    var nomes = (c && Array.isArray(c.nomes) && c.nomes.length) ? c.nomes : [txt((c || {}).quem)];
+    var meu = function (nome) { return nomes.some(function (n) { return txt(n) && (DN ? DN.eDe({ dev: nome }, n) : txt(nome) === txt(n)); }); };
+    var dia = txt(hoje).slice(0, 10);
+    var corte = '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dia)) {
+      var q = dia.split('-');
+      corte = new Date(Date.UTC(+q[0], +q[1] - 1, +q[2] - AVISO_DIAS)).toISOString().slice(0, 10);
+    }
+    var recente = function (d) { var x = txt(d).slice(0, 10); return !!x && (!corte || x >= corte); };
+    var out = [];
+    var poe = function (tipo, m, carimbo, em) {
+      out.push({ chave: tipo + ':' + m.id + ':' + carimbo, tipo: tipo, id: m.id, codigo: m.codigo || '', titulo: txt(m.titulo), em: txt(em).slice(0, 10) });
+    };
+    (lista || []).forEach(function (m) {
+      if (!m || !m.id || txt(m.mesclado_em) || m.oculto) return;
+      var minha = ehMeu(m, c);
+      var e = etapaGravada(m, c);
+      if (minha) {
+        // A troca de dono mais recente que te pos na demanda, feita por outra pessoa.
+        var hs = Array.isArray(m.historico) ? m.historico : [];
+        for (var i = hs.length - 1; i >= 0; i--) {
+          var h = hs[i] || {};
+          var mu = (h.mudancas || []).filter(function (x) { return x && x.campo === 'dev'; })[0];
+          if (!mu) continue;
+          if (meu(mu.para) && !meu(mu.de) && !meu(h.quem) && recente(h.em)) poe('nova', m, txt(h.em), h.em);
+          break;
+        }
+        if (DV && DV.houve(m) && ['planejado', 'em_andamento'].indexOf(e) >= 0) poe('devolvida', m, resumoTexto(m.validacao_obs), '');
+        if (G && G.pendente(m)) { var gd = G.dados(m); poe('grill', m, gd.marcado_em || 'sim', gd.marcado_em); }
+        if (P && P.retornoVencido && P.retornoVencido(m, dia)) { var t = P.terceiro(m); poe('terceiro', m, t.retorno, t.retorno); }
+      }
+      // A pausa e de quem PEDIU (pausa_por / pedido_por), mesmo que a demanda tenha mudado de dono.
+      if (txt(m.pausado_em) && txt(m.pausa_aprovada_em) && meu(m.pausa_por) && !meu(m.pausa_aprovada_por) && recente(m.pausa_aprovada_em)) {
+        poe('pausa_aprovada', m, txt(m.pausa_aprovada_em), m.pausa_aprovada_em);
+      }
+      var rs = Array.isArray(m.pausa_recusas) ? m.pausa_recusas.filter(Boolean) : [];
+      var ur = rs[rs.length - 1];
+      if (ur && meu(ur.pedido_por) && !txt(m.pausado_em) && recente(ur.em)) poe('pausa_recusada', m, txt(ur.em), ur.em);
+    });
+    return out.sort(function (a, b) { return b.em < a.em ? -1 : b.em > a.em ? 1 : 0; });
+  }
+
   /* O ARRASTE DO CARD ENTRE COLUNAS — `kbDrop` (admin.html) e `onDragOver`
      + `onDrop` (dev.html), por perfil. `soltarEm` devolve o que o gesto faz,
      sem gravar:
@@ -1149,11 +1275,11 @@
   };
   Object.assign(REGRAS, REGRAS_DO_DEV);
   Object.assign(api, { SUB: SUB, donoDoCard: donoDoCard, mostraNoPainel: mostraNoPainel, doMeuTime: doMeuTime, timeDeOutro: timeDeOutro,
-                       sprintsDoPainel: sprintsDoPainel, casaSprintDoPainel: casaSprintDoPainel,
+                       sprintsDoPainel: sprintsDoPainel, casaSprintDoPainel: casaSprintDoPainel, motivosFora: motivosFora,
                        devsParaVincular: devsParaVincular, pessoasDaConversa: pessoasDaConversa,
                        sugestoesArroba: sugestoesArroba, escolheArroba: escolheArroba });
   Object.assign(api, { soltarEm: soltarEm, podeSoltar: podeSoltar, arrastavel: arrastavel, COLUNAS_BLOQUEADAS_MSG: COLUNAS_BLOQUEADAS_MSG,
-                       salesOpsLivre: salesOpsLivre, contaLivre: contaLivre });
+                       salesOpsLivre: salesOpsLivre, contaLivre: contaLivre, avisosDoDev: avisosDoDev, horasPlanejadas: horasPlanejadas });
   Object.assign(api, { soLeitura: soLeitura });
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
@@ -1302,7 +1428,7 @@
     var D = AX.APP.D || {};
     return { papel: AX.APP.papel, quem: quem(), hoje: H.hoje(), agora: new Date().toISOString(), dono: H.donoDaSprint(),
              lista: D.melhorias || [], aprovadores: Array.isArray(D.spike_aprovadores) ? D.spike_aprovadores : null,
-             D: D, nomes: H.meusNomes(), times: _times };
+             D: D, nomes: H.meusNomes(), times: _times, eu: AX.APP.eu || null };
   }
   function porId(id) { return ((AX.APP.D || {}).melhorias || []).find(function (x) { return x && x.id === id; }) || null; }
 
@@ -1698,16 +1824,45 @@
           opcoes: ds.map(function (d) { return { v: d, r: rotEtapa(d), d: NOTA[d] }; }) });
       }
       var hz = horasDaEntrega(m, c);
+      /* O RASCUNHO DA ENTREGA (PRD RF-09): o que o dev foi escrevendo no Item
+         preenche a caixa. Sem rede, segue sem ele — nunca trava a entrega. */
+      var rasc = null;
+      try { rasc = await H.api('rascunho-ler', { id: m.id }); } catch (_) { rasc = null; }
+      var hp = horasPlanejadas(m.inicio, m.entrega, (c.D || {}).feriados);
       campos.push({ nome: 'horas', rotulo: 'Horas de desenvolvimento', tipo: 'numero', passo: '0.25', valor: hz.horas, obrig: true,
-        nota: hz.somado ? 'Somado de ' + hz.n + (hz.n === 1 ? ' passo' : ' passos') + ' das subtarefas.' : '' });
-      campos.push({ nome: 'implementacao', rotulo: 'O que foi implementado', tipo: 'area', valor: m.implementacao || '', dica: 'É o texto que a área e o PM/PO leem para validar.', obrig: true });
+        nota: [hz.somado ? 'Somado de ' + hz.n + (hz.n === 1 ? ' passo' : ' passos') + ' das subtarefas.' : '',
+               hp ? 'Planejado: ' + hp.horas + ' h (' + hp.dias + (hp.dias === 1 ? ' dia útil' : ' dias úteis') + ' × 8 h).' : ''].filter(Boolean).join(' ') });
+      campos.push({ nome: 'implementacao', rotulo: 'O que foi implementado', tipo: 'area', valor: m.implementacao || (rasc && rasc.texto) || '', dica: 'É o texto que a área e o PM/PO leem para validar.', obrig: true,
+        nota: !m.implementacao && rasc && rasc.texto ? 'Veio do seu rascunho da entrega.' : '' });
       campos.push({ nome: 'resumo', rotulo: 'Resumo da entrega', tipo: 'area', linhas: 2, valor: m.resumo_entrega || '', dica: 'Vai para o relatório e a apresentação.' });
       var fixo = campos[0].nome === 'destino' ? {} : { destino: ds[0] };
       fixo.naCaixa = { horas: 1 };
       var v = await caixa({ titulo: 'Registrar entrega de ' + cod(m), campos: campos, ok: 'Registrar entrega', valida: validaCom('entregar', m, fixo) });
-      if (v) return aplicar('entregar', m, Object.assign({ destino: fixo.destino }, v));
+      if (!v) return;
+      var out = await aplicar('entregar', m, Object.assign({ destino: fixo.destino }, v));
+      // Entregue, o rascunho cumpriu o papel: sai do servidor.
+      if (out && out.ok !== false && rasc && rasc.texto) H.api('rascunho-gravar', { id: m.id, texto: '' }).catch(function () {});
+      return out;
     }
   };
+
+  /* AS HORAS PLANEJADAS (PRD RF-11) — a mesma conta do `calcHorasPlanejadas`
+     do admin.html: dias uteis (sem fim de semana e sem feriado) de `inicio` a
+     `entrega`, inclusive, x 8 h. So uma SUGESTAO na caixa de entregar: as
+     horas reais continuam sendo do dev. `null` sem as duas datas. */
+  function horasPlanejadas(inicio, entrega, feriados) {
+    var a = txt(inicio).slice(0, 10), b = txt(entrega).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(a) || !/^\d{4}-\d{2}-\d{2}$/.test(b) || b < a) return null;
+    var fer = {};
+    (feriados || []).forEach(function (f) { var d = f && typeof f === 'object' ? f.data : f; if (d) fer[String(d).slice(0, 10)] = 1; });
+    var q = a.split('-'), d = new Date(Date.UTC(+q[0], +q[1] - 1, +q[2])), dias = 0;
+    while (d.toISOString().slice(0, 10) <= b) {
+      var dw = d.getUTCDay(), iso = d.toISOString().slice(0, 10);
+      if (dw !== 0 && dw !== 6 && !fer[iso]) dias++;
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return { dias: dias, horas: dias * 8 };
+  }
 
   // ── Os gestos do painel do dev e a conversa ──────────────────────────
   /** O id de demanda nova (`uid`, dev.html). */

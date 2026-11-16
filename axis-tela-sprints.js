@@ -42,6 +42,16 @@
     s.id = 'css-tela-sprints';
     s.textContent = [
       '.axa .sp-hd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px}',
+      /* Linha das sprints (PRD RF-30): rola de lado no celular, sem empurrar a pagina. */
+      '.axa .sp-linha{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x proximity;max-width:100%}',
+      '.axa .sp-lk{flex:0 0 150px;display:flex;flex-direction:column;gap:3px;padding:10px 12px;border:1px solid var(--bd);border-radius:12px;background:var(--sf);text-decoration:none;color:var(--tx);scroll-snap-align:start;min-height:44px}',
+      '.axa .sp-lk.agora{border-color:var(--ac-t)}',
+      '.axa .sp-lk.on{background:rgba(var(--ac-rgb),.10);box-shadow:inset 0 0 0 1px var(--ac-t)}',
+      '.axa .sp-lk-t{display:flex;align-items:center;gap:6px;font-size:13.5px}',
+      '.axa .sp-lk-ag{font-size:10.5px;font-weight:700;color:var(--ac-t);text-transform:uppercase;letter-spacing:.04em}',
+      '.axa .sp-lk-d,.axa .sp-lk-n{font-size:12px;color:var(--tx3)}',
+      '.axa .sp-lk-s{font-size:12px;font-weight:700}',
+      '.axa .sp-lk-s.x-ok{color:var(--ok-t)}.axa .sp-lk-s.x-in{color:var(--in-t)}.axa .sp-lk-s.x-wn{color:var(--wn-t)}.axa .sp-lk-s.x-mut{color:var(--tx3)}',
       '.axa .sp-hd .tt{display:flex;flex-direction:column;gap:6px;min-width:0}',
       '.axa .sp-hd .tt .row{flex-wrap:wrap}',
       '.axa .sp-hd .ac{display:flex;flex-wrap:wrap;gap:10px;align-items:center}',
@@ -612,6 +622,27 @@
     return _inativos.lista;
   }
 
+  /* A LINHA DAS SPRINTS (PRD RF-30, a faixa do gantt.html): 2 anteriores, a
+     de hoje e 5 seguintes; cada uma abre a sprint aqui mesmo. Os numeros sao
+     do placar, os mesmos que a sprint mostra aberta. */
+  function htmlLinhaSprints(D, sel, tr) {
+    if (!SP().linhaDasSprints) return '';
+    var SIT = { fechada: ['Fechada', 'mut'], em_curso: ['Em curso', 'ok'], montando: ['Montando', 'in'] };
+    var l = SP().linhaDasSprints(D, H.hoje(), fer(D), H.colunaDe, { trilha: tr });
+    if (!l.length) return '';
+    return '<nav class="sp-linha" aria-label="Linha das sprints">' + l.map(function (s) {
+      var st = s.situacao === 'em_curso' && s.passada ? ['Vencida, aberta', 'wn']
+        : s.situacao === 'montando' && s.passada ? ['Não iniciada', 'wn'] : (SIT[s.situacao] || ['', '']);
+      return '<a class="sp-lk' + (s.rotulo === sel ? ' on' : '') + (s.agora ? ' agora' : '') + '" href="#sprints/atual/' + esc(s.rotulo) + '"' +
+        (s.rotulo === sel ? ' aria-current="page"' : '') + '>' +
+        '<span class="sp-lk-t"><b>' + esc(curto(s.rotulo)) + '</b>' + (s.agora ? '<span class="sp-lk-ag">agora</span>' : '') + '</span>' +
+        '<span class="sp-lk-d">' + esc(H.dm(s.de)) + '–' + esc(H.dm(s.ate)) + '</span>' +
+        '<span class="sp-lk-s x-' + st[1] + '">' + esc(st[0]) + '</span>' +
+        '<span class="sp-lk-n">' + plural(s.demandas, 'demanda', 'demandas') + ' · ' + s.pontos + ' pts' +
+        (s.demandas && (s.situacao !== 'montando' || s.passada) ? ' · ' + s.pct + '%' : '') + '</span></a>';
+    }).join('') + '</nav>';
+  }
+
   function abaAtual(el, ctx) {
     var D = ctx.D;
     var lista = sprintsComDados(D);
@@ -670,6 +701,7 @@
       '<span class="sub">' + esc(txtFaixa(f)) + ' · time ' + esc(nomeTrilha(tr)) + ' · ' + esc(situacaoTxt(D, r)) + '</span></div>' +
       '<div class="ac"><select class="sp-sel" id="sp-sel" aria-label="Sprint">' + opcoes + '</select>' + botao + '</div></header>';
 
+    h += htmlLinhaSprints(D, r, tr);
     h += htmlTrilhas(D, r);
 
     // Faixa de aviso no lugar da META do prototipo (o RoadMap nao registra meta
@@ -2206,6 +2238,9 @@
       else abaAtual(el, ctx);
     },
     depois: function (el, ctx) {
+      // A linha das sprints abre com a escolhida a vista (no celular ela rola de lado).
+      var lk = el.querySelector('.sp-linha'), lkOn = lk && lk.querySelector('.sp-lk.on');
+      if (lkOn && lk.scrollWidth > lk.clientWidth) lk.scrollLeft = Math.max(0, lkOn.offsetLeft - lk.offsetLeft - 8);
       var sel = el.querySelector('#sp-sel');
       if (sel) sel.addEventListener('change', function () { _esc.n = 25; H.ir('sprints/atual/' + sel.value); });
       var selEs = el.querySelector('#sp-sel-es');

@@ -209,6 +209,53 @@
     }).sort(function (a, b) { return b.usos - a.usos || chaveNome(a.nome).localeCompare(chaveNome(b.nome)); });
   }
 
+  /* ═══ DIAS PARADOS POR FORNECEDOR (PRD RF-20, 16/11/2026) ═════════════════
+   *
+   * Quanto cada terceiro segurou do trabalho no periodo [de, ate]: as pausas
+   * ja retomadas (`pausa_historico` com `terceiro`) e a pausa em curso (ate
+   * `hoje`). So os dias que CAEM no periodo contam, na MESMA unidade da pausa
+   * (`diasEntre`: o dia em que parou conta, o da retomada nao — pausar e
+   * retomar no mesmo dia e zero). Uma pausa de 25/10 a 05/11 tem 11 dias: 7
+   * caem em outubro e 4 em novembro, e a soma dos meses bate com a pausa.
+   *
+   * `retornosVencidos`: quantas dessas pausas passaram da data que o terceiro
+   * prometeu (a retomada depois do retorno, ou a em curso com o retorno ja
+   * vencido hoje). Grafias do mesmo nome viram uma (`grafiaDe`).
+   *
+   * Devolve [{ nome, tarefas, dias, retornosVencidos, ids }], quem segurou
+   * mais dias primeiro. */
+  function diasPorTerceiro(melhorias, de, ate, hoje) {
+    var ini = iso(de), fim = iso(ate), h = iso(hoje);
+    if (!ini || !fim) return [];
+    var q = fim.split('-'), fimMais1 = new Date(Date.UTC(+q[0], +q[1] - 1, +q[2] + 1)).toISOString().slice(0, 10);
+    var sobra = function (a, b) {                // dias de [a, b) dentro de [ini, fim]
+      var x = a > ini ? a : ini, y = b < fimMais1 ? b : fimMais1;
+      return x && y && y > x ? diasEntre(x, y) : 0;
+    };
+    var grupos = {};
+    var conta = function (t, m, a, b, venceu) {
+      var d = sobra(a, b);
+      if (!d) return;
+      var nome = grafiaDe(t.nome, melhorias), k = chaveNome(nome);
+      var g = grupos[k] || (grupos[k] = { nome: nome, tarefas: 0, dias: 0, retornosVencidos: 0, ids: [] });
+      if (g.ids.indexOf(m.id) < 0) { g.ids.push(m.id); g.tarefas++; }
+      g.dias += d;
+      if (venceu) g.retornosVencidos++;
+    };
+    (melhorias || []).forEach(function (m) {
+      if (!m || !m.id || m.mesclado_em || m.oculto) return;
+      (Array.isArray(m.pausa_historico) ? m.pausa_historico : []).forEach(function (x) {
+        var t = x && terceiroDe(x.terceiro);
+        var a = iso(x && x.de), b = iso(x && x.ate);
+        if (t && a && b) conta(t, m, a, b, !!(t.retorno && b > t.retorno));
+      });
+      var tc = terceiro(m);
+      if (tc && h) conta(tc, m, iso(m.pausado_em), h, !!(tc.retorno && tc.retorno < h));
+    });
+    return Object.keys(grupos).map(function (k) { return grupos[k]; })
+      .sort(function (a, b) { return b.dias - a.dias || b.tarefas - a.tarefas || chaveNome(a.nome).localeCompare(chaveNome(b.nome)); });
+  }
+
   /** Grafia ja conhecida para o nome digitado (caixa/acento), senao ele mesmo. */
   function grafiaDe(nome, melhorias) {
     var k = chaveNome(nome);
@@ -412,7 +459,7 @@
     aprovacoesComDataErrada: aprovacoesComDataErrada,
     terceiroDe: terceiroDe, problemaNoTerceiro: problemaNoTerceiro, terceiro: terceiro,
     retornoVencido: retornoVencido, rotuloTerceiro: rotuloTerceiro, motivoTransbordo: motivoTransbordo, selo: selo, linhaTerceiro: linhaTerceiro,
-    terceirosConhecidos: terceirosConhecidos, grafiaDe: grafiaDe,
+    terceirosConhecidos: terceirosConhecidos, grafiaDe: grafiaDe, diasPorTerceiro: diasPorTerceiro,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

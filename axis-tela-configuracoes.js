@@ -183,6 +183,10 @@
   function linkVisualizacao(origem, chave) {
     return String(origem || '') + 'gantt.html?view=' + VIEW_KEY + (chave ? '&k=' + encodeURIComponent(chave) : '');
   }
+  /* O MESMO LINK NO APP (PRD RF-32): abre o Planejamento so leitura, sem login. */
+  function linkPlanejamento(origem, chave) {
+    return String(origem || '') + 'axis.html?view=' + VIEW_KEY + (chave ? '&k=' + encodeURIComponent(chave) : '') + '#planejamento';
+  }
 
   var DOMINIO = '@audaxcapitalsa.com.br';
   /* A CONTA NOVA — as conferencias de `uCriar` (admin.html), na mesma ordem.
@@ -202,7 +206,7 @@
 
   var REGRAS_CFG = { temaSalvar: temaSalvar, temaJuntar: temaJuntar, temaExcluir: temaExcluir, juntaDevEm: juntaDevEm,
                      devsJuntar: devsJuntar, devTirar: devTirar, devIncluir: devIncluir, naLista: naLista,
-                     perfilCom: perfilCom, linkVisualizacao: linkVisualizacao, VIEW_KEY: VIEW_KEY, STATUS_BLOQUEIO: STATUS_BLOQUEIO,
+                     perfilCom: perfilCom, linkVisualizacao: linkVisualizacao, linkPlanejamento: linkPlanejamento, VIEW_KEY: VIEW_KEY, STATUS_BLOQUEIO: STATUS_BLOQUEIO,
                      contaNova: contaNova, emailSugerido: emailSugerido, DOMINIO: DOMINIO };
   if (typeof module !== 'undefined' && module.exports) { module.exports = REGRAS_CFG; return; }
   raiz.AXIS_CFG = REGRAS_CFG;
@@ -234,10 +238,11 @@
     { grp: 'INTEGRAÇÕES', itens: [
       // A secao e uma tela propria (axis-tela-api.js): o item leva ate ela.
       { id: 'api', rotulo: 'API e integrações', real: true, href: '#api' },
-      { id: 'widget', rotulo: 'Widget', real: false }
+      { id: 'widget', rotulo: 'Widget', real: false },
+      { id: 'espelho', rotulo: 'Base no banco (D1)', real: true }
     ] },
     { grp: 'SEGURANÇA', itens: [
-      { id: 'auditoria', rotulo: 'Auditoria', real: false }
+      { id: 'auditoria', rotulo: 'Auditoria', real: true }
     ] }
   ];
   var TODAS = [];
@@ -281,6 +286,8 @@
       '.axa button.cfg-sw{border:0;padding:0;cursor:pointer}' +
       '.axa button.cfg-sw:focus-visible,.axa .cfg-papel:focus-visible{outline:2px solid var(--ac);outline-offset:2px}' +
       '.axa .cfg-it{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;background:var(--sf2);font-size:13px}' +
+      '.axa .cfg-pend{border-color:rgba(var(--wn-rgb),.45);background:rgba(var(--wn-rgb),.06)}.axa .cfg-pend .cfg-it{flex-wrap:wrap}.axa .cfg-pend .btnp,.axa .cfg-pend .btn{min-height:44px}' +
+      '.axa .cfg-esp-dif{border-color:rgba(var(--wn-rgb),.45);background:rgba(var(--wn-rgb),.06)}' +
       '.axa .cfg-it.hj{box-shadow:inset 3px 0 0 var(--ac)}' +
       '.axa .cfg-it.pass{opacity:.6}' +
       '.axa .cfg-ton{height:44px;border-radius:10px;border:1px solid var(--bd2)}' +
@@ -577,6 +584,7 @@
         status: u.pendente ? 'pendente' : (u.ativo ? 'ativo' : 'off'), nomeDev: nd, declarado: decl.join(' / '),
         frente: (desenvolve || ehAtivo(nd)) ? frenteDe(nd, D) : { txt: '', padrao: false },
         axcred: !!(perf && perf.axcred), spike: !!u.aprova_spike, nova: !!u.interface_nova, produto: !!u.area_produto,
+        kanban: !!u.kanban_livre, comite: !!u.marca_comite,
         capacidade: nd && ehAtivo(nd), acesso: u.ultimo_acesso || '', criado: u.criado_em || '',
         dem: contaDemandas(decl.length ? decl : (nd ? [nd] : []))
       };
@@ -667,7 +675,7 @@
         '<td class="mono" style="white-space:nowrap" title="abertas / total" data-tc="fora">' + (p.dem.total ? p.dem.abertas + '/' + p.dem.total : '<span style="color:var(--tx4)">0</span>') + '</td></tr>';
     }).join('') : '<tr><td colspan="5">' + H.vazio('users', 'Ninguém neste filtro', q ? 'Nada casa com "' + est.pesBusca + '".' : '') + '</td></tr>';
 
-    return blocoPedidos() + '<div class="grid" style="grid-template-columns:minmax(0,1fr) 290px;align-items:start">' +
+    return blocoPendentes(todas) + blocoPedidos() + '<div class="grid" style="grid-template-columns:minmax(0,1fr) 290px;align-items:start">' +
       '<section class="pn" style="padding:14px 12px 6px"><div style="overflow-x:auto"><table class="tbl tc cfg-pes-tb"><thead><tr><th>PESSOA</th><th>PAPEL</th><th>FRENTE</th><th>CAP.</th><th title="Demandas abertas / total">DEM.</th></tr></thead><tbody>' +
       linhas + '</tbody></table></div></section>' + painelPessoa(sel, D) + '</div>' +
       '<span class="note">Capacidade = ' + raiz.SPRINTPO.PONTOS_POR_DEV + ' pontos por sprint para quem está na lista de devs ativos (a mesma conta do Gantt). Demandas casam pelo “nome nas demandas”.</span>' + blocoDevs(D) + blocoLink();
@@ -778,6 +786,12 @@
          papel que a regra exige; qualquer admin muda a marca. */
       (p.papel === 'admin' && p.status === 'ativo'
         ? sw('Área de produto', p.produto, 'Escolhe a sprint, marca prioritária, inicia e fecha a sprint e sela a planning', 'u-produto', dLogin) : '') +
+      /* KANBAN SEM TRAVAS E MARCA DO COMITE (PRD RF-22 a RF-24): eram listas no
+         codigo; agora sao marcas da conta. A do comite so em quem nao e admin. */
+      (p.papel !== 'semconta' && p.status !== 'pendente'
+        ? sw('Kanban sem travas', p.kanban, 'Move todo o Kanban de Desenvolvimento e Sales Ops sem as travas do dev (menos Dados/BI)', 'u-kanban', dLogin) : '') +
+      (p.papel !== 'semconta' && p.papel !== 'admin' && p.status !== 'pendente'
+        ? sw('Marca o comitê', p.comite, 'Pode marcar o validado pelo comitê (admin já pode)', 'u-comite', dLogin) : '') +
       (noDev ? sw('DEV-AXCred', p.axcred, 'Aparece primeiro no Planejamento', 'perfil-axcred', dDev) : '');
     if (p.status !== 'semconta') {
       h += '<span class="note" style="font-size:12px">' + (p.acesso ? 'Último acesso em ' + esc(quando(p.acesso)) : '<span style="color:var(--wn-t)">Nunca entrou com a conta</span> (pode estar usando a senha geral)') +
@@ -813,6 +827,25 @@
       }).join('') + '</div>' : '') + '</section>';
   }
 
+  /* OS CADASTROS AGUARDANDO LIBERACAO (PRD RF-31), em destaque no topo, com
+     Liberar e Recusar ali mesmo — as mesmas acoes do perfil da pessoa. Antes,
+     o pedido so aparecia no meio da lista, com um chip. */
+  function blocoPendentes(todas) {
+    var ps = (todas || []).filter(function (p) { return p.status === 'pendente'; });
+    if (!ps.length) return '';
+    var edita = H.pode('configurar');
+    return '<section class="pn cfg-pend" aria-label="Cadastros aguardando liberação"><h2 class="h2">' + ico('hourglass', 'style="color:var(--wn-t)"') + ' ' +
+      H.plural(ps.length, 'cadastro aguardando liberação', 'cadastros aguardando liberação') + '</h2>' +
+      '<span class="note">Liberar pede o papel — sem padrão: quem libera diz o que a pessoa pode fazer. Recusar apaga o cadastro; a pessoa pode pedir de novo.</span>' +
+      ps.map(function (p) {
+        var dL = ' data-cfg-login="' + esc(p.login || '') + '"';
+        return '<div class="cfg-it"><span style="flex:1;min-width:0;display:flex;flex-direction:column"><b class="ell">' + esc(p.nome || p.login) + '</b><span class="note" style="font-size:11.5px">' +
+          esc(p.email || p.login || '') + (p.criado ? ' · pediu em ' + esc(quando(p.criado)) : '') + '</span></span>' +
+          (edita ? '<span class="row" style="gap:8px;flex:0 0 auto"><button type="button" class="btnp" data-cfg-acao="u-aprovar"' + dL + '>Liberar…</button>' +
+            '<button type="button" class="btn perigo" data-cfg-acao="u-recusar"' + dL + '>Recusar</button></span>' : '') + '</div>';
+      }).join('') + '</section>';
+  }
+
   /* OS PEDIDOS DE SENHA em aberto (rota `usuarios`, op `listar`): a mesma
      caixa do admin, resolvida aqui com "Nova senha". */
   function blocoPedidos() {
@@ -832,8 +865,9 @@
   function blocoLink() {
     var chave = raiz.VIEW_CHAVE || '';
     return '<section class="pn"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h2 class="h2">Link de visualização sem login</h2>' +
-      '<button type="button" class="btn" data-cfg-acao="link-view">' + ico('clipboard') + ' Copiar link</button></div>' +
-      '<span class="note">Abre o Gantt em modo somente leitura, sem pedir senha — para quem acompanha e não tem conta. Quem tem conta entra aqui pelo perfil Consulta, com nome.' +
+      '<span class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btnp" data-cfg-acao="link-plan">' + ico('clipboard') + ' Copiar link do Planejamento</button>' +
+      '<button type="button" class="btn" data-cfg-acao="link-view">' + ico('clipboard') + ' Link do Gantt antigo</button></span></div>' +
+      '<span class="note">Abre o Planejamento em modo somente leitura, sem pedir senha — para quem acompanha e não tem conta. O link do Gantt antigo segue valendo para quem já o tem. Quem tem conta entra aqui pelo perfil Consulta, com nome.' +
       (chave ? '' : ' <span style="color:var(--wn-t)">A chave de leitura (VIEW_CHAVE) não está configurada neste ambiente: com a trava de leitura ligada no Worker, o link abre sem dados.</span>') + '</span></section>';
   }
 
@@ -1108,6 +1142,7 @@
       return chamaConta('interface', { login: login, nova: liga },
         liga ? '"' + login + '" passa a usar a interface nova na próxima tela que abrir.' : '"' + login + '" volta às telas de sempre.');
     },
+    'uso-antiga-reler': async function () { carregarUsoAntiga(true); },
     'u-interface-admins': async function () {
       if (window.confirmar && !(await window.confirmar({ titulo: 'Interface nova para todos os admins',
           texto: 'Todos os admins ativos passam a usar o app AXIS na próxima tela que abrirem. Dá para desligar um a um depois.', ok: 'Ligar' }))) return;
@@ -1120,6 +1155,16 @@
         liga ? '"' + login + '" passa a ser da área de produto.' : '"' + login + '" sai da área de produto.');
       var eu = raiz.AXIS_APP.APP.eu; if (r && eu && eu.login === login) eu.area_produto = liga;
       return r;
+    },
+    'u-kanban': async function (el) {
+      var login = el.getAttribute('data-cfg-login'), u = contaDe(login) || {};
+      var liga = !u.kanban_livre;
+      return chamaConta('kanban-livre', { login: login, liga: liga }, (liga ? 'Ligado' : 'Desligado') + ' "Kanban sem travas" para "' + login + '".');
+    },
+    'u-comite': async function (el) {
+      var login = el.getAttribute('data-cfg-login'), u = contaDe(login) || {};
+      var liga = !u.marca_comite;
+      return chamaConta('marca-comite', { login: login, liga: liga }, (liga ? 'Ligado' : 'Desligado') + ' "Marca o comitê" para "' + login + '".');
     },
     'u-spike': async function (el) {
       var login = el.getAttribute('data-cfg-login'), u = contaDe(login) || {};
@@ -1209,6 +1254,37 @@
       return gravaRaiz(function (base) { return devsJuntar(base, v.de, v.para); }, function (r) { return Object.keys(r.patch).length + ' demanda(s) agora são de "' + v.para + '".'; });
     },
 
+    'link-plan': async function () {
+      var link = linkPlanejamento(location.origin + location.pathname.replace(/[^\/]*$/, ''), raiz.VIEW_CHAVE || '');
+      try { await navigator.clipboard.writeText(link); H.toast('Link do Planejamento copiado!'); }
+      catch (_) { await caixa({ titulo: 'Copie o link', campos: [{ nome: 'link', rotulo: 'Link do Planejamento (somente leitura)', valor: link }], ok: 'Fechar' }); }
+    },
+    'esp-status': async function () { carregarEspelho(true); },
+    'esp-comparar': async function () {
+      esp.rodando = 'comparar'; pintarEspelho();
+      try { var j = await H.api('espelho-d1', { op: 'comparar' }); esp.ultima = j.ultima || esp.ultima; H.toast(resumoEspelho(esp.ultima)); }
+      catch (e) { H.toast((e.corpo && e.corpo.detail) || 'Não foi possível comparar agora.', 'erro'); }
+      esp.rodando = ''; pintarEspelho();
+    },
+    /* A carga inicial e os reparos: uma fatia por chamada (o teto do plano
+       Free), repetindo enquanto restar algo; no fim, compara. */
+    'esp-sincronizar': async function () {
+      esp.rodando = 'sincronizar'; esp.progresso = ''; pintarEspelho();
+      var feitas = 0, voltas = 0;
+      try {
+        while (voltas < 40) {
+          voltas++;
+          var j = await H.api('espelho-d1', { op: 'sincronizar' });
+          feitas += (j.gravadas || 0) + (j.apagadas || 0);
+          esp.progresso = feitas + ' / ' + (j.total || '?'); pintarEspelho();
+          if (!j.restam) break;
+        }
+        var c = await H.api('espelho-d1', { op: 'comparar' });
+        esp.ultima = c.ultima || esp.ultima;
+        H.toast(H.plural(feitas, 'linha copiada', 'linhas copiadas') + '. ' + resumoEspelho(esp.ultima));
+      } catch (e) { H.toast((e.corpo && e.corpo.detail) || 'A sincronização parou no meio; rode de novo para continuar.', 'erro'); }
+      esp.rodando = ''; esp.progresso = ''; pintarEspelho();
+    },
     'link-view': async function () {
       var link = linkVisualizacao(location.origin + location.pathname.replace(/[^\/]*$/, ''), raiz.VIEW_CHAVE || '');
       try { await navigator.clipboard.writeText(link); H.toast('Link de visualização copiado!'); }
@@ -1225,6 +1301,60 @@
     folga: { rot: 'Folga', ico: 'pause', cor: 'in' }, outro: { rot: 'Outro', ico: 'pin', cor: 'pu' }
   };
   var feriadoISO = function (f) { return (f && typeof f === 'object' ? f.data : f) || ''; };
+
+  /* ═══ A BASE NO BANCO (PRD RF-35/36, passo 1) ═══════════════════════════
+     O espelho do melhorias.json no D1: se esta ligado, a ultima comparacao
+     (cron diario ou o botao) e, com o espelho ligado, comparar agora e a
+     sincronizacao em fatias (a carga inicial e ela com o banco vazio). O app
+     continua lendo do arquivo; isto so mostra se os dois batem. */
+  var esp = { carregando: false, erro: '', ligado: null, ultima: null, rodando: '', progresso: '' };
+  function carregarEspelho(forcar) {
+    if (esp.carregando || (!forcar && esp.ligado !== null)) return;
+    esp.carregando = true; esp.erro = '';
+    H.api('espelho-d1', { op: 'status' }).then(function (j) { esp.ligado = !!j.ligado; esp.ultima = j.ultima || null; })
+      .catch(function (e) { esp.erro = (e.corpo && e.corpo.detail) || String(e.message || e); })
+      .then(function () { esp.carregando = false; pintarEspelho(); });
+  }
+  function pintarEspelho() {
+    var A = raiz.AXIS_APP;
+    if (!A || A.APP.rota.aba !== 'espelho') return;
+    var box = document.getElementById('cfg-esp');
+    if (box) box.innerHTML = corpoEspelho();
+  }
+  function resumoEspelho(u) {
+    if (!u) return 'Nenhuma comparação registrada ainda.';
+    var n = (u.detalhe && u.detalhe.n) || {};
+    var partes = [];
+    if (n.faltando) partes.push(H.plural(n.faltando, 'demanda falta no banco', 'demandas faltam no banco'));
+    if (n.diferentes) partes.push(H.plural(n.diferentes, 'demanda diferente', 'demandas diferentes'));
+    if (n.sobrando) partes.push(H.plural(n.sobrando, 'demanda sobrando no banco', 'demandas sobrando no banco'));
+    if (n.meta) partes.push(H.plural(n.meta, 'chave de topo diferente', 'chaves de topo diferentes'));
+    return u.diferencas ? partes.join(' · ') : 'Zero diferenças entre o arquivo e o banco (' + H.plural((u.detalhe && u.detalhe.demandas) || 0, 'demanda', 'demandas') + ').';
+  }
+  function corpoEspelho() {
+    if (esp.erro) return H.vazio('alert', 'Não foi possível ler o estado do espelho', esp.erro, '<button type="button" class="btn" data-cfg-acao="esp-status">Tentar de novo</button>');
+    if (esp.ligado === null) return '<div class="sk" style="height:140px"></div>';
+    var u = esp.ultima, ok = u && !u.diferencas;
+    var quando = u ? H.dma(String(u.em).slice(0, 10)) + ' ' + String(u.em).slice(11, 16) + ' UTC · ' + (u.origem === 'cron' ? 'rotina diária' : 'comparação manual') : '';
+    var lista = function (rot, ids) { return ids && ids.length ? '<span class="note" style="font-size:12px"><b>' + esc(rot) + ':</b> ' + ids.map(esc).join(', ') + '</span>' : ''; };
+    var d = (u && u.detalhe) || {};
+    return '<section class="pn' + (u && u.diferencas ? ' cfg-esp-dif' : '') + '"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px">' +
+        '<h2 class="h2">' + (esp.ligado ? 'Espelho ligado' : 'Espelho desligado') + '</h2>' +
+        H.chip(esp.ligado ? (u ? (ok ? 'bate' : 'diferente') : 'sem comparação') : 'desligado', esp.ligado ? (u ? (ok ? 'ok' : 'wn') : 'bk') : 'bk') + '</div>' +
+      (esp.ligado ? '' : '<span class="note">Liga-se pela variável <span class="mono">ESPELHO_D1=1</span> no Worker. Desligado, nenhuma gravação copia nada para o banco e a rotina diária não compara.</span>') +
+      (u ? '<span style="font-weight:700">' + esc(resumoEspelho(u)) + '</span><span class="note">' + esc(quando) + '</span>' +
+           lista('Faltam', d.faltando) + lista('Diferentes', d.diferentes) + lista('Sobrando', d.sobrando) + lista('Chaves de topo', d.meta)
+         : '<span class="note">Nenhuma comparação registrada ainda.</span>') +
+      (esp.ligado ? '<div class="row" style="gap:8px;flex-wrap:wrap">' +
+        '<button type="button" class="btnp" data-cfg-acao="esp-comparar"' + (esp.rodando ? ' disabled' : '') + '>' + (esp.rodando === 'comparar' ? 'Comparando…' : 'Comparar agora') + '</button>' +
+        '<button type="button" class="btn" data-cfg-acao="esp-sincronizar"' + (esp.rodando ? ' disabled' : '') + ' title="Copia para o banco o que estiver diferente do arquivo, em fatias">' +
+          (esp.rodando === 'sincronizar' ? 'Sincronizando… ' + esc(esp.progresso) : 'Sincronizar com o arquivo') + '</button></div>' : '') +
+      '</section>';
+  }
+  function secEspelho(ctx) {
+    return cab('Base no banco (D1)', 'O espelho do arquivo de demandas no banco D1, passo 1 da migração: toda gravação continua indo para o arquivo e é copiada para o banco; uma rotina diária compara os dois. O AXIS continua lendo do arquivo.', '') +
+      '<div id="cfg-esp" style="display:flex;flex-direction:column;gap:16px">' + corpoEspelho() + '</div>';
+  }
 
   function secSprint(ctx) {
     var D = ctx.D, S = raiz.SPRINTPO, P = raiz.PIPELINES;
@@ -1407,6 +1537,43 @@
   // ════════════════════════════════════════════════════════════════════════
   /* Cada uma diz o que o prototipo promete e o que o RoadMap faz HOJE no
      lugar — em vez de uma tela vazia ou de numero inventado. */
+  /* AUDITORIA · USO DA INTERFACE ANTIGA (PRD RF-33). Quem ainda abre as telas
+     antigas pela saida de emergencia `?antiga=1`, nos ultimos 30 dias: e o
+     dado que diz quando elas podem sair (tarefa 13.0). Le uma vez por minuto. */
+  var usoAntiga = { linhas: null, erro: '', em: 0, carregando: false, dias: 30 };
+  function carregarUsoAntiga(forcar) {
+    if (usoAntiga.carregando || (!forcar && usoAntiga.linhas && Date.now() - usoAntiga.em < 60000)) return;
+    usoAntiga.carregando = true; usoAntiga.erro = '';
+    H.api('uso-antiga-relatorio', { dias: usoAntiga.dias }).then(function (j) {
+      usoAntiga.linhas = j.linhas || []; usoAntiga.em = Date.now();
+    }).catch(function (e) {
+      usoAntiga.erro = e.status === 401 || e.status === 403 ? 'Esta sessão não tem permissão para ver o uso.' : String(e.message || e);
+    }).then(function () {
+      usoAntiga.carregando = false;
+      var alvo = document.getElementById('cfg-uso-antiga');
+      if (alvo) alvo.innerHTML = corpoUsoAntiga();
+    });
+  }
+  function corpoUsoAntiga() {
+    if (usoAntiga.erro) return '<span class="note" style="color:var(--dg-t)">' + esc(usoAntiga.erro) + '</span>';
+    if (!usoAntiga.linhas) return '<span class="note">Carregando…</span>';
+    if (!usoAntiga.linhas.length) return H.vazio('check', 'Ninguém usou a interface antiga nos últimos ' + usoAntiga.dias + ' dias',
+      'Quando este quadro passar um mês vazio, as telas antigas podem passar a levar ao app.');
+    var total = usoAntiga.linhas.reduce(function (t, l) { return t + (l.vezes || 0); }, 0);
+    return '<span class="note">' + H.plural(total, 'abertura', 'aberturas') + ' de tela antiga com <span class="mono">?antiga=1</span> nos últimos ' + usoAntiga.dias + ' dias.</span>' +
+      '<div class="tbl tc"><table><thead><tr><th>Pessoa</th><th>Tela</th><th>Vezes</th><th>Última</th></tr></thead><tbody>' +
+      usoAntiga.linhas.map(function (l) {
+        return '<tr><td data-l="Pessoa">' + esc(l.nome || l.login || 'Senha compartilhada') + (l.login ? ' <span class="note mono">' + esc(l.login) + '</span>' : '') + '</td>' +
+          '<td data-l="Tela" class="mono">' + esc(l.pagina) + '</td><td data-l="Vezes">' + (l.vezes || 0) + '</td>' +
+          '<td data-l="Última">' + esc(l.ultima ? H.dma(String(l.ultima).slice(0, 10)) : '—') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  function secAuditoria() {
+    return cab('Auditoria', 'Uso da saída de emergência para a interface antiga.', '<button type="button" class="btn" data-cfg-acao="uso-antiga-reler">' + ico('refresh') + ' Atualizar</button>') +
+      '<section class="pn" style="display:flex;flex-direction:column;gap:10px"><h2 class="h2">Interface antiga (?antiga=1)</h2>' +
+      '<div id="cfg-uso-antiga" style="display:flex;flex-direction:column;gap:10px">' + corpoUsoAntiga() + '</div></section>';
+  }
+
   function secFutura(id, ctx) {
     var F = {
       marca: { t: 'Empresa e marca', sub: 'O AXIS será whitelabel: cada empresa com a sua cor, o seu logo, o seu nome e o seu endereço.',
@@ -1467,6 +1634,8 @@
         : aba === 'pessoas' ? secPessoas(ctx)
         : aba === 'sprint' ? secSprint(ctx)
         : aba === 'aparencia' ? secAparencia(ctx)
+        : aba === 'auditoria' ? secAuditoria()
+        : aba === 'espelho' ? secEspelho(ctx)
         : secFutura(aba, ctx);
       return '<div class="cfg">' + nav(aba) + '<div class="view" style="min-width:0">' + corpo + '</div></div>';
     },
@@ -1474,6 +1643,8 @@
       var aba = ctx.aba || 'catalogo';
       if (aba === 'pessoas') carregarContas(false);
       if (aba === 'aparencia') pintarTons(el);
+      if (aba === 'auditoria') carregarUsoAntiga(false);
+      if (aba === 'espelho') carregarEspelho(false);
 
       // Buscas: so a lista redesenha, o campo fica com o foco. Por delegacao,
       // porque a secao do catalogo e redesenhada inteira ao escolher sistema.

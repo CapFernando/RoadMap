@@ -187,6 +187,9 @@
   display: flex; flex-direction: column; gap: 4px; }
 .axa .ntf-it { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 10px; text-decoration: none; color: var(--tx); font-size: 13px; line-height: 18px; cursor: pointer; }
 .axa .ntf-it:hover { background: var(--sf4); }
+/* "Marcar avisos como lidos" (PRD RF-07): texto no acento, sem cara de botao pesado. */
+.axa .ntf-lidos { border: 0; background: transparent; color: var(--ac-t); font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0; text-transform: none; cursor: pointer; padding: 4px 0; min-height: 32px; }
+@container app (max-width: 760px) { .axa .ntf-lidos { min-height: 44px; } }
 .axa .ntf-it .axi { margin-top: 1px; }
 
 /* ── Entrar ───────────────────────────────────────────────────────────── */

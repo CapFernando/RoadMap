@@ -145,6 +145,28 @@
     try { APP.eu = JSON.parse(sessionStorage.getItem('rm_eu') || 'null'); } catch (_) { APP.eu = null; }
     APP.token = sessionStorage.getItem('rm_admin_token') || sessionStorage.getItem('rm_dev_token') || '';
     APP.papel = (APP.eu && APP.eu.papel) || (sessionStorage.getItem('rm_admin_token') ? 'admin' : sessionStorage.getItem('rm_dev_token') ? 'dev' : '');
+    // Link de visualizacao sem login (PRD RF-32): so quando ninguem entrou.
+    APP.visao = !APP.token && modoVisao();
+    if (APP.visao) { APP.eu = null; APP.papel = 'consulta'; }
+  }
+
+  /* O LINK DE VISUALIZACAO SEM LOGIN (PRD RF-32), o mesmo do gantt.html:
+     `?view=vz-audax-26` liga o modo so leitura e `&k=` leva a chave que o
+     Worker confere na leitura (secret VIEW_CHAVE), guardada na aba como no
+     Gantt (`rm_view_key`). No modo, o app abre so o Planejamento, como
+     Consulta, sem menu e sem nenhum gesto de gravar. */
+  var VIEW_KEY = 'vz-audax-26';
+  function modoVisao() {
+    try {
+      var q = new URLSearchParams(location.search || '');
+      if (q.get('view') !== VIEW_KEY) return false;
+      var k = q.get('k');
+      if (k) sessionStorage.setItem('rm_view_key', k);
+      return true;
+    } catch (_) { return false; }
+  }
+  function chaveVisao() {
+    try { return new URLSearchParams(location.search || '').get('k') || sessionStorage.getItem('rm_view_key') || ''; } catch (_) { return ''; }
   }
 
   /* A SESSAO E A MESMA DAS TELAS ANTIGAS: as chaves sao as que admin.html e
@@ -430,7 +452,7 @@
   }
 
   async function api(action, extra) {
-    var corpo = Object.assign({ action: action }, APP.token ? { token: APP.token } : {}, extra || {});
+    var corpo = Object.assign({ action: action }, APP.token ? { token: APP.token } : APP.visao && chaveVisao() ? { chave: chaveVisao() } : {}, extra || {});
     var r = await postar(corpo);
     var j = await r.json().catch(function () { return {}; });
     if (!r.ok) {
@@ -539,8 +561,10 @@
     } else {
       if (r.status === 401) r.erro = MSG_SESSAO;
       var msg = r.erro || 'Não foi possível salvar.';
-      if (r.itens && r.itens.length > 1) msg += ' (e mais ' + (r.itens.length - 1) + ': ' + r.itens.slice(1).map(function (x) { return x.codigo; }).join(', ') + ')';
+      if (r.itens && r.itens.length > 1 && r.codigo !== 'ja_tem_dono') msg += ' (e mais ' + (r.itens.length - 1) + ': ' + r.itens.slice(1).map(function (x) { return x.codigo; }).join(', ') + ')';
       toast(msg, 'erro');
+      // Outra pessoa pegou antes (PRD RF-14): a tela rele, para a fila mostrar o dono certo.
+      if (r.codigo === 'ja_tem_dono') carregar().then(function () { desenhar(true); }).catch(function () {});
     }
     return r;
   }
@@ -1055,8 +1079,54 @@
   /* Nao ha servico de notificacao (e item novo do de-para). O sino mostra o
      que a propria base ja diz que espera alguem — a mesma leitura que as
      faixas do admin e do painel do dev fazem hoje. */
+  /* ═══ AVISOS POR EVENTO (PRD RF-05 a RF-08) ═══════════════════════════════
+     `AXIS_ACOES.avisosDoDev` deriva os avisos da base; `APP.lidos` sao as
+     chaves que esta conta ja leu (rota `avisos-lidos`), em qualquer aparelho.
+     Lidos saem do sino; a releitura de 30 s traz os novos sem recarregar. */
+  var AVISO_TXT = {
+    nova: ['user', 'var(--in-t)', function (c) { return '<b>' + c + '</b> passou para o seu nome'; }],
+    devolvida: ['undo', 'var(--wn-t)', function (c) { return '<b>' + c + '</b> devolvida pelo PM/PO: leia o motivo'; }],
+    pausa_aprovada: ['pause', 'var(--ok-t)', function (c) { return 'Pausa aprovada em <b>' + c + '</b>'; }],
+    pausa_recusada: ['ban', 'var(--dg-t)', function (c) { return 'Pausa recusada em <b>' + c + '</b>: leia o motivo'; }],
+    grill: ['flame', 'var(--wn-t)', function (c) { return '<b>' + c + '</b> pede o seu parecer (Grill)'; }],
+    terceiro: ['alert', 'var(--dg-t)', function (c) { return 'O retorno do terceiro venceu em <b>' + c + '</b>: hora de cobrar'; }]
+  };
+  function avisosAbertos() {
+    var AC = raiz.AXIS_ACOES;
+    if (!AC || !AC.avisosDoDev || APP.papel === 'consulta' || !APP.token) return [];
+    var lidos = APP.lidos || {};
+    return AC.avisosDoDev(visiveis(), AC.contexto(), hoje()).filter(function (a) { return !lidos[a.chave]; }).slice(0, 12);
+  }
+  function carregarLidos() {
+    return api('avisos-lidos', { op: 'listar' }).then(function (j) {
+      var l = {}; (j.chaves || []).forEach(function (k) { l[k] = true; });
+      APP.lidos = l;
+      atualizaSino();
+    }).catch(function () {});
+  }
+  function marcarLidos(chaves) {
+    var ks = (chaves || []).filter(Boolean);
+    if (!ks.length) return;
+    APP.lidos = APP.lidos || {};
+    ks.forEach(function (k) { APP.lidos[k] = true; });
+    atualizaSino();
+    api('avisos-lidos', { op: 'marcar', chaves: ks }).catch(function () {});
+  }
+  /* O numero do sino sem redesenhar a tela inteira (o clique num aviso ja
+     navega; marcar todos nao). */
+  function atualizaSino() {
+    var b = document.querySelector('[data-acao="ntf"]');
+    if (!b) return;
+    var n = notificacoes().length, d = b.querySelector('.dot');
+    if (n && !d) { d = document.createElement('span'); d.className = 'dot'; b.appendChild(d); }
+    if (d) { if (n) d.textContent = n; else d.remove(); }
+  }
+
   function notificacoes() {
-    var lista = [];
+    var lista = avisosAbertos().map(function (a) {
+      var t = AVISO_TXT[a.tipo] || ['bell', 'var(--tx2)', function (c) { return c; }];
+      return { ico: t[0], cor: t[1], txt: t[2](esc(a.codigo || a.titulo || 'Demanda')), href: '#item/' + encodeURIComponent(a.codigo || a.id), aviso: a.chave };
+    });
     var vs = visiveis();
     if (APP.papel === 'admin') {
       var val = vs.filter(function (m) { return colunaDe(m) === 'validacao'; });
@@ -1068,6 +1138,10 @@
       var pend = raiz.SPRINTPO && raiz.SPRINTPO.pendentesDeFechamento ? (raiz.SPRINTPO.pendentesDeFechamento(APP.D, hoje(), (APP.D || {}).feriados || [], colunaDe) || []) : [];
       if (pend.length) lista.push({ ico: 'refresh', cor: 'var(--wn-t)', txt: '<b>' + plural(pend.length, 'sprint terminou', 'sprints terminaram') + '</b> e não ' + (pend.length === 1 ? 'foi fechada' : 'foram fechadas'), href: '#sprints/encerrar' });
     }
+    /* O espelho da base no D1 nao bate com o arquivo (ultima comparacao): o
+       Worker so manda o numero para a area de produto, com o espelho ligado. */
+    var espDif = Number((APP.eu || {}).espelho_dif) || 0;
+    if (espDif > 0) lista.push({ ico: 'alert', cor: 'var(--wn-t)', txt: '<b>' + plural(espDif, 'diferença', 'diferenças') + '</b> entre o arquivo de demandas e o banco (D1)', href: APP.papel === 'admin' ? '#configuracoes/espelho' : '#inicio' });
     // O pessoal vale para quem tem demanda no nome, o PM/PO que tambem
     // desenvolve inclusive — e nao so para o perfil dev.
     var minhas = vs.filter(minha);
@@ -1079,8 +1153,7 @@
         return prazoDe(m) === hoje() && !pausada(m) && !(raiz.PRAZO && raiz.PRAZO.relogioParou && raiz.PRAZO.relogioParou(colunaDe(m)));
       });
       if (hojeV.length) lista.push({ ico: 'clock', cor: 'var(--wn-t)', txt: '<b>' + plural(hojeV.length, 'demanda vence', 'demandas vencem') + '</b> hoje', href: '#inicio/meu' });
-      var dev = minhas.filter(function (m) { return raiz.DEVOLUCAO && raiz.DEVOLUCAO.houve && raiz.DEVOLUCAO.houve(m) && colunaDe(m) === 'em_andamento'; });
-      if (dev.length) lista.push({ ico: 'undo', cor: 'var(--wn-t)', txt: '<b>' + plural(dev.length, 'demanda devolvida', 'demandas devolvidas') + '</b> para ajuste', href: '#inicio/meu' });
+      // As devolvidas viraram aviso por evento (`avisosDoDev`, tipo `devolvida`), com o lido guardado.
     }
     var poker = vs.filter(function (m) { return colunaDe(m) === 'planning' && !pontosDe(m); });
     if (poker.length && APP.papel !== 'consulta') lista.push({ ico: 'cards', cor: 'var(--in-t)', txt: '<b>' + plural(poker.length, 'item', 'itens') + '</b> para estimar no Poker', href: '#poker' });
@@ -1190,6 +1263,43 @@
     setTimeout(function () { var u = raizEl.querySelector(o.usuario ? '#lg-senha' : '#lg-usuario'); if (u) u.focus(); }, 0);
   }
 
+  /* A VISTA SEM LOGIN: so o Planejamento, com uma barra minima (marca, aviso
+     de somente leitura, tema e "Entrar"). Qualquer outra rota volta a ele. */
+  var _visaoDesenhada = false;
+  function desenharVisao(manterRolagem) {
+    var r = lerRota();
+    if (r.tela !== 'planejamento') {
+      // Clique numa barra (abre o Item) ou link para outra tela: diz por que nao abriu.
+      if (APP.D && _visaoDesenhada) toast('Pelo link de visualização só o Planejamento abre. Entre com a sua conta para ver a demanda.');
+      try { history.replaceState(null, '', location.pathname + location.search + '#planejamento'); } catch (_) {}
+      r = { tela: 'planejamento', aba: '', param: '' };
+      if (_visaoDesenhada && raizEl.querySelector('.app-visao #vista')) return;
+    }
+    if (APP.D) _visaoDesenhada = true;
+    var t = APP.telas.planejamento;
+    raizEl.innerHTML = '<div class="app app-visao"><main class="main"><div class="topbar">' +
+      '<span class="tb-logo" style="display:inline-flex"><span class="sb-mark"><img src="axis/marca/axis-leao-branco.png" alt="AXIS" style="width:22px;height:auto;display:block"></span></span>' +
+      '<span class="chip in" title="Link de visualização: ninguém grava por aqui">' + ico('eye') + ' Somente leitura</span>' +
+      '<span style="flex:1"></span>' +
+      '<button type="button" class="tb-ico" data-acao="tema" aria-label="Alternar tema claro ou escuro" title="Tema claro ou escuro">' + ico(raiz.temaAtual && raiz.temaAtual() === 'claro' ? 'sun' : 'moon') + '</button>' +
+      '<a class="btn" href="' + esc(location.pathname) + '">Entrar</a>' +
+      '</div><div class="view" id="vista"></div></main></div>';
+    var vista = raizEl.querySelector('#vista');
+    if (APP.erroVisao) { vista.innerHTML = vazio('lock', 'Este link de visualização não abre os dados', APP.erroVisao, '<a class="btnp" href="' + esc(location.pathname) + '">Entrar com a minha conta</a>'); return; }
+    if (!APP.D || !t) { vista.innerHTML = '<div class="sk" style="height:40px;width:320px;max-width:100%"></div><div class="sk" style="height:420px"></div>'; return; }
+    APP.rota = r;
+    document.title = 'Planejamento (somente leitura) — AXIS';
+    try {
+      var out = t.render(vista, ctx(r));
+      if (typeof out === 'string') vista.innerHTML = out;
+      if (t.depois) t.depois(vista, ctx(r));
+    } catch (e) {
+      console.error(e);
+      vista.innerHTML = vazio('alert', 'Esta tela não conseguiu ser desenhada', String(e && e.message || e));
+    }
+    if (manterRolagem !== true) window.scrollTo(0, 0);
+  }
+
   function telaPermitida(id) {
     var t = APP.telas[id];
     if (!t) return false;
@@ -1201,6 +1311,7 @@
   function desenhar(manterRolagem) {
     if (!raizEl) return;
     lerSessao();
+    if (APP.visao) { desenharVisao(manterRolagem); return; }
     if (!APP.token) { _noVinculo = false; desenharLogin(); return; }
     // O passo do vinculo esta na tela: a releitura e a troca de rota nao passam por cima dele.
     if (_noVinculo) return;
@@ -1283,9 +1394,18 @@
     var lista = notificacoes();
     var d = document.createElement('div');
     d.className = 'ntf';
-    d.innerHTML = '<span class="lab" style="padding:6px 10px">O QUE PEDE AÇÃO</span>' + (lista.length ? lista.map(function (n) {
-      return '<a class="ntf-it" href="' + n.href + '"><span style="color:' + n.cor + '">' + ico(n.ico) + '</span><span>' + n.txt + '</span></a>';
-    }).join('') : '<div class="pal-vazio">Nada pendente com você agora.</div>');
+    var comAviso = lista.filter(function (n) { return n.aviso; });
+    d.innerHTML = '<span class="lab" style="padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px">O QUE PEDE AÇÃO' +
+      (comAviso.length ? '<button type="button" class="ntf-lidos" data-ntf-lidos="1">Marcar avisos como lidos</button>' : '') + '</span>' +
+      (lista.length ? lista.map(function (n) {
+        return '<a class="ntf-it" href="' + n.href + '"' + (n.aviso ? ' data-aviso="' + esc(n.aviso) + '"' : '') + '><span style="color:' + n.cor + '">' + ico(n.ico) + '</span><span>' + n.txt + '</span></a>';
+      }).join('') : '<div class="pal-vazio">Nada pendente com você agora.</div>');
+    var bt = d.querySelector('[data-ntf-lidos]');
+    if (bt) bt.onclick = function (e) {
+      e.preventDefault(); e.stopPropagation();
+      marcarLidos(comAviso.map(function (n) { return n.aviso; }));
+      d.remove(); btn.setAttribute('aria-expanded', 'false');
+    };
     btn.parentNode.appendChild(d);
     btn.setAttribute('aria-expanded', 'true');
   }
@@ -1323,13 +1443,13 @@
   var _novoNoServidor = false;
   var _arrastando = false;
   async function conferirServidor() {
-    if (_relendo || _naFila || !APP.token || !APP.D || _sessaoCaiu || _noVinculo) return;
+    if (_relendo || _naFila || !(APP.token || APP.visao) || !APP.D || _sessaoCaiu || _noVinculo) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     _relendo = true;
     try {
       var j = await api('dados');
       var d = decisaoDaReleitura((APP.D || {}).atualizado_em, j.atualizado_em, telaOcupada());
-      if (d === 'rele' && !_naFila && APP.token) {
+      if (d === 'rele' && !_naFila && (APP.token || APP.visao)) {
         APP.D = comFila(await hidrata(j));
         APP.carregadoEm = Date.now();
         _novoNoServidor = false;
@@ -1401,7 +1521,7 @@
      o palpite) e a gravacao sao as da Minha conta (axis-tela-conta.js). */
   function precisaVinculo() {
     var C = raiz.AXIS_CONTA;
-    if (!C || !C.precisaVinculo || !APP.D) return false;
+    if (!C || !C.precisaVinculo || !APP.D || APP.visao) return false;
     try { if (sessionStorage.getItem(VINCULO_DEPOIS) === '1') return false; } catch (_) {}
     return C.precisaVinculo(APP.eu, APP.papel, APP.D);
   }
@@ -1452,11 +1572,16 @@
       if (!_sessaoCaiu && precisaVinculo()) { pedirVinculo(); return; }
       desenhar();
     } catch (e) {
+      if (APP.visao) {
+        APP.erroVisao = e.status === 401 || e.status === 403 ? 'A chave do link não confere (ou foi trocada). Peça o link de novo a quem administra o AXIS.' : 'Não foi possível ler os dados: ' + (e.message || e);
+        desenhar(); return;
+      }
       if (e.status === 401) { limparSessao(); desenharLogin('Sua sessão expirou. Entre de novo.'); return; }
       raizEl.querySelector('#vista, .main') && (raizEl.querySelector('.main').innerHTML =
         vazio('alert', 'Não foi possível ler os dados', String(e.message || e), '<button class="btnp" type="button" onclick="location.reload()">Tentar de novo</button>'));
     }
     if (APP.token) voltaDaSessao();
+    if (APP.token) carregarLidos();   // os avisos ja lidos por esta conta (RF-07)
     filaPinta();
     if (APP.token) setTimeout(filaProcessa, 3000);
   }
@@ -1468,6 +1593,9 @@
     }
     raizEl = document.getElementById('axa');
     document.addEventListener('click', function (e) {
+      // Um aviso clicado (no sino ou na aba Notificacoes) conta como lido (RF-07).
+      var av = e.target.closest('[data-aviso]');
+      if (av) marcarLidos([av.getAttribute('data-aviso')]);
       var a = e.target.closest('[data-acao]');
       if (a) {
         var acao = a.getAttribute('data-acao');
@@ -1513,7 +1641,7 @@
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') conferirServidor(); });
     window.addEventListener('focus', conferirServidor);
     lerSessao();
-    if (APP.token) iniciarApp(); else desenhar();
+    if (APP.token || APP.visao) iniciarApp(); else desenhar();
   }
 
   var H = {

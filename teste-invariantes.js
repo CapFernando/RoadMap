@@ -22764,9 +22764,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const QUEM = [
       ['Fernando (PM/PO)', { login: 'fernando', papel: 'admin' }, true],
       ['Paullymax (lideranca, ja admin)', { login: 'paullymax.faria', papel: 'admin' }, true],
-      ['Guilherme Augusto (lideranca, dev)', { login: 'guilherme.augusto', papel: 'dev' }, true],
-      /* O OUTRO GUILHERME DEV. Casar por primeiro nome o autorizaria, e
-         ninguem notaria — a marca sairia igual. Por isso a regra e por LOGIN. */
+      // 16/11/2026 (PRD RF-23): a lideranca entra pela marca `marca_comite` da conta, e nao pela lista de logins.
+      ['Guilherme Augusto (lideranca, dev, com a marca)', { login: 'guilherme.augusto', papel: 'dev', marca_comite: true }, true],
+      ['Guilherme Augusto sem a marca (desligada pelo admin)', { login: 'guilherme.augusto', papel: 'dev' }, false],
+      /* O OUTRO GUILHERME DEV. A regra e por CONTA (a marca), nao por nome:
+         o mesmo primeiro nome nao autoriza. */
       ['Guilherme Eloi (outro Guilherme dev)', { login: 'guilherme.oliveira', papel: 'dev' }, false],
       ['um dev qualquer', { login: 'leite', papel: 'dev' }, false],
       ['analista', { login: 'x', papel: 'analista' }, false],
@@ -22869,11 +22871,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const srcPode = corpo(W, 'function podeMarcarComite(');
     ok(!!srcPode, 'o Worker tem a sua copia de quem pode marcar');
     if (srcPode) {
-      const doW = new Function('ident',
-        "const COMITE_LOGINS = ['guilherme.augusto'];\n" +
-        srcPode + '\nreturn podeMarcarComite(ident);');
+      const doW = new Function('ident', srcPode + '\nreturn podeMarcarComite(ident);');
       const divergem = QUEM.filter(([nome, u]) => {
-        const ident = u ? { papel: u.papel, usuario: { login: u.login } } : null;
+        const ident = u ? { papel: u.papel, usuario: { login: u.login, marca_comite: !!u.marca_comite } } : null;
         return doW(ident) !== SELOM.podeComite(u);
       });
       ok(!divergem.length,
@@ -26468,6 +26468,321 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(/!EST\.sprintManual && EST\.sprintAuto !== sprint && EST\.sprint === EST\.sprintAuto/.test(lerTela('axis-tela-inicio.js')) &&
          /spr\.onchange = function \(\) \{ EST\.sprint = spr\.value; EST\.sprintManual = true;/.test(lerTela('axis-tela-inicio.js')),
          'e o Meu trabalho do app tambem: o padrao vira com a semana enquanto a pessoa nao escolhe outra sprint');
+      /* "POR QUE NAO ESTOU VENDO?" (PRD RF-01 a RF-03, tarefa 1.0): `motivosFora`
+         agrupa o que e do dev e o Meu trabalho nao mostra, pelo motivo. */
+      {
+        const ACf = require('./axis-acoes.js');
+        const R = { SPRINTPO: require('./sprint.js'), DEVNOME: require('./dev-nome.js'), ETAPA: require('./etapa-demanda.js') };
+        const H16 = '2026-11-16';
+        const M = (id, o) => Object.assign({ id, codigo: 'AX-' + id, titulo: 'T ' + id, dev: 'Ana', status_planejamento: 'em_andamento', tipo: 'evolucao' }, o);
+        const Df = { feriados: [], melhorias: [
+          M('a', { sprint_po: 'S3-11-2026' }),                                    // na tela
+          M('b', { sprint_po: 'S4-11-2026', status_planejamento: 'planejado' }),  // sprint futura
+          M('c', { sprint_po: 'S2-11-2026' }),                                    // outra sprint, aberta
+          M('d', { status_planejamento: 'backlog' }),                             // sem sprint
+          M('e', { sprint_po: 'S3-11-2026', tipo: 'sustentacao' }),               // escondida pelo Tipo
+          M('f', { sprint_po: 'S3-11-2026', status_planejamento: 'concluido' }),  // concluida fora do mes
+          M('g', { sprint_po: 'S2-11-2026', status_planejamento: 'concluido' }),  // concluida de outra sprint: nao conta
+          M('h', { sprint_po: 'S4-11-2026', dev: 'Bia' }),                        // de outra pessoa
+          M('i', { sprint_po: 'S4-11-2026', status_planejamento: 'negada' }),     // negada
+          M('j', { sprint_po: 'S4-11-2026', mesclado_em: '2026-11-10' }),         // mesclada
+          M('k', { sprint_po: 'S4-11-2026', oculto: true }) ] };                  // oculta
+        const cf = { R, D: Df, quem: 'Ana', nomes: ['Ana'] };
+        const filtros = (o) => Object.assign({ sprint: 'S3-11-2026', mostrar: '', colunaDe: (m) => m.status_planejamento,
+          casaFiltro: (m) => m.tipo !== 'sustentacao', noMes: (m) => m.id !== 'f' }, o);
+        const resumo = (gs) => gs.map((g) => g.motivo + (g.rotulo ? ':' + g.rotulo : '') + '=' + g.ids.join('')).join(' ');
+        const rf = ACf.motivosFora(Df.melhorias, cf, filtros(), H16);
+        ok(resumo(rf) === 'sprint_futura:S4-11-2026=b outra_sprint:S2-11-2026=c fora_da_sprint=d filtro=e concluida_fora_do_mes=f',
+           'motivosFora: cada tarefa do dev fora da tela cai no seu motivo, na ordem da faixa (sprint futura, outra sprint, sem sprint, filtro, concluida fora do mes)', resumo(rf));
+        ok(!rf.some((g) => /[ghijk]/.test(g.ids.join(''))),
+           'motivosFora: tarefa de outra pessoa, negada, mesclada, oculta e a concluida de outra sprint nao contam');
+        const rm = ACf.motivosFora(Df.melhorias, cf, filtros({ mostrar: 'fila' }), H16);
+        ok(resumo(rm) === 'mostrar=abcde', 'motivosFora: com "So a fila do time", as abertas no nome do dev aparecem como escondidas pelo Mostrar', resumo(rm));
+        const rt = ACf.motivosFora(Df.melhorias, cf, filtros({ sprint: '', casaFiltro: () => true, noMes: () => true }), H16);
+        ok(rt.length === 0, 'motivosFora: sem filtro nenhum, nada esta fora da tela e a faixa nao aparece (RF-03)', resumo(rt));
+        const rfo = ACf.motivosFora(Df.melhorias, cf, filtros({ sprint: '__fora__' }), H16);
+        // `e` e da S3-11 e do Tipo filtrado: o motivo de sprint vem antes do filtro, porque e o primeiro a escondê-la.
+        ok(resumo(rfo) === 'sprint_futura:S4-11-2026=b outra_sprint:S2-11-2026=c outra_sprint:S3-11-2026=ae',
+           'motivosFora: com "Fora da sprint" escolhido, as tarefas da sprint atual tambem aparecem, como outra sprint', resumo(rfo));
+        const INIf = lerTela('axis-tela-inicio.js');
+        ok(/AC\.motivosFora\(vs, cx, \{ sprint: EST\.sprint, mostrar: EST\.mostrar,/.test(INIf) && /return !visiveis\[id\];/.test(INIf) &&
+           /if \(q === 'fora'\) \{/.test(INIf) && !/no Backlog fora desta sprint/.test(INIf),
+           'o Meu trabalho desenha a faixa com o que o quadro nao mostrou, cada motivo tem o seu gesto, e o rodape antigo do Backlog saiu');
+      }
+      /* A VIRADA DA SPRINT ASSISTIDA (PRD RF-15 a RF-17, tarefa 3.0): `viradaDoDia`
+         diz, para o dia, o que a virada pede — o Inicio da area de produto lembra. */
+      {
+        const SV = require('./sprint.js'), PV = require('./prazo.js');
+        const MV = (id, o) => Object.assign({ id, codigo: 'AX-' + id, titulo: 'T', status_planejamento: 'em_andamento' }, o);
+        const base = () => ({ sprints: [], feriados: [], melhorias: [
+          MV('a', { dev: 'Ana', sprint_po: 'S3-11-2026' }),
+          MV('b', { dev: '', sprint_po: 'S3-11-2026', status_planejamento: 'planejado' }),
+          MV('c', { dev: 'Ana', sprint_po: 'S3-11-2026', pausado_em: '2026-11-17' }),
+          MV('d', { dev: 'Bia', sprint_po: 'S3-11-2026', entrega: '2026-11-18' }),
+          MV('e', { dev: 'Bia', sprint_po: 'S3-11-2026', status_planejamento: 'concluido', concluido_em: '2026-11-19' }),
+          MV('f', { dev: 'Caio', sprint_po: 'S1-11-2026' }) ] });
+        const v16 = SV.viradaDoDia(base(), '2026-11-16', [], null, { prazo: PV });
+        ok(v16.atual === 'S3-11-2026' && !v16.fecharHoje && v16.iniciarHoje && v16.iniciarHoje.comDono === 3 && v16.iniciarHoje.semDono === 1,
+           'viradaDoDia: no primeiro dia da S3-11, em montagem, convida a iniciar e diz quantas entram com e sem dono', JSON.stringify(v16));
+        ok(v16.vencidasAbertas.length === 1 && v16.vencidasAbertas[0].rotulo === 'S1-11-2026',
+           'viradaDoDia: a S1-11, que terminou sem fechar, aparece como vencida aberta (e a atual nao)', JSON.stringify(v16.vencidasAbertas));
+        const v20 = SV.viradaDoDia(base(), '2026-11-20', [], null, { prazo: PV });
+        ok(v20.fecharHoje && v20.fecharHoje.rotulo === 'S3-11-2026' && v20.fecharHoje.pendentes === 4 && v20.fecharHoje.pausadas === 1 &&
+           v20.fecharHoje.semDestino === 3 && v20.fecharHoje.vencidas === 1,
+           'viradaDoDia: no ultimo dia util, o checklist conta as pendentes, as pausadas (ja com destino), as sem destino e as vencidas', JSON.stringify(v20.fecharHoje));
+        ok(SV.viradaDoDia(base(), '2026-11-20', [], null, {}).fecharHoje.vencidas === 0,
+           'viradaDoDia: sem a regra de prazo injetada, nao conta vencida nenhuma — contar com regra adivinhada mentiria');
+        const fer = SV.viradaDoDia(base(), '2026-11-19', ['2026-11-20'], null, { prazo: PV });
+        ok(fer.fecharHoje && fer.fecharHoje.rotulo === 'S3-11-2026' && !SV.viradaDoDia(base(), '2026-11-19', [], null, {}).fecharHoje,
+           'viradaDoDia: com feriado na sexta (20/11), o ultimo dia util e a quinta');
+        const d1 = SV.faixaDaSprint(SV.sprintSeguinte('S5-11-2026', []), []).de;
+        ok(SV.viradaDoDia(base(), d1, [], null, {}).atual === 'S1-12-2026' && d1 === '2026-12-01',
+           'viradaDoDia: na virada do mes, o primeiro dia da S1-12 ja e da S1-12', d1);
+        const fechada = base(); fechada.sprints = [{ rotulo: 'S3-11-2026', iniciada_em: '2026-11-16', em: '2026-11-20' }];
+        const vf = SV.viradaDoDia(fechada, '2026-11-20', [], null, { prazo: PV });
+        ok(!vf.fecharHoje && !vf.iniciarHoje, 'viradaDoDia: sprint ja fechada nao pede nada', JSON.stringify(vf));
+        const iniciada = base(); iniciada.sprints = [{ rotulo: 'S3-11-2026', iniciada_em: '2026-11-16' }];
+        ok(!SV.viradaDoDia(iniciada, '2026-11-18', [], null, {}).iniciarHoje,
+           'viradaDoDia: depois de iniciada, o convite some');
+        const INIv = lerTela('axis-tela-inicio.js');
+        ok(/function cartaoVirada\(ctx\) \{/.test(INIv) && /if \(!S \|\| !S\.viradaDoDia \|\| !H\.donoDaSprint \|\| !H\.donoDaSprint\(\)\) return '';/.test(INIv) &&
+           /return h \+ cartaoVirada\(ctx\) \+ kpis/.test(INIv) && /return h \+ cartaoVirada\(ctx\) \+ kp \+ cols;/.test(INIv),
+           'o cartao da virada aparece no Inicio e no "O que pede voce", so para a area de produto');
+      }
+      /* USO DE ?antiga=1 (PRD RF-33, tarefa 4.0): o dado que decide quando as
+         telas antigas podem sair. */
+      {
+        const WU = lerTela('cloudflare-worker/worker.js'), IU = lerTela('axis-interface.js'), CU = lerTela('axis-tela-configuracoes.js');
+        const ua = (WU.match(/if \(body\.action === 'uso-antiga'\) \{[\s\S]*?\n    \}\n/) || [''])[0];
+        const ur = (WU.match(/if \(body\.action === 'uso-antiga-relatorio'\) \{[\s\S]*?\n    \}\n/) || [''])[0];
+        ok(/CREATE TABLE IF NOT EXISTS uso_antiga/.test(WU) && /'uso-antiga':\s+\{ max: 30/.test(WU) && /'uso-antiga-relatorio': \{ max: 20/.test(WU),
+           'uso de ?antiga=1: tabela no D1 e limite por IP nas duas acoes');
+        ok(/exigePapel\(env, body, \['admin', 'analista', 'dev', 'consulta'\], headers\)/.test(ua) &&
+           /PAGINAS_ANTIGAS\.includes\(pg\)/.test(ua) && /return json\(\{ error: 'pagina' \}, 400/.test(ua),
+           'registrar exige sessao e aceita so as paginas antigas conhecidas (o campo nao vira texto livre)');
+        ok(/exigePapel\(env, body, \['admin'\], headers\)/.test(ur) && /Math\.min\(180,/.test(ur),
+           'o relatorio e so de admin, com periodo limitado');
+        ok(/function registrarUsoAntiga\(\)/.test(IU) && /rm_ui_antiga_log/.test(IU) && /if \(ja\.indexOf\(pg\) >= 0\) return;/.test(IU) &&
+           /if \(querAntiga\(\)\) registrarUsoAntiga\(\);/.test(IU),
+           'a tela registra uma vez por aba e por pagina, e tambem depois de um login feito na propria tela');
+        ok(/\{ id: 'auditoria', rotulo: 'Auditoria', real: true \}/.test(CU) && /aba === 'auditoria' \? secAuditoria\(\)/.test(CU) &&
+           /H\.api\('uso-antiga-relatorio'/.test(CU),
+           'Configuracoes > Auditoria mostra quem ainda usa a interface antiga');
+      }
+      /* KANBAN SEM TRAVAS E MARCA DO COMITE (PRD RF-22 a RF-25, tarefa 5.0): as
+         duas listas fixas viram marcas da conta, com a primeira carga igual. */
+      {
+        const WK = lerTela('cloudflare-worker/worker.js');
+        ok(/colunaSeFaltar\(db, 'usuario', 'kanban_livre'/.test(WK) && /colunaSeFaltar\(db, 'usuario', 'marca_comite'/.test(WK) &&
+           /\['josias', 'rikelme'\]\.includes\(primeiro\(u\.nome \|\| u\.login\)\)/.test(WK) &&
+           /SELECT 1 AS x FROM usuario WHERE kanban_livre = 1 LIMIT 1/.test(WK) &&
+           /WHERE login = 'guilherme\.augusto'\s+AND NOT EXISTS \(SELECT 1 FROM usuario WHERE marca_comite = 1\)/.test(WK),
+           'a primeira carga marca quem as listas marcavam, e so enquanto ninguem tem a marca');
+        ok(/kanban_livre: !!r\.kanban_livre,\s+marca_comite: !!r\.marca_comite/.test(WK) && /kanban_livre: !!u\.kanban_livre,\s+marca_comite: !!u\.marca_comite/.test(WK) &&
+           /if \(op === 'kanban-livre' \|\| op === 'marca-comite'\)/.test(WK),
+           'as marcas vem na sessao e no login, e qualquer admin as liga em Usuarios');
+        const semLista = (f) => !/SALES_OPS_LIVRES\s*=|COMITE_LOGINS\s*=|function ehSalesOpsLivre/.test(lerTela(f));
+        ok(['cloudflare-worker/worker.js', 'dev.html', 'axis-acoes.js', 'selo-validacao.js'].every(semLista),
+           'nenhuma lista de nomes ou logins sobra nessas regras (Worker, painel do dev, app e selo)');
+        const ACk = require('./axis-acoes.js');
+        const m = { id: 'x', status_planejamento: 'backlog', dados_bi: false };
+        ok(ACk.salesOpsLivre(m, { papel: 'dev', eu: { kanban_livre: true } }) && !ACk.salesOpsLivre(m, { papel: 'dev', quem: 'Rikelme Santos', eu: {} }) &&
+           !ACk.salesOpsLivre(Object.assign({}, m, { dados_bi: true }), { papel: 'dev', eu: { kanban_livre: true } }),
+           'no app, a liberacao vem da marca da conta na sessao; o nome nao libera, e Dados/BI segue fora');
+        ok(/e\.kanban_livre = !!j\.usuario\.kanban_livre;/.test(lerTela('axis-interface.js')) && /eu: AX\.APP\.eu \|\| null/.test(lerTela('axis-acoes.js')),
+           'uma sessao aberta pega a marca nova pelo quem-sou, e o contexto das acoes a carrega');
+      }
+      /* AVISOS NO SINO (PRD RF-05 a RF-08, tarefa 6.0): derivados da base, com
+         chave estavel, e o lido guardado no servidor. */
+      {
+        const ACa = require('./axis-acoes.js');
+        const Ra = { DEVNOME: require('./dev-nome.js'), PAUSA: require('./pausa.js'), GRILL: require('./grill.js'),
+                     DEVOLUCAO: require('./devolucao.js'), ETAPA: require('./etapa-demanda.js'), SPRINTPO: require('./sprint.js') };
+        const ca = { R: Ra, quem: 'Ana', nomes: ['Ana'], D: {} };
+        const Ma = (id, o) => Object.assign({ id, codigo: 'AX-' + id, titulo: 'T', dev: 'Ana', status_planejamento: 'em_andamento' }, o);
+        const base = [
+          Ma('1', { historico: [{ em: '2026-11-14T10:00:00Z', quem: 'Fernando', mudancas: [{ campo: 'dev', de: 'Bia', para: 'Ana' }] }] }),
+          Ma('2', { validacao_obs: 'refazer o calculo do saldo', status_planejamento: 'em_andamento' }),
+          Ma('3', { pausado_em: '2026-11-10', pausa_por: 'Ana', pausa_aprovada_por: 'Fernando', pausa_aprovada_em: '2026-11-12' }),
+          Ma('4', { pausa_recusas: [{ em: '2026-11-13', por: 'Fernando', motivo: 'segue pelo caminho B', pedido_por: 'Ana' }] }),
+          Ma('5', { status_planejamento: 'backlog', grill: { marcado: true, marcado_em: '2026-11-11', marcado_por: 'Fernando' } }),
+          Ma('6', { pausado_em: '2026-11-05', pausa_motivo: 'aguardando o banco', pausa_terceiro: { nome: 'Banco X', retorno: '2026-11-12' } }),
+          Ma('7', { historico: [{ em: '2026-09-01T10:00:00Z', quem: 'Fernando', mudancas: [{ campo: 'dev', de: '', para: 'Ana' }] }] }),
+          Ma('8', { historico: [{ em: '2026-11-14T10:00:00Z', quem: 'Ana', mudancas: [{ campo: 'dev', de: '', para: 'Ana' }] }] }),
+          Ma('9', { dev: 'Bia', validacao_obs: 'refazer', historico: [{ em: '2026-11-14T10:00:00Z', quem: 'Fernando', mudancas: [{ campo: 'dev', de: 'Ana', para: 'Bia' }] }] }),
+          Ma('10', { pausado_em: '2026-11-10', pausa_por: 'Fernando', pausa_aprovada_por: 'Fernando', pausa_aprovada_em: '2026-11-10' }) ];
+        const av = ACa.avisosDoDev(base, ca, '2026-11-16');
+        const por = {}; av.forEach((x) => { por[x.tipo] = (por[x.tipo] || []).concat(x.id); });
+        ok(JSON.stringify(por) === JSON.stringify({ nova: ['1'], pausa_recusada: ['4'], pausa_aprovada: ['3'], terceiro: ['6'], grill: ['5'], devolvida: ['2'] }),
+           'avisosDoDev: cada evento do RF-05 vira um aviso, do mais novo para o mais antigo (devolvida, sem data, por ultimo)', JSON.stringify(por));
+        ok(!av.some((x) => ['7', '8', '9', '10'].indexOf(x.id) >= 0),
+           'nao avisa: troca de dono de mais de 30 dias, a que a propria pessoa fez, demanda que saiu do seu nome, pausa que ela mesma aprovou');
+        const av2 = ACa.avisosDoDev(base, ca, '2026-11-16');
+        ok(av.map((x) => x.chave).join() === av2.map((x) => x.chave).join() && av.every((x) => x.chave.indexOf(x.tipo + ':' + x.id + ':') === 0),
+           'a chave e estavel (tipo:id:carimbo): a mesma em qualquer aparelho, e e ela que o lido guarda');
+        const outra = base.map((m) => (m.id === '2' ? Object.assign({}, m, { validacao_obs: 'outro motivo, novo' }) : m));
+        ok(ACa.avisosDoDev(outra, ca, '2026-11-16').find((x) => x.tipo === 'devolvida').chave !== av.find((x) => x.tipo === 'devolvida').chave,
+           'uma devolucao nova (outro motivo) e outro aviso, mesmo ja tendo lido a anterior');
+        const WA = lerTela('cloudflare-worker/worker.js'), AA = lerTela('axis-app.js');
+        const rota = (WA.match(/if \(body\.action === 'avisos-lidos'\) \{[\s\S]*?\n    \}\n/) || [''])[0];
+        ok(/CREATE TABLE IF NOT EXISTS aviso_lido/.test(WA) && /PRIMARY KEY \(usuario_id, chave\)/.test(WA) &&
+           /if \(!uAv\) return json\(\{ error: 'sem_conta'/.test(rota) && /\.slice\(0, 200\)/.test(rota) && /INSERT OR IGNORE INTO aviso_lido/.test(rota),
+           'o lido fica no D1 por conta (senha compartilhada nao tem), com teto por chamada e sem duplicar');
+        ok(/function avisosAbertos\(\)/.test(AA) && /return !lidos\[a\.chave\];/.test(AA) && /if \(av\) marcarLidos\(\[av\.getAttribute\('data-aviso'\)\]\);/.test(AA) &&
+           /carregarLidos\(\);/.test(AA) && !/plural\(dev\.length, 'demanda devolvida'/.test(AA),
+           'o sino mostra so os nao lidos, marca no clique, carrega os lidos ao abrir, e a linha agregada de devolvidas saiu (virou aviso por evento)');
+      }
+      /* A PAUSA POR TERCEIRO ABRE E FECHA O ACOMPANHAMENTO (PRD RF-18 e RF-19, tarefa 7.0). */
+      {
+        const WP = lerTela('cloudflare-worker/worker.js');
+        const fonte = ['function limpaTexto(v, max) {', 'function chavePausaTerceiro(m) {', 'function pausasParaAcompanhar(melhorias, itens, hoje) {'].map((h) => corpo(WP, h));
+        ok(fonte.every(Boolean), 'a regra do acompanhamento da pausa existe no Worker');
+        if (fonte.every(Boolean)) {
+          const PA = new Function(fonte.join('\n') + '\nreturn pausasParaAcompanhar;')();
+          const mel = [
+            { id: 'a1', codigo: 'AX-1', titulo: 'Remessa', pausado_em: '2026-11-10', pausa_motivo: 'arquivo de remessa', pausa_terceiro: { nome: 'Banco X', contato: 'chamado 9', retorno: '2026-11-20' } },
+            { id: 'a2', codigo: 'AX-2', titulo: 'Sem data', pausado_em: '2026-11-12', pausa_terceiro: { nome: 'Fornecedor Y' } },
+            { id: 'a3', codigo: 'AX-3', titulo: 'Interna', pausado_em: '2026-11-12', pausa_terceiro: null },
+            { id: 'a4', codigo: 'AX-4', titulo: 'Retomada', pausado_em: '' } ];
+          const r1 = PA(mel, [], '2026-11-16');
+          ok(r1.criar.length === 2 && r1.criar[0].pessoa === 'Banco X' && r1.criar[0].retorno === '2026-11-20' && /AX-1/.test(r1.criar[0].atividade) &&
+             /Contato: chamado 9/.test(r1.criar[0].observacao) && r1.criar[0].origem.chave === 'pausa:a1:2026-11-10' && !r1.encerrar.length,
+             'aprovada a pausa por terceiro, nasce o acompanhamento com o fornecedor, o retorno prometido e a origem', JSON.stringify(r1.criar[0]));
+          ok(r1.criar[1].retorno === '2026-11-23' && /Sem data prometida/.test(r1.criar[1].observacao),
+             'sem data prometida, o retorno fica para daqui a 7 dias, e a observacao diz isso');
+          const itens = r1.criar.concat([{ id: 'fw-manual', atividade: 'Juridico', pessoa: 'Ana', retorno: '2026-11-18', concluido: false }]);
+          ok(!PA(mel, itens, '2026-11-17').criar.length, 'rodar de novo nao duplica (a chave ja existe)');
+          const retomada = mel.map((m) => (m.id === 'a1' ? Object.assign({}, m, { pausado_em: '', pausa_terceiro: null }) : m));
+          const r2 = PA(retomada, itens, '2026-11-18');
+          ok(r2.encerrar.join() === r1.criar[0].id && !r2.criar.length, 'retomada a demanda, so o acompanhamento DELA e encerrado; o escrito a mao nao se toca', JSON.stringify(r2));
+          const nova = mel.map((m) => (m.id === 'a1' ? Object.assign({}, m, { pausado_em: '2026-11-25' }) : m));
+          ok(PA(nova, itens, '2026-11-25').criar.some((x) => x.origem.chave === 'pausa:a1:2026-11-25'), 'uma pausa nova da mesma demanda e outro acompanhamento');
+          // Pausar, retomar e pausar de novo NO MESMO DIA: a chave se repete, mas o encerrado nao conta.
+          const fechados = itens.map((it) => (it.id === r1.criar[0].id ? Object.assign({}, it, { concluido: true, concluido_em: '2026-11-10' }) : it));
+          const r3 = PA(mel, fechados, '2026-11-10');
+          const novoA1 = r3.criar.find((x) => x.origem.chave === 'pausa:a1:2026-11-10');
+          ok(!!novoA1 && novoA1.id === r1.criar[0].id + '-2' && !novoA1.concluido,
+             'segunda pausa por terceiro no mesmo dia abre outro acompanhamento (o encerrado da primeira nao impede), com id proprio', JSON.stringify(r3.criar.map((x) => x.id)));
+          ok(!PA(mel, fechados.concat([novoA1]), '2026-11-10').criar.length, 'e rodar de novo nao duplica o novo');
+        }
+        ok((WP.match(/await sincronizaAcompanhamentosDaPausa\(gh, data\.melhorias, hojeBR\(\)\);/g) || []).length === 2,
+           'a sincronizacao roda depois de gravar, no publish e no dev-publish');
+        ok(/\.\.\.\(it\.origem && it\.origem\.tipo === 'pausa_terceiro'/.test(WP),
+           'editar o acompanhamento na tela preserva a origem (senao a sincronizacao o recriaria)');
+        ok(/function daPausa\(it\)/.test(lerTela('axis-tela-acompanhamentos.js')), 'Acompanhamentos mostra que a linha nasceu da pausa e leva a demanda');
+      }
+      /* DIAS PARADOS POR FORNECEDOR (PRD RF-20, tarefa 8.0): `diasPorTerceiro`. */
+      {
+        const PT = require('./pausa.js');
+        const mel = [
+          { id: '1', pausa_historico: [{ de: '2026-10-25', ate: '2026-11-05', dias: 11, terceiro: { nome: 'Banco X', retorno: '2026-11-01' } }] },
+          { id: '2', pausado_em: '2026-11-10', pausa_terceiro: { nome: 'banco x', retorno: '2026-11-12' } },
+          { id: '3', pausado_em: '2026-11-14', pausa_terceiro: { nome: 'Fornecedor Y' } },
+          { id: '4', pausa_historico: [{ de: '2026-11-02', ate: '2026-11-03', dias: 1 }] },                         // interna: nao entra
+          { id: '5', pausa_historico: [{ de: '2026-09-01', ate: '2026-09-10', terceiro: { nome: 'Banco X' } }] },  // fora do mes
+          { id: '6', mesclado_em: '2026-11-10', pausado_em: '2026-11-01', pausa_terceiro: { nome: 'Banco X' } } ];
+        const r = PT.diasPorTerceiro(mel, '2026-11-01', '2026-11-30', '2026-11-16');
+        ok(r.length === 2 && r[0].nome === 'Banco X' && r[0].dias === 10 && r[0].tarefas === 2 && r[0].ids.join() === '1,2',
+           'diasPorTerceiro: so os dias que caem no mes, na unidade da pausa (25/10-05/11 da 4 a novembro; a em curso, de 10 a hoje 16, da 6); grafias do mesmo nome viram uma', JSON.stringify(r[0]));
+        const out = PT.diasPorTerceiro(mel.slice(0, 1), '2026-10-01', '2026-10-31', '2026-11-16')[0].dias;
+        ok(out === 7 && out + 4 === 11, 'e a soma dos meses bate com o total da pausa (7 em outubro + 4 em novembro = 11)', String(out));
+        ok(r[0].retornosVencidos === 2 && r[1].nome === 'Fornecedor Y' && r[1].dias === 2 && r[1].retornosVencidos === 0,
+           'diasPorTerceiro: conta os retornos que passaram da data prometida (retomada depois dela, ou em curso com ela vencida)', JSON.stringify(r));
+        ok(!PT.diasPorTerceiro(mel, '2026-12-01', '2026-12-31', '2026-11-16').length,
+           'diasPorTerceiro: um mes sem pausa por terceiro nao tem linha (a em curso so conta ate hoje)');
+        const RT = lerTela('axis-tela-relatorios.js');
+        ok(/function terceiros\(ctx\)/.test(RT) && /if \(ctx\.aba === 'terceiros'\) return terceiros\(ctx\);/.test(RT) && /P\.diasPorTerceiro\(D\.melhorias \|\| \[\], j\.de, j\.ate, H\.hoje\(\)\)/.test(RT),
+           'Relatorios ganhou a aba Terceiros, por mes, com a conta do pausa.js');
+      }
+      /* RASCUNHO DA ENTREGA E HORAS PLANEJADAS (PRD RF-09 a RF-12, tarefa 9.0). */
+      {
+        const ACr = require('./axis-acoes.js');
+        const ADMr = lerTela('admin.html');
+        const calc = corpo(ADMr, 'function calcHorasPlanejadas(inicio, entrega) {');
+        ok(!!calc, 'o calcHorasPlanejadas do admin existe para comparar');
+        if (calc) {
+          const casos = [['2026-11-16', '2026-11-20', []], ['2026-11-16', '2026-11-20', ['2026-11-20']], ['2026-11-14', '2026-11-16', []],
+                         ['2026-11-20', '2026-11-16', []], ['2026-10-26', '2026-11-06', [{ data: '2026-11-02' }]], ['', '2026-11-20', []]];
+          const div = casos.filter(([i, e, f]) => {
+            const adm = new Function('state', calc + '\nreturn calcHorasPlanejadas;')({ feriados: f })(i, e);
+            const app = ACr.horasPlanejadas(i, e, f);
+            return (adm == null ? null : adm) !== (app ? app.horas : null);
+          });
+          ok(!div.length, 'horas planejadas do app = calcHorasPlanejadas do admin (dias uteis x 8 h, feriado e fim de semana fora)', div.map((c) => c.join(' ')).join(' | '));
+        }
+        const WR = lerTela('cloudflare-worker/worker.js');
+        const rota = (WR.match(/if \(body\.action === 'rascunho-ler' \|\| body\.action === 'rascunho-gravar'\) \{[\s\S]*?\n    \}\n/) || [''])[0];
+        ok(/CREATE TABLE IF NOT EXISTS entrega_rascunho/.test(WR) && /PRIMARY KEY \(usuario_id, melhoria_id\)/.test(WR) &&
+           /if \(!uR\) return json\(\{ error: 'sem_conta'/.test(rota) && /if \(!demandaDaConta\(mR, permR\.ident\)\)/.test(rota) && /error: 'nao_sua'/.test(rota) &&
+           /DELETE FROM entrega_rascunho/.test(rota) && /\.slice\(0, 8000\)/.test(rota),
+           'o rascunho fica no D1 por conta e demanda, so o dono le e grava, texto vazio apaga, com teto de tamanho');
+        const dc = corpo(WR, 'function demandaDaConta(m, ident) {');
+        if (dc) {
+          const f = new Function('nomeNaDemanda', 'nomeDemandasDoEmail', dc + '\nreturn demandaDaConta;')((i) => i.usuario.nome, () => '');
+          ok(f({ dev: 'João Siqueira' }, { usuario: { nome: 'Joao Siqueira' } }) && f({ dev: 'Ana / João Siqueira' }, { usuario: { nome: 'x', nome_demandas: 'João Siqueira' } }) &&
+             !f({ dev: 'Crisley Almeida' }, { usuario: { nome: 'João Siqueira' } }) && !f({ dev: 'João' }, { usuario: null }),
+             'demandaDaConta: o nome da conta ou os declarados, sem acento e sem caixa, contra cada dev da demanda; sem conta, nao');
+        }
+        const ITr = lerTela('axis-tela-item.js'), ACs = lerTela('axis-acoes.js');
+        ok(/function areaRascunho\(m, col\)/.test(ITr) && /if \(!H\.minha\(m\) \|\|/.test(ITr) && /tm = setTimeout\(salva, 1200\)/.test(ITr) &&
+           /H\.api\('rascunho-ler', \{ id: m\.id \}\)/.test(ACs) && /valor: m\.implementacao \|\| \(rasc && rasc\.texto\) \|\| ''/.test(ACs) &&
+           /H\.api\('rascunho-gravar', \{ id: m\.id, texto: '' \}\)/.test(ACs) && /Planejado: ' \+ hp\.horas \+ ' h/.test(ACs),
+           'o Item tem o rascunho do dono, salvo ao parar de digitar; a caixa de entregar vem com ele e com as horas planejadas, e entregar o apaga');
+      }
+      /* QUEM PEGOU PRIMEIRO FICA (PRD RF-13 e RF-14, tarefa 10.0). */
+      {
+        const WG = lerTela('cloudflare-worker/worker.js');
+        const src = [corpo(WG, 'function demandaDaConta(m, ident) {'), corpo(WG, 'function tomandoDemandaDeOutro(recebido, servidor, ident) {')];
+        ok(src.every(Boolean), 'a trava de quem pegou primeiro existe no Worker');
+        if (src.every(Boolean)) {
+          const T = new Function('nomeNaDemanda', 'nomeDemandasDoEmail', src.join('\n') + '\nreturn tomandoDemandaDeOutro;')((i) => i.usuario.nome, () => '');
+          const bia = { usuario: { nome: 'Bia Souza' } };
+          const serv = { melhorias: [{ id: 'f', codigo: 'AX-1', dev: 'Ana Lima' }, { id: 'g', codigo: 'AX-2', dev: '' }, { id: 'h', codigo: 'AX-3', dev: 'Bia Souza' }] };
+          const r = T({ melhorias: [{ id: 'f', dev: 'Bia Souza' }, { id: 'g', dev: 'Bia Souza' }, { id: 'h', dev: '' }] }, serv, bia);
+          ok(r.length === 1 && r[0].codigo === 'AX-1' && r[0].dono === 'Ana Lima',
+             'recusa pegar a demanda que, no servidor, ja tem outro dono — e diz quem; a sem dono e a propria (devolver a fila) passam', JSON.stringify(r));
+          ok(!T({ melhorias: [{ id: 'f', dev: 'Ana Lima' }] }, serv, bia).length && !T({ melhorias: [{ id: 'f', dev: 'Bia Souza' }] }, serv, { usuario: null }).length,
+             'sem mudanca de dono nao recusa; e a senha compartilhada (sem conta) nao passa por esta trava');
+        }
+        const dp = WG.slice(WG.indexOf("body.action === 'dev-publish'"), WG.indexOf("body.action === 'dev-publish'") + 40000);
+        ok(/const jaTemDono = tomandoDemandaDeOutro\(data, antesDev, _ident\);/.test(dp) && /error: 'ja_tem_dono'/.test(dp) && /409, headers\);/.test(dp),
+           'o dev-publish (por onde o "Pegar da fila" grava) responde 409 ja_tem_dono');
+        ok(/if \(r\.codigo === 'ja_tem_dono'\) carregar\(\)\.then/.test(lerTela('axis-app.js')),
+           'o app diz quem pegou e rele a fila');
+      }
+      /* SAUDE DO BACKLOG (PRD RF-26 e RF-27, tarefa 11.0): `SAUDE.problemas`. */
+      {
+        const SD = require('./saude-backlog.js');
+        const M = (id, o) => Object.assign({ id, codigo: 'AX-' + id, titulo: 'T', dev: 'Ana', tema_id: 't1', status_planejamento: 'em_andamento', poker_pontos: 3 }, o);
+        const D = { melhorias: [
+          M('1', { dev: '', sprint_po: 'S3-11-2026', status_planejamento: 'planejado' }),   // sem dono, sprint em curso
+          M('2', { dev: '', sprint_po: 'S4-11-2026', status_planejamento: 'planejado' }),   // sem dono, sprint montando: nao
+          M('3', { poker_pontos: 0 }),                                                       // comprometida sem pontos
+          M('4', { status_planejamento: 'validacao_area' }),                                 // 6 dias na area
+          M('5', { status_planejamento: 'validacao_area' }),                                 // 2 dias: nao
+          M('6', { entrega: '2026-11-10' }),                                                 // vencida
+          M('7', { tema_id: '' }),                                                           // sem sistema
+          M('8', { pausado_em: '2026-11-05', pausa_terceiro: { nome: 'Banco X', retorno: '2026-11-12' } }),
+          M('9', { status_planejamento: 'concluido', poker_pontos: 0, tema_id: '' }),        // concluida: nada
+          M('10', { status_planejamento: 'backlog', poker_pontos: 0, tema_id: '' }),         // backlog: nem pontos nem sistema
+          M('11', { mesclado_em: '2026-11-01', poker_pontos: 0 }) ] };                       // mesclada: nada
+        const opts = {
+          situacaoDaSprint: (r) => (r === 'S3-11-2026' ? 'em_curso' : 'montando'),
+          diasNaArea: (m) => (m.id === '4' ? 6 : 2),
+          etapaEfetiva: (m) => (m.entrega && m.entrega < '2026-11-16' && m.status_planejamento === 'em_andamento' ? 'atrasado' : m.status_planejamento),
+          retornoVencido: (m, h) => require('./pausa.js').retornoVencido(m, h) };
+        const ps = SD.problemas(D, '2026-11-16', opts);
+        const res = ps.map((p) => p.k + '=' + p.ids.join(',')).join(' ');
+        ok(res === 'sem_dono_na_sprint=1 sem_pontos=3 parada_na_area=4 vencida=6 sem_sistema=7 terceiro_vencido=8',
+           'saude: cada categoria pega so a sua demanda (sem dono em sprint em curso, sem pontos, parada na area, vencida, sem sistema, terceiro vencido)', res);
+        ok(ps.every((p) => p.n === p.ids.length) && ps.map((p) => p.k).join() === SD.CATEGORIAS.map((c) => c.k).join(),
+           'saude: a contagem e o tamanho da lista que a linha abre, e a ordem e a da tela (RF-27)');
+        ok(SD.problemas({ melhorias: [] }, '2026-11-16', opts).every((p) => p.n === 0), 'saude: base vazia, todas as linhas em zero');
+        const PN = lerTela('axis-tela-paineis.js');
+        ok(/function saude\(ctx\)/.test(PN) && /if \(ctx\.aba === 'saude'\) return saude\(ctx\);/.test(PN) && /etapaDe: H\.colunaDe, etapaEfetiva: H\.etapaDe, pontosDe: H\.pontosDe/.test(PN) &&
+           /<script src="saude-backlog\.js\?v=/.test(lerTela('axis.html')),
+           'Paineis ganhou a aba Saude, com as regras das outras telas injetadas');
+      }
     }
     const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
     ok(/if \(sprint && \(!EST\.sprintPadrao \|\|[^\n]*\)\) \{\s*EST\.sprintPadrao = true; EST\.sprint = sprint; EST\.sprintAuto = sprint;/.test(INI) &&
@@ -27033,6 +27348,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(vk && vk === CF.VIEW_KEY && CF.linkVisualizacao('https://x/', 'k&1') === 'https://x/gantt.html?view=' + vk + '&k=k%261' &&
        CF.linkVisualizacao('https://x/', '') === 'https://x/gantt.html?view=' + vk,
        'o link de visualizacao do app e o do gantt (mesma chave de modo leitura e o &k= da VIEW_CHAVE)', vk);
+    ok(CF.linkPlanejamento('https://x/', 'k&1') === 'https://x/axis.html?view=' + vk + '&k=k%261#planejamento',
+       'o link do Planejamento sem login usa a mesma chave de modo leitura e o mesmo &k=', CF.linkPlanejamento('https://x/', 'k&1'));
 
     // ── O que ainda manda para as telas antigas ─────────────────────────
     const CFG = semComentario(lerTela('axis-tela-configuracoes.js'));
@@ -27906,7 +28223,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        I.rotaNova('gantt.html', '') === 'planejamento' && I.rotaNova('ADMIN.HTML', '#ax-887') === 'item/AX-887' &&
        I.rotaNova('dev.html', '#AX-12') === 'item/AX-12' && I.rotaNova('index.html', '') === '',
        'cada tela antiga tem a sua rota no app; #AX-n abre o Item; o painel publico nao muda');
-    ok(I.rotaNova('projetos.html', '') === 'paineis/visao', 'projetos.html (horas por tema) vai para a visao dos Paineis, e nao para os projetos EP-');
+    ok(I.rotaNova('projetos.html', '') === 'paineis/tema', 'projetos.html (horas por tema) vai para a aba Por tema dos Paineis, e nao para os projetos EP-');
     ok(I.rotaNova('mensageria.html', '', '?codigo=AX-1091') === 'item/AX-1091/conversa' &&
        I.rotaNova('mensageria.html', '', '?codigo=1091') === 'item/AX-1091/conversa' && I.rotaNova('mensageria.html', '', '') === 'api',
        'mensageria.html?codigo=AX-n abre a Conversa daquela demanda no app (antes caia em #api e perdia o codigo)');
@@ -29360,7 +29677,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'Releitura a cada 30 s e ao voltar para a aba, nos dois (o app relia so ao voltar o foco depois de 1 minuto)', 'admin ' + intAdm + ' ms, app ' + AXA.RELEITURA_MS + ' ms');
     const toc = corpo(APJ, 'function telaOcupada() {') || '';
     ok(/document\.querySelector\('\.ovl, \.gv-fundo, \.fl\.aberto, \.ntf'\)/.test(toc) && /a\.tagName === 'TEXTAREA'/.test(toc) && /if \(_arrastando\) return true;/.test(toc) &&
-       /if \(_relendo \|\| _naFila \|\| !APP\.token \|\| !APP\.D \|\| _sessaoCaiu \|\| _noVinculo\) return;/.test(csv || '') &&
+       /if \(_relendo \|\| _naFila \|\| !\(APP\.token \|\| APP\.visao\) \|\| !APP\.D \|\| _sessaoCaiu \|\| _noVinculo\) return;/.test(csv || '') &&
        /Há alterações mais novas no servidor \(feitas no Planejamento, no Painel Dev ou por outra pessoa\)\. Esta tela está mostrando uma versão anterior\./.test(APJ) &&
        /data-acao="atualizar">Atualizar agora<\/button>/.test(APJ) && /data-acao="depois">Depois<\/button>/.test(APJ),
        'O que bloqueia o redesenho no app: formulario, caixa, gaveta, filtros abertos, campo de texto em uso e card no meio do arraste; nao rele no meio de uma gravacao nem com o passo do vinculo na tela; a faixa tem o texto e os botoes do admin.html');
@@ -30075,14 +30392,17 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const i0 = W.indexOf('const SALES_OPS_SEM_TRAVA'), i1 = W.indexOf('function faltaHoras(m) {');
     ok(i0 > 0 && i1 > i0, 'a liberacao do Sales Ops existe no Worker');
     if (i0 > 0 && i1 > i0) {
-      const T = new Function(W.slice(i0, i1) + '\nreturn { salesOpsForaDasTravas, ehSalesOpsLivre };')();
+      const T = new Function(W.slice(i0, i1) + '\nreturn { salesOpsForaDasTravas, contaKanbanLivre };')();
       /* 10/11/2026: todo o kanban de dev/sales sai das travas; so Dados/BI fica. */
       const d = { melhorias: [{ id: '1', dev: 'Josias Bueno' }, { id: '2', dev: 'Marina', dados_bi: true }, { id: '3', dev: '', sales_ops: true }, { id: '4', dev: 'Hugo' }, { id: '5', dev: 'Ana', dados_bi: false }] };
       const sv = { melhorias: [{ id: '1', dev: 'Josias Bueno' }, { id: '2', dev: 'Marina', dados_bi: true }, { id: '4', dev: 'Hugo' }, { id: '5', dev: 'Ana', dados_bi: true }] };
-      const g = T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Josias Bueno' } });
-      ok(g.melhorias.map(m => m.id).join(',') === '2,5', 'todo o kanban de dev/sales sai das travas para eles; a de Dados/BI (antes ou depois) nao',
+      // 16/11/2026 (PRD RF-22): quem sai das travas e a CONTA com a marca `kanban_livre`, e nao o primeiro nome.
+      const g = T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Josias Bueno', kanban_livre: true } });
+      ok(g.melhorias.map(m => m.id).join(',') === '2,5', 'todo o kanban de dev/sales sai das travas para a conta com a marca; a de Dados/BI (antes ou depois) nao',
          g.melhorias.map(m => m.id).join(','));
-      ok(T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Marina' } }) === d, 'e para quem nao e do Sales Ops nada muda');
+      ok(T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Marina' } }) === d, 'e para quem nao tem a marca nada muda');
+      ok(T.salesOpsForaDasTravas(d, sv, { usuario: { nome: 'Josias Bueno' } }) === d && T.salesOpsForaDasTravas(d, sv, { usuario: null }) === d,
+         'o nome sozinho nao libera mais nada, nem a senha compartilhada (sem conta)');
     }
     const dp = W.slice(W.indexOf("body.action === 'dev-publish'"), W.indexOf('const voltaramDev = preservaChaves(data, antesDev);'));
     const iT = dp.indexOf('data.melhorias = salesOpsForaDasTravas(data, antesDev, _ident).melhorias;');
@@ -30090,7 +30410,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(iT > 0 && iT < iD && /data\.melhorias = _todasDev;/.test(W.slice(W.indexOf("body.action === 'dev-publish'"), W.indexOf('const voltaramDev = preservaChaves(data, antesDev);') + 60)),
        'na rota do painel do dev as travas conferem sem o Sales Ops, e a lista volta inteira antes de gravar');
     const DV = require('fs').readFileSync(__dirname + '/dev.html', 'utf8');
-    ok(/const SALES_OPS_SEM_TRAVA = true;/.test(DV) && /salesOpsLivre\(m\)\)\) \{ setTimeout\(\(\) => updateStatus\(id, colKey\), 0\); return; \}/.test(DV) &&
+    ok(/const SALES_OPS_SEM_TRAVA = true;/.test(DV) && /!\(_eu && _eu\.kanban_livre\)/.test(DV) && /salesOpsLivre\(m\)\)\) \{ setTimeout\(\(\) => updateStatus\(id, colKey\), 0\); return; \}/.test(DV) &&
        /id="ms-sprint-sel"/.test(DV), 'e a tela do dev libera o arraste e a escolha de sprint para eles');
   }
 
@@ -30152,6 +30472,222 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a fila insiste so na queda; recusa de regra sai da fila e e avisada');
     ok(AXA.includes('setInterval(filaProcessa, FILA_INTERVALO)') && AXA.includes('APP.D = comFila('),
        'a fila roda sozinha e a releitura mantem na tela o que ainda esta na fila');
+  }
+
+  /* HORAS POR TEMA NO APP (PRD RF-28): a aba Por tema dos Paineis repete a
+     conta de projetos.html (renderPage/calcHorasPlanejadas/getHorasEfetivas). */
+  sec('App AXIS: Paineis > Por tema bate com a tela antiga de horas por tema');
+  {
+    const win = { AXIS_APP: { tela() {}, APP: { D: {} }, H: new Proxy({ MESES: [], MESES_C: [] }, { get: (o, k) => (k in o ? o[k] : () => '') }) }, addEventListener() {} };
+    new Function('window', 'document', lerTela('axis-tela-paineis.js'))(win, { getElementById: () => null, addEventListener() {}, head: { appendChild() {} }, createElement: () => ({ style: {} }) });
+    const G = win.AXIS_GER;
+    ok(!!(G && G.horasPorTema), 'os Paineis expoem a conta de horas por tema');
+    const PRJ = fs.readFileSync('projetos.html', 'utf8');
+    const fCalc = corpo(PRJ, 'function calcHorasPlanejadas(inicio, entrega) {');
+    const fEf = corpo(PRJ, 'function getHorasEfetivas(m) {');
+    ok(!!fCalc && !!fEf, 'projetos.html ainda tem as contas de referencia');
+    if (G && fCalc && fEf) {
+      const feriados = [{ data: '2026-11-02' }, '2026-11-20'];
+      const temas = [{ id: 't2', nome: 'Sistema B' }, { id: 't1', nome: 'Sistema A' }, { id: 't3', nome: 'Vazio' }];
+      const mel = [
+        { id: 'a', tema_id: 't1', inicio: '2026-11-03', entrega: '2026-11-21', status_planejamento: 'concluido' },
+        { id: 'b', tema_id: 't1', inicio: '2026-11-10', entrega: '2026-11-12', horas_realizadas: 40 },
+        { id: 'c', tema_id: 't2', inicio: '2026-11-01', entrega: '2026-11-30', status: 'concluida' },
+        { id: 'd', tema_id: 't2', inicio: '2026-11-05', entrega: '2026-11-04' },
+        { id: 'e', tema_id: 't1', inicio: '2026-10-28', entrega: '2026-11-03' },
+        { id: 'f', tema_id: 't1', inicio: '2026-11-03', entrega: '2026-11-06', status_planejamento: 'negada' },
+        { id: 'g', tema_id: 't2', entrega: '2026-11-06' },
+        { id: 'h', tema_id: 't1', inicio: '2025-11-03', entrega: '2025-11-07' },
+        ...[1, 2, 3, 4].map((i) => ({ id: 'x' + i, tema_id: 't1', inicio: '2026-11-1' + i, entrega: '2026-11-2' + i }))
+      ];
+      const ref = new Function('state', fCalc + '\n' + fEf + '\nreturn [calcHorasPlanejadas, getHorasEfetivas];')({ feriados });
+      const [calc, ef] = ref;
+      const esperado = (ano, mes) => {
+        const it = mel.filter((m) => m.status_planejamento !== 'negada' && m.inicio && (!ano || m.inicio.slice(0, 4) === ano) && (!mes || +m.inicio.slice(5, 7) === +mes));
+        return temas.filter((t) => it.some((m) => m.tema_id === t.id)).map((t) => {
+          const ts = it.filter((m) => m.tema_id === t.id);
+          return [t.id, ts.length, ts.filter((m) => m.status_planejamento === 'concluido' || m.status === 'concluida').length,
+                  ts.reduce((s, m) => s + (calc(m.inicio, m.entrega) || 0), 0), ts.reduce((s, m) => s + ef(m), 0),
+                  [...ts].sort((a, b) => ef(b) - ef(a)).slice(0, 5).map((m) => m.id).join()].join('|');
+        }).join(' ; ');
+      };
+      for (const [ano, mes] of [['2026', '11'], ['2026', ''], ['', ''], ['2025', '11'], ['2026', '1']]) {
+        const obt = G.horasPorTema(mel, temas, ano, mes, feriados).map((t) => [t.id, t.n, t.concluidas, t.hPlan, t.hReal, t.top.map((x) => x.m.id).join()].join('|')).join(' ; ');
+        ok(obt === esperado(ano, mes), 'horas por tema em ' + (mes || 'todos os meses') + '/' + (ano || 'todos os anos') + ' igual a tela antiga', obt + ' <> ' + esperado(ano, mes));
+      }
+    }
+  }
+
+  /* CRIAR DEMANDA DE DENTRO DO PROJETO (PRD RF-29). */
+  sec('App AXIS: o projeto cria demanda ja vinculada a ele');
+  {
+    const FRM = fs.readFileSync('axis-form-demanda.js', 'utf8');
+    const fP = corpo(FRM, 'function preencheNova(o) {');
+    ok(!!fP, 'o formulario tem o preenchimento da demanda nova');
+    if (fP) {
+      const campos = { 'axf-projeto': { value: '', options: [{ value: '' }, { value: 'p1' }, { value: 'p2' }] } };
+      const pre = new Function('el', fP + '\nreturn preencheNova;')((id) => campos[id] || null);
+      pre({ projeto_id: 'p2' });
+      ok(campos['axf-projeto'].value === 'p2', 'aberto de dentro do projeto, o formulario ja vem com ele escolhido');
+      campos['axf-projeto'].value = '';
+      pre({ projeto_id: 'p9' });
+      ok(campos['axf-projeto'].value === '', 'projeto que nao esta na lista (pendente/recusado) nao e forcado no campo');
+    }
+    ok(FRM.includes("projeto_id: val('axf-projeto')"), 'e o projeto escolhido vai junto na gravacao da demanda nova');
+    const PJ = fs.readFileSync('axis-tela-projetos.js', 'utf8');
+    const fPode = corpo(PJ, 'function podeCriarNoProjeto(p) {') || PJ.match(/function podeCriarNoProjeto\(p\) \{[^\n]*\}/)?.[0] || '';
+    ok(fPode.includes("H.pode('gravar')") && fPode.includes("aprovacao(p) === 'aprovado'"), 'o botao so aparece para quem grava e em projeto aprovado');
+    ok(PJ.includes("raiz.AXIS_FORM.abrir(null, { projeto_id: pc.id })"), 'o botao abre o formulario de demanda nova com o projeto');
+  }
+
+  /* A LINHA DAS SPRINTS (PRD RF-30): 2 anteriores, a de hoje, 5 seguintes,
+     atravessando a virada do mes, com os numeros do placar. */
+  sec('Sprint: a linha das sprints bate com o calendario e com o placar');
+  {
+    const SPX = require('./sprint.js');
+    const et = (m) => m.status_planejamento;
+    const dados = {
+      sprints: [{ rotulo: 'S1-11-2026', iniciada_em: '2026-11-02', em: '2026-11-09' }, { rotulo: 'S2-11-2026', iniciada_em: '2026-11-09' }],
+      melhorias: [
+        { id: 'a', sprint_po: 'S3-11-2026', dev: 'Ana', status_planejamento: 'planejado', poker_pontos: 3 },
+        { id: 'b', sprint_po: 'S3-11-2026', dev: 'Bia', status_planejamento: 'em_andamento', poker_pontos: 5 },
+        { id: 'c', sprint_po: 'S1-12-2026', dev: 'Ana', status_planejamento: 'planejado', poker_pontos: 2 }
+      ]
+    };
+    const l = SPX.linhaDasSprints(dados, '2026-11-16', [], et);
+    ok(l.length === 8, 'sao 8 sprints: 2 antes, a de hoje e 5 depois', l.length);
+    ok(l.map((x) => x.rotulo).join() === 'S1-11-2026,S2-11-2026,S3-11-2026,S4-11-2026,S5-11-2026,S1-12-2026,S2-12-2026,S3-12-2026',
+       'na ordem do calendario, atravessando a virada do mes', l.map((x) => x.rotulo).join());
+    ok(l.filter((x) => x.agora).map((x) => x.rotulo).join() === 'S3-11-2026', 'so a de hoje e marcada como agora');
+    ok(l[0].situacao === 'fechada' && l[1].situacao === 'em_curso' && l[1].passada && l[2].situacao === 'montando',
+       'situacao de cada uma: fechada, em curso vencida (passada), montando', JSON.stringify(l.slice(0, 3).map((x) => [x.situacao, x.passada])));
+    const ok3 = ['S3-11-2026', 'S1-12-2026'].every((r) => {
+      const p = SPX.placarDaSprint(dados, r, et, ''), x = l.find((y) => y.rotulo === r);
+      return x.demandas === p.total && x.pontos === p.pontosTotal && x.pct === p.pct;
+    });
+    ok(l[2].demandas === 2 && l[2].pontos === 8 && l[5].demandas === 1, 'a de hoje tem as 2 demandas (8 pts) e a S1-12 tem 1', JSON.stringify(l.map((x) => [x.demandas, x.pontos])));
+    ok(ok3, 'demandas, pontos e cumprimento sao os do placar de cada sprint', JSON.stringify(l.map((x) => [x.rotulo, x.demandas, x.pontos])));
+    const l2 = SPX.linhaDasSprints(dados, '2027-01-01', [], et);
+    ok(l2[0].rotulo === 'S4-12-2026' && l2[1].rotulo === 'S5-12-2026' && l2[2].rotulo === 'S1-01-2027', 'na virada do ano, as anteriores sao as de dezembro', l2.map((x) => x.rotulo).join());
+    const SPT = fs.readFileSync('axis-tela-sprints.js', 'utf8');
+    ok(SPT.includes('h += htmlLinhaSprints(D, r, tr);') && SPT.includes("href=\"#sprints/atual/' + esc(s.rotulo)"),
+       'a tela Sprints mostra a linha no topo e cada sprint abre ali mesmo');
+  }
+
+  /* CADASTROS AGUARDANDO LIBERACAO EM DESTAQUE (PRD RF-31). */
+  sec('App AXIS: Configuracoes > Pessoas destaca quem aguarda liberacao');
+  {
+    const CFG = fs.readFileSync('axis-tela-configuracoes.js', 'utf8');
+    const fB = corpo(CFG, 'function blocoPendentes(todas) {');
+    ok(!!fB, 'a tela tem a caixa dos cadastros aguardando liberacao');
+    if (fB) {
+      const H = { pode: () => true, plural: (n, a, b) => n + ' ' + (n === 1 ? a : b), esc: (x) => String(x == null ? '' : x) };
+      const mk = (pode) => new Function('H', 'ico', 'esc', 'quando', fB + '\nreturn blocoPendentes;')(Object.assign({}, H, { pode: () => pode }), () => '', H.esc, () => '15/11/2026 10:00');
+      const todas = [{ status: 'ativo', login: 'ana' }, { status: 'pendente', login: 'novo.um', nome: 'Novo Um', criado: 'x' }, { status: 'pendente', login: 'novo.dois' }];
+      const h = mk(true)(todas);
+      ok(h.includes('2 cadastros aguardando') && (h.match(/data-cfg-acao="u-aprovar"/g) || []).length === 2 && (h.match(/data-cfg-acao="u-recusar"/g) || []).length === 2,
+         'cada pendente aparece com Liberar e Recusar (as acoes que ja existem)', h.length);
+      ok(!h.includes('"ana"'), 'conta ativa nao entra na caixa');
+      ok(mk(true)([{ status: 'ativo' }]) === '', 'sem pendente, a caixa nao aparece');
+      ok(!mk(false)(todas).includes('u-aprovar'), 'quem nao configura ve os pedidos, sem os botoes');
+    }
+    ok(CFG.includes('return blocoPendentes(todas) + blocoPedidos()'), 'a caixa fica no topo de Pessoas');
+  }
+
+  /* O PLANEJAMENTO SO LEITURA SEM LOGIN (PRD RF-32). */
+  sec('App AXIS: link de visualizacao abre o Planejamento so leitura, sem login');
+  {
+    const AXA = fs.readFileSync('axis-app.js', 'utf8');
+    const GT = fs.readFileSync('gantt.html', 'utf8');
+    const vkA = (AXA.match(/var VIEW_KEY = '([^']+)';/) || [])[1], vkG = (GT.match(/const VIEW_KEY = '([^']+)';/) || [])[1];
+    ok(vkA && vkA === vkG, 'o app liga o modo pela mesma chave do Gantt', vkA + ' / ' + vkG);
+    const fM = corpo(AXA, 'function modoVisao() {'), fC = corpo(AXA, 'function chaveVisao() {'), fL = corpo(AXA, 'function lerSessao() {');
+    ok(!!fM && !!fC && !!fL, 'o app tem o modo visualizacao');
+    if (fM && fC && fL) {
+      const roda = (search, store) => {
+        const ss = Object.assign({}, store || {});
+        const sessionStorage = { getItem: (k) => (k in ss ? ss[k] : null), setItem: (k, v) => { ss[k] = String(v); }, removeItem: (k) => { delete ss[k]; } };
+        const APP = {};
+        new Function('APP', 'location', 'sessionStorage', "var VIEW_KEY = '" + vkA + "';\n" + fM + '\n' + fC + '\n' + fL + '\nlerSessao();')(APP, { search }, sessionStorage);
+        return { APP, ss, chave: new Function('location', 'sessionStorage', fC + '\nreturn chaveVisao();')({ search }, sessionStorage) };
+      };
+      const a = roda('?view=' + vkA + '&k=abc');
+      ok(a.APP.visao === true && a.APP.papel === 'consulta' && a.APP.eu === null, 'sem sessao, o link entra como Consulta, sem conta', JSON.stringify(a.APP));
+      ok(a.ss.rm_view_key === 'abc' && a.chave === 'abc', 'a chave do link fica guardada na aba, como no Gantt');
+      const b = roda('?view=' + vkA, { rm_admin_token: 't1', rm_eu: JSON.stringify({ papel: 'admin', login: 'f' }) });
+      ok(b.APP.visao === false && b.APP.papel === 'admin', 'quem ja entrou com a conta segue com ela (o link nao rebaixa a sessao)');
+      ok(roda('?view=outra').APP.visao === false && roda('').APP.visao === false, 'sem a chave de modo certa, nada muda: pede login');
+    }
+    const fA = corpo(AXA, 'async function api(action, extra) {') || '';
+    ok(fA.includes('APP.visao && chaveVisao() ? { chave: chaveVisao() }'), 'no modo, a leitura leva a chave que o Worker confere (VIEW_CHAVE)');
+    const fD = corpo(AXA, 'function desenharVisao(manterRolagem) {') || '';
+    ok(fD.includes("r.tela !== 'planejamento'") && fD.includes('APP.telas.planejamento') && !fD.includes('htmlMenu') && !fD.includes("data-acao=\"novo\""),
+       'o modo so desenha o Planejamento, sem menu nem Nova demanda');
+    const fG = corpo(AXA, 'async function gravarAgora(patch, o) {') || '';
+    ok(fG.includes("['admin', 'analista', 'dev'].indexOf(APP.papel) < 0"), 'gravar continua recusado para Consulta (o papel do modo)');
+  }
+
+  /* O ESPELHO DA BASE NO D1 (PRD RF-35/36, tarefa 14): gravacao dupla e a
+     comparacao diaria. O arquivo tem de sair IDENTICO, ligado ou nao. */
+  sec('Worker: espelho da base no D1 (gravacao dupla e comparacao)');
+  {
+    const pre = "const ESPELHO_MARCA = '__espelho_d1_melhorias__'; const ESPELHO_META_FORA = ['melhorias']; const HIST_NA_BASE = false;\n";
+    const fT = corpo(W, 'function textoComEspelho(data) {');
+    const fF = corpo(W, 'function textoDaBaseFila(data, fila) {');
+    const fD = corpo(W, 'function espelhoDiferencas(base, d1) {');
+    ok(!!fT && !!fF && !!fD, 'o worker tem o texto com espelho, o gancho da gravacao e a comparacao');
+    if (fT && fF) {
+      const [txtEsp, txtFila] = new Function(pre + fT + '\n' + fF + '\nreturn [textoComEspelho, textoDaBaseFila];')();
+      const base = () => ({
+        atualizado_em: '2026-11-16T10:00:00Z', temas: [{ id: 't1', nome: 'A $& $1 "x"' }],
+        melhorias: [{ id: 'a', codigo: 'AX-1', titulo: 'preço $$ e \\ barra', historico: [{ em: 'x' }], n: 1.5, z: null },
+                    { id: 'b', codigo: 'AX-2', titulo: '__espelho_d1_melhorias__', desc: 'linha\nnova' }, null, { titulo: 'sem id' }],
+        sprints: [], feriados: ['2026-11-20'], devs_perfil: { Ana: { axcred: true } }
+      });
+      const b1 = base(), b2 = base();
+      const fila = []; fila.espelhoLigado = true;
+      const tLig = txtFila(b1, fila), tDes = txtFila(b2, []);
+      ok(tLig === tDes, 'ligado ou desligado, o arquivo sai identico (inclusive com $, aspas, barra e a propria marca no texto)');
+      ok(JSON.stringify(JSON.parse(tLig)) === tLig && !('historico' in JSON.parse(tLig).melhorias[0]), 'e e o JSON de sempre, sem o historico dentro da demanda');
+      const e = fila.espelho;
+      ok(e && e.demandas.length === 2 && e.demandas.map((d) => d.id).join() === 'a,b', 'o espelho leva so as demandas com id', e && e.demandas.map((d) => d.id).join());
+      ok(e && e.demandas[0].corpo === JSON.stringify(JSON.parse(tLig).melhorias[0]) && e.demandas[0].codigo === 'AX-1', 'o corpo de cada demanda e exatamente o trecho dela no arquivo');
+      ok(e && Object.keys(e.meta).sort().join() === 'atualizado_em,devs_perfil,feriados,sprints,temas' && e.meta.temas === JSON.stringify(b1.temas),
+         'as chaves de topo (menos melhorias) vao para base_meta', e && Object.keys(e.meta).join());
+      const f2 = []; txtFila(base(), f2);
+      ok(!f2.espelho, 'desligado, a gravacao nao monta espelho nenhum');
+      ok(Array.isArray(b1.melhorias) && b1.melhorias.length === 4, 'a base volta intacta depois de montar o texto');
+    }
+    if (fD) {
+      const dif = new Function(fD + '\nreturn espelhoDiferencas;')();
+      const zero = dif({ demandas: [{ id: 'a', hash: '1' }, { id: 'b', hash: '2' }], meta: { temas: 'x', atualizado_em: 'q' } },
+                       { demandas: [{ id: 'b', hash: '2' }, { id: 'a', hash: '1' }], meta: { temas: 'x', atualizado_em: 'OUTRO' } });
+      ok(zero.total === 0, 'iguais (em outra ordem, e com atualizado_em diferente) = zero diferencas', JSON.stringify(zero));
+      const r = dif({ demandas: [{ id: 'a', hash: '1' }, { id: 'b', hash: '2' }, { id: 'c', hash: '3' }], meta: { temas: 'x', sprints: 's' } },
+                    { demandas: [{ id: 'a', hash: '1' }, { id: 'b', hash: 'velho' }, { id: 'z', hash: '9' }], meta: { temas: 'y', feriados: 'f' } });
+      ok(r.faltando.join() === 'c' && r.diferentes.join() === 'b' && r.sobrando.join() === 'z' && r.meta.sort().join() === 'feriados,sprints,temas' && r.total === 6,
+         'acusa a que falta, a diferente, a que sobra e cada chave de topo', JSON.stringify(r));
+    }
+    const fFetch = corpo(W, 'async fetch(request, env, ctx) {') || '';
+    ok(fFetch.includes("_histFila.espelhoLigado = espelhoLigado(env) && !!(env && env.POKER_DB);") &&
+       fFetch.includes('if (_histFila.espelho && resp && resp.status >= 200 && resp.status < 300)') && fFetch.includes('ctx.waitUntil(tarefa)'),
+       'a copia so acontece se a gravacao deu certo, e depois da resposta (waitUntil)');
+    ok(/\.catch\(e => console\.log\(JSON\.stringify\(\{ acao: 'espelho-gravar', ok: false/.test(fFetch), 'falha no D1 so vai para o log: nao derruba a resposta da gravacao');
+    const fSch = corpo(W, 'async scheduled(event, env, ctx) {') || '';
+    ok(fSch.startsWith('\n    if (!espelhoLigado(env) || !env.POKER_DB) return;') || fSch.includes('if (!espelhoLigado(env) || !env.POKER_DB) return;'), 'o cron so trabalha com ESPELHO_D1=1');
+    ok(/function espelhoLigado\(env\) \{ return String\(\(env && env\.ESPELHO_D1\) \|\| ''\)\.trim\(\) === '1'; \}/.test(W), 'ligado e exatamente ESPELHO_D1=1');
+    const LPI = +((W.match(/const ESPELHO_LINHAS_POR_INSERT = (\d+);/) || [])[1]), MAX = +((W.match(/const ESPELHO_MAX_LINHAS = (\d+);/) || [])[1]);
+    ok(LPI * 5 <= 100 && Math.ceil(MAX / LPI) + 1 + 2 <= 40, 'cada INSERT cabe nos 100 parametros do D1 e a chamada fica longe das 50 consultas do plano Free', LPI + ' por insert, ' + MAX + ' por chamada');
+    const WT = fs.readFileSync('cloudflare-worker/wrangler.toml', 'utf8');
+    ok(/\[triggers\]\s*\ncrons = \["0 9 \* \* \*"\]/.test(WT), 'o wrangler.toml declara o cron diario');
+    const fQ = corpo(W, "if (body.action === 'quem-sou') {") || '';
+    ok(fQ.includes('espelhoLigado(env) && env.POKER_DB && ident.usuario && ident.usuario.area_produto'), 'a diferenca so vai no quem-sou da area de produto, com o espelho ligado');
+    const fE = corpo(W, "if (body.action === 'espelho-d1') {") || '';
+    ok(fE.includes("exigePapel(env, body, ['admin'], headers)") && fE.includes("if (!ligado) return json({ error: 'desligado'"), 'comparar e sincronizar sao so do admin, e so com o espelho ligado');
+    const INT = fs.readFileSync('axis-interface.js', 'utf8');
+    ok(INT.includes('e.espelho_dif = Number(j.espelho_dif) || 0;'), 'o app guarda o numero na sessao, como as outras marcas da conta');
+    const AXA2 = fs.readFileSync('axis-app.js', 'utf8');
+    ok(AXA2.includes("entre o arquivo de demandas e o banco (D1)") && AXA2.includes("'#configuracoes/espelho'"), 'diferenca vira aviso no sino, levando a Configuracoes');
   }
 
   Promise.all(pendentes).then(() => {
