@@ -24011,7 +24011,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(iPub > 0 && /if \(semSprintPub\.length\) \{/.test(WC.slice(iPub, iPub + 200)) &&
          /error: 'fora_da_sprint'/.test(WC.slice(iPub, iPub + 400)),
          'o publish do Admin recusa mover sem sprint, com o mesmo codigo de erro');
-      const iApi = WC.indexOf('const semSprintApi = alocacaoSemSprint(');
+      const iApi = WC.indexOf('const semSprintApi = salesOpsLivreApi ? [] : alocacaoSemSprint(');
       ok(iApi > 0 && /if \(semSprintApi\.length\)/.test(WC.slice(iApi, iApi + 400)),
          'e a API do dev (demanda-atualizar) tambem — a etapa muda por la');
     }
@@ -30092,6 +30092,13 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const DV = require('fs').readFileSync(__dirname + '/dev.html', 'utf8');
     ok(/const SALES_OPS_SEM_TRAVA = true;/.test(DV) && /salesOpsLivre\(m\)\)\) \{ setTimeout\(\(\) => updateStatus\(id, colKey\), 0\); return; \}/.test(DV) &&
        /id="ms-sprint-sel"/.test(DV), 'e a tela do dev libera o arraste e a escolha de sprint para eles');
+    /* 16/11/2026: A API TAMBEM. A liberacao so existia no painel do dev; pela
+       `demanda-atualizar` o Rikelme levava 403 fora_da_sprint ao mover o proprio
+       card que a tela movia sem reclamar. */
+    const at = W.slice(W.indexOf("body.action === 'demanda-atualizar'"), W.indexOf("body.action === 'deploy-versao'"));
+    const iLib = at.indexOf('const salesOpsLivreApi = !salesOpsForaDasTravas(');
+    const iTr = at.indexOf('const semSprintApi = salesOpsLivreApi ? [] : alocacaoSemSprint(');
+    ok(iLib > 0 && iTr > iLib, 'e a API (demanda-atualizar) deixa o Sales Ops mover sem sprint, como a tela');
   }
 
   /* O ENDERECO SEM ".html" TAMBEM LEVA AO APP (09/11/2026). */

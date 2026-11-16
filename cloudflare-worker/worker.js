@@ -6112,7 +6112,11 @@ async function rotear(request, env, _histFila) {
           /* A MESMA TRAVA DAS TELAS: atravessar a Planning ou comecar exige
              sprint. Pela API ela faltava — o dev movia para em_andamento sem
              sprint por aqui, e a regra so existia nas portas com tela. */
-          const semSprintApi = alocacaoSemSprint(
+          /* SALES OPS SEM TRAVAS TAMBEM AQUI (16/11/2026). A liberacao de
+             `salesOpsForaDasTravas` so valia no painel do dev: a tela movia o
+             card e esta rota recusava o mesmo movimento com fora_da_sprint. */
+          const salesOpsLivreApi = !salesOpsForaDasTravas({ melhorias: [m] }, { melhorias: [m] }, ident).melhorias.length;
+          const semSprintApi = salesOpsLivreApi ? [] : alocacaoSemSprint(
             { melhorias: [Object.assign({}, m, { status_planejamento: e })] },
             { melhorias: [m] }, 'dev');
           if (semSprintApi.length) {
