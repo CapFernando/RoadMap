@@ -1937,7 +1937,29 @@
     return doPO(d) !== '';
   }
 
+  /* ═══ A LINHA DAS SPRINTS (PRD RF-30) ═════════════════════════════════════
+   * As 2 anteriores, a de hoje e as 5 seguintes, na ordem do calendário, com a
+   * situação (fechada, em curso, montando), quantas demandas e pontos tem e o
+   * cumprimento — tudo pelo PLACAR (`placarDaSprint`), para a linha nunca
+   * dizer um número diferente do que a sprint mostra ao ser aberta. A `etapaDe`
+   * é injetada, como no placar. */
+  function linhaDasSprints(dados, hoje, feriados, etapaDe, opts) {
+    var o = opts || {}, antes = o.antes == null ? 2 : o.antes, depois = o.depois == null ? 5 : o.depois;
+    var agora = sprintCorrente(hoje, feriados);
+    if (!agora) return [];
+    var rot = [agora], r = agora, k;
+    for (k = 0; k < antes; k++) { r = sprintAnterior(r, feriados); if (!r) break; rot.unshift(r); }
+    r = agora;
+    for (k = 0; k < depois; k++) { r = sprintSeguinte(r, feriados); if (!r) break; rot.push(r); }
+    return rot.map(function (s) {
+      var f = faixaDaSprint(s, feriados) || {}, p = placarDaSprint(dados, s, etapaDe, o.trilha || '');
+      return { rotulo: s, de: f.de || '', ate: f.ate || '', agora: s === agora, passada: !!f.ate && f.ate < iso(hoje),
+               situacao: situacaoDaSprint(dados, s), demandas: p.total, pontos: p.pontosTotal, pct: p.pct };
+    });
+  }
+
   var api = {
+    linhaDasSprints: linhaDasSprints,
     TRILHAS: TRILHAS,
     CORES_SPRINT: CORES_SPRINT,
     corDaSprint: corDaSprint,

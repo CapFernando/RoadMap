@@ -30220,6 +30220,40 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(PJ.includes("raiz.AXIS_FORM.abrir(null, { projeto_id: pc.id })"), 'o botao abre o formulario de demanda nova com o projeto');
   }
 
+  /* A LINHA DAS SPRINTS (PRD RF-30): 2 anteriores, a de hoje, 5 seguintes,
+     atravessando a virada do mes, com os numeros do placar. */
+  sec('Sprint: a linha das sprints bate com o calendario e com o placar');
+  {
+    const SPX = require('./sprint.js');
+    const et = (m) => m.status_planejamento;
+    const dados = {
+      sprints: [{ rotulo: 'S1-11-2026', iniciada_em: '2026-11-02', em: '2026-11-09' }, { rotulo: 'S2-11-2026', iniciada_em: '2026-11-09' }],
+      melhorias: [
+        { id: 'a', sprint_po: 'S3-11-2026', dev: 'Ana', status_planejamento: 'planejado', poker_pontos: 3 },
+        { id: 'b', sprint_po: 'S3-11-2026', dev: 'Bia', status_planejamento: 'em_andamento', poker_pontos: 5 },
+        { id: 'c', sprint_po: 'S1-12-2026', dev: 'Ana', status_planejamento: 'planejado', poker_pontos: 2 }
+      ]
+    };
+    const l = SPX.linhaDasSprints(dados, '2026-11-16', [], et);
+    ok(l.length === 8, 'sao 8 sprints: 2 antes, a de hoje e 5 depois', l.length);
+    ok(l.map((x) => x.rotulo).join() === 'S1-11-2026,S2-11-2026,S3-11-2026,S4-11-2026,S5-11-2026,S1-12-2026,S2-12-2026,S3-12-2026',
+       'na ordem do calendario, atravessando a virada do mes', l.map((x) => x.rotulo).join());
+    ok(l.filter((x) => x.agora).map((x) => x.rotulo).join() === 'S3-11-2026', 'so a de hoje e marcada como agora');
+    ok(l[0].situacao === 'fechada' && l[1].situacao === 'em_curso' && l[1].passada && l[2].situacao === 'montando',
+       'situacao de cada uma: fechada, em curso vencida (passada), montando', JSON.stringify(l.slice(0, 3).map((x) => [x.situacao, x.passada])));
+    const ok3 = ['S3-11-2026', 'S1-12-2026'].every((r) => {
+      const p = SPX.placarDaSprint(dados, r, et, ''), x = l.find((y) => y.rotulo === r);
+      return x.demandas === p.total && x.pontos === p.pontosTotal && x.pct === p.pct;
+    });
+    ok(l[2].demandas === 2 && l[2].pontos === 8 && l[5].demandas === 1, 'a de hoje tem as 2 demandas (8 pts) e a S1-12 tem 1', JSON.stringify(l.map((x) => [x.demandas, x.pontos])));
+    ok(ok3, 'demandas, pontos e cumprimento sao os do placar de cada sprint', JSON.stringify(l.map((x) => [x.rotulo, x.demandas, x.pontos])));
+    const l2 = SPX.linhaDasSprints(dados, '2027-01-01', [], et);
+    ok(l2[0].rotulo === 'S4-12-2026' && l2[1].rotulo === 'S5-12-2026' && l2[2].rotulo === 'S1-01-2027', 'na virada do ano, as anteriores sao as de dezembro', l2.map((x) => x.rotulo).join());
+    const SPT = fs.readFileSync('axis-tela-sprints.js', 'utf8');
+    ok(SPT.includes('h += htmlLinhaSprints(D, r, tr);') && SPT.includes("href=\"#sprints/atual/' + esc(s.rotulo)"),
+       'a tela Sprints mostra a linha no topo e cada sprint abre ali mesmo');
+  }
+
   Promise.all(pendentes).then(() => {
     console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
     process.exit(falhas ? 1 : 0);
