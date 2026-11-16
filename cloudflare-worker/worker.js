@@ -2840,19 +2840,6 @@ function demandaDaConta(m, ident) {
   return String(m.dev || '').split('/').map(x => norm(x)).filter(Boolean).some(n => aceitos.includes(n));
 }
 
-/* A DEMANDA E DESTA CONTA? O criterio da API (`meuDono`): o nome da conta, os
- * nomes declarados (`nome_demandas`) e o derivado do e-mail, todos por
- * igualdade sem acento e sem caixa, contra cada nome do campo `dev`. */
-function demandaDaConta(m, ident) {
-  const u = (ident && ident.usuario) || null;
-  if (!u || !m) return false;
-  const norm = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const eu = nomeNaDemanda(ident);
-  const declarados = String(u.nome_demandas || '').split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
-  const aceitos = [...declarados, nomeDemandasDoEmail(u.email || '', eu), eu].filter(Boolean).map(norm);
-  return String(m.dev || '').split('/').map(x => norm(x)).filter(Boolean).some(n => aceitos.includes(n));
-}
-
 /* QUEM TENTA TOMAR A DEMANDA DE OUTRO (PRD RF-14): no servidor ela ja tem
  * dono, esse dono nao e quem grava, e o envio poe a demanda no nome de quem
  * grava. Devolve [{ codigo, dono }]. Tirar o proprio nome (devolver a fila) e
