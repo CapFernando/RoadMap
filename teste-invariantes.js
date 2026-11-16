@@ -27341,6 +27341,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(vk && vk === CF.VIEW_KEY && CF.linkVisualizacao('https://x/', 'k&1') === 'https://x/gantt.html?view=' + vk + '&k=k%261' &&
        CF.linkVisualizacao('https://x/', '') === 'https://x/gantt.html?view=' + vk,
        'o link de visualizacao do app e o do gantt (mesma chave de modo leitura e o &k= da VIEW_CHAVE)', vk);
+    ok(CF.linkPlanejamento('https://x/', 'k&1') === 'https://x/axis.html?view=' + vk + '&k=k%261#planejamento',
+       'o link do Planejamento sem login usa a mesma chave de modo leitura e o mesmo &k=', CF.linkPlanejamento('https://x/', 'k&1'));
 
     // ── O que ainda manda para as telas antigas ─────────────────────────
     const CFG = semComentario(lerTela('axis-tela-configuracoes.js'));
@@ -28214,7 +28216,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        I.rotaNova('gantt.html', '') === 'planejamento' && I.rotaNova('ADMIN.HTML', '#ax-887') === 'item/AX-887' &&
        I.rotaNova('dev.html', '#AX-12') === 'item/AX-12' && I.rotaNova('index.html', '') === '',
        'cada tela antiga tem a sua rota no app; #AX-n abre o Item; o painel publico nao muda');
-    ok(I.rotaNova('projetos.html', '') === 'paineis/visao', 'projetos.html (horas por tema) vai para a visao dos Paineis, e nao para os projetos EP-');
+    ok(I.rotaNova('projetos.html', '') === 'paineis/tema', 'projetos.html (horas por tema) vai para a aba Por tema dos Paineis, e nao para os projetos EP-');
     ok(I.rotaNova('mensageria.html', '', '?codigo=AX-1091') === 'item/AX-1091/conversa' &&
        I.rotaNova('mensageria.html', '', '?codigo=1091') === 'item/AX-1091/conversa' && I.rotaNova('mensageria.html', '', '') === 'api',
        'mensageria.html?codigo=AX-n abre a Conversa daquela demanda no app (antes caia em #api e perdia o codigo)');
@@ -29668,7 +29670,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'Releitura a cada 30 s e ao voltar para a aba, nos dois (o app relia so ao voltar o foco depois de 1 minuto)', 'admin ' + intAdm + ' ms, app ' + AXA.RELEITURA_MS + ' ms');
     const toc = corpo(APJ, 'function telaOcupada() {') || '';
     ok(/document\.querySelector\('\.ovl, \.gv-fundo, \.fl\.aberto, \.ntf'\)/.test(toc) && /a\.tagName === 'TEXTAREA'/.test(toc) && /if \(_arrastando\) return true;/.test(toc) &&
-       /if \(_relendo \|\| _naFila \|\| !APP\.token \|\| !APP\.D \|\| _sessaoCaiu \|\| _noVinculo\) return;/.test(csv || '') &&
+       /if \(_relendo \|\| _naFila \|\| !\(APP\.token \|\| APP\.visao\) \|\| !APP\.D \|\| _sessaoCaiu \|\| _noVinculo\) return;/.test(csv || '') &&
        /Há alterações mais novas no servidor \(feitas no Planejamento, no Painel Dev ou por outra pessoa\)\. Esta tela está mostrando uma versão anterior\./.test(APJ) &&
        /data-acao="atualizar">Atualizar agora<\/button>/.test(APJ) && /data-acao="depois">Depois<\/button>/.test(APJ),
        'O que bloqueia o redesenho no app: formulario, caixa, gaveta, filtros abertos, campo de texto em uso e card no meio do arraste; nao rele no meio de uma gravacao nem com o passo do vinculo na tela; a faixa tem o texto e os botoes do admin.html');
@@ -30463,6 +30465,159 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a fila insiste so na queda; recusa de regra sai da fila e e avisada');
     ok(AXA.includes('setInterval(filaProcessa, FILA_INTERVALO)') && AXA.includes('APP.D = comFila('),
        'a fila roda sozinha e a releitura mantem na tela o que ainda esta na fila');
+  }
+
+  /* HORAS POR TEMA NO APP (PRD RF-28): a aba Por tema dos Paineis repete a
+     conta de projetos.html (renderPage/calcHorasPlanejadas/getHorasEfetivas). */
+  sec('App AXIS: Paineis > Por tema bate com a tela antiga de horas por tema');
+  {
+    const win = { AXIS_APP: { tela() {}, APP: { D: {} }, H: new Proxy({ MESES: [], MESES_C: [] }, { get: (o, k) => (k in o ? o[k] : () => '') }) }, addEventListener() {} };
+    new Function('window', 'document', lerTela('axis-tela-paineis.js'))(win, { getElementById: () => null, addEventListener() {}, head: { appendChild() {} }, createElement: () => ({ style: {} }) });
+    const G = win.AXIS_GER;
+    ok(!!(G && G.horasPorTema), 'os Paineis expoem a conta de horas por tema');
+    const PRJ = fs.readFileSync('projetos.html', 'utf8');
+    const fCalc = corpo(PRJ, 'function calcHorasPlanejadas(inicio, entrega) {');
+    const fEf = corpo(PRJ, 'function getHorasEfetivas(m) {');
+    ok(!!fCalc && !!fEf, 'projetos.html ainda tem as contas de referencia');
+    if (G && fCalc && fEf) {
+      const feriados = [{ data: '2026-11-02' }, '2026-11-20'];
+      const temas = [{ id: 't2', nome: 'Sistema B' }, { id: 't1', nome: 'Sistema A' }, { id: 't3', nome: 'Vazio' }];
+      const mel = [
+        { id: 'a', tema_id: 't1', inicio: '2026-11-03', entrega: '2026-11-21', status_planejamento: 'concluido' },
+        { id: 'b', tema_id: 't1', inicio: '2026-11-10', entrega: '2026-11-12', horas_realizadas: 40 },
+        { id: 'c', tema_id: 't2', inicio: '2026-11-01', entrega: '2026-11-30', status: 'concluida' },
+        { id: 'd', tema_id: 't2', inicio: '2026-11-05', entrega: '2026-11-04' },
+        { id: 'e', tema_id: 't1', inicio: '2026-10-28', entrega: '2026-11-03' },
+        { id: 'f', tema_id: 't1', inicio: '2026-11-03', entrega: '2026-11-06', status_planejamento: 'negada' },
+        { id: 'g', tema_id: 't2', entrega: '2026-11-06' },
+        { id: 'h', tema_id: 't1', inicio: '2025-11-03', entrega: '2025-11-07' },
+        ...[1, 2, 3, 4].map((i) => ({ id: 'x' + i, tema_id: 't1', inicio: '2026-11-1' + i, entrega: '2026-11-2' + i }))
+      ];
+      const ref = new Function('state', fCalc + '\n' + fEf + '\nreturn [calcHorasPlanejadas, getHorasEfetivas];')({ feriados });
+      const [calc, ef] = ref;
+      const esperado = (ano, mes) => {
+        const it = mel.filter((m) => m.status_planejamento !== 'negada' && m.inicio && (!ano || m.inicio.slice(0, 4) === ano) && (!mes || +m.inicio.slice(5, 7) === +mes));
+        return temas.filter((t) => it.some((m) => m.tema_id === t.id)).map((t) => {
+          const ts = it.filter((m) => m.tema_id === t.id);
+          return [t.id, ts.length, ts.filter((m) => m.status_planejamento === 'concluido' || m.status === 'concluida').length,
+                  ts.reduce((s, m) => s + (calc(m.inicio, m.entrega) || 0), 0), ts.reduce((s, m) => s + ef(m), 0),
+                  [...ts].sort((a, b) => ef(b) - ef(a)).slice(0, 5).map((m) => m.id).join()].join('|');
+        }).join(' ; ');
+      };
+      for (const [ano, mes] of [['2026', '11'], ['2026', ''], ['', ''], ['2025', '11'], ['2026', '1']]) {
+        const obt = G.horasPorTema(mel, temas, ano, mes, feriados).map((t) => [t.id, t.n, t.concluidas, t.hPlan, t.hReal, t.top.map((x) => x.m.id).join()].join('|')).join(' ; ');
+        ok(obt === esperado(ano, mes), 'horas por tema em ' + (mes || 'todos os meses') + '/' + (ano || 'todos os anos') + ' igual a tela antiga', obt + ' <> ' + esperado(ano, mes));
+      }
+    }
+  }
+
+  /* CRIAR DEMANDA DE DENTRO DO PROJETO (PRD RF-29). */
+  sec('App AXIS: o projeto cria demanda ja vinculada a ele');
+  {
+    const FRM = fs.readFileSync('axis-form-demanda.js', 'utf8');
+    const fP = corpo(FRM, 'function preencheNova(o) {');
+    ok(!!fP, 'o formulario tem o preenchimento da demanda nova');
+    if (fP) {
+      const campos = { 'axf-projeto': { value: '', options: [{ value: '' }, { value: 'p1' }, { value: 'p2' }] } };
+      const pre = new Function('el', fP + '\nreturn preencheNova;')((id) => campos[id] || null);
+      pre({ projeto_id: 'p2' });
+      ok(campos['axf-projeto'].value === 'p2', 'aberto de dentro do projeto, o formulario ja vem com ele escolhido');
+      campos['axf-projeto'].value = '';
+      pre({ projeto_id: 'p9' });
+      ok(campos['axf-projeto'].value === '', 'projeto que nao esta na lista (pendente/recusado) nao e forcado no campo');
+    }
+    ok(FRM.includes("projeto_id: val('axf-projeto')"), 'e o projeto escolhido vai junto na gravacao da demanda nova');
+    const PJ = fs.readFileSync('axis-tela-projetos.js', 'utf8');
+    const fPode = corpo(PJ, 'function podeCriarNoProjeto(p) {') || PJ.match(/function podeCriarNoProjeto\(p\) \{[^\n]*\}/)?.[0] || '';
+    ok(fPode.includes("H.pode('gravar')") && fPode.includes("aprovacao(p) === 'aprovado'"), 'o botao so aparece para quem grava e em projeto aprovado');
+    ok(PJ.includes("raiz.AXIS_FORM.abrir(null, { projeto_id: pc.id })"), 'o botao abre o formulario de demanda nova com o projeto');
+  }
+
+  /* A LINHA DAS SPRINTS (PRD RF-30): 2 anteriores, a de hoje, 5 seguintes,
+     atravessando a virada do mes, com os numeros do placar. */
+  sec('Sprint: a linha das sprints bate com o calendario e com o placar');
+  {
+    const SPX = require('./sprint.js');
+    const et = (m) => m.status_planejamento;
+    const dados = {
+      sprints: [{ rotulo: 'S1-11-2026', iniciada_em: '2026-11-02', em: '2026-11-09' }, { rotulo: 'S2-11-2026', iniciada_em: '2026-11-09' }],
+      melhorias: [
+        { id: 'a', sprint_po: 'S3-11-2026', dev: 'Ana', status_planejamento: 'planejado', poker_pontos: 3 },
+        { id: 'b', sprint_po: 'S3-11-2026', dev: 'Bia', status_planejamento: 'em_andamento', poker_pontos: 5 },
+        { id: 'c', sprint_po: 'S1-12-2026', dev: 'Ana', status_planejamento: 'planejado', poker_pontos: 2 }
+      ]
+    };
+    const l = SPX.linhaDasSprints(dados, '2026-11-16', [], et);
+    ok(l.length === 8, 'sao 8 sprints: 2 antes, a de hoje e 5 depois', l.length);
+    ok(l.map((x) => x.rotulo).join() === 'S1-11-2026,S2-11-2026,S3-11-2026,S4-11-2026,S5-11-2026,S1-12-2026,S2-12-2026,S3-12-2026',
+       'na ordem do calendario, atravessando a virada do mes', l.map((x) => x.rotulo).join());
+    ok(l.filter((x) => x.agora).map((x) => x.rotulo).join() === 'S3-11-2026', 'so a de hoje e marcada como agora');
+    ok(l[0].situacao === 'fechada' && l[1].situacao === 'em_curso' && l[1].passada && l[2].situacao === 'montando',
+       'situacao de cada uma: fechada, em curso vencida (passada), montando', JSON.stringify(l.slice(0, 3).map((x) => [x.situacao, x.passada])));
+    const ok3 = ['S3-11-2026', 'S1-12-2026'].every((r) => {
+      const p = SPX.placarDaSprint(dados, r, et, ''), x = l.find((y) => y.rotulo === r);
+      return x.demandas === p.total && x.pontos === p.pontosTotal && x.pct === p.pct;
+    });
+    ok(l[2].demandas === 2 && l[2].pontos === 8 && l[5].demandas === 1, 'a de hoje tem as 2 demandas (8 pts) e a S1-12 tem 1', JSON.stringify(l.map((x) => [x.demandas, x.pontos])));
+    ok(ok3, 'demandas, pontos e cumprimento sao os do placar de cada sprint', JSON.stringify(l.map((x) => [x.rotulo, x.demandas, x.pontos])));
+    const l2 = SPX.linhaDasSprints(dados, '2027-01-01', [], et);
+    ok(l2[0].rotulo === 'S4-12-2026' && l2[1].rotulo === 'S5-12-2026' && l2[2].rotulo === 'S1-01-2027', 'na virada do ano, as anteriores sao as de dezembro', l2.map((x) => x.rotulo).join());
+    const SPT = fs.readFileSync('axis-tela-sprints.js', 'utf8');
+    ok(SPT.includes('h += htmlLinhaSprints(D, r, tr);') && SPT.includes("href=\"#sprints/atual/' + esc(s.rotulo)"),
+       'a tela Sprints mostra a linha no topo e cada sprint abre ali mesmo');
+  }
+
+  /* CADASTROS AGUARDANDO LIBERACAO EM DESTAQUE (PRD RF-31). */
+  sec('App AXIS: Configuracoes > Pessoas destaca quem aguarda liberacao');
+  {
+    const CFG = fs.readFileSync('axis-tela-configuracoes.js', 'utf8');
+    const fB = corpo(CFG, 'function blocoPendentes(todas) {');
+    ok(!!fB, 'a tela tem a caixa dos cadastros aguardando liberacao');
+    if (fB) {
+      const H = { pode: () => true, plural: (n, a, b) => n + ' ' + (n === 1 ? a : b), esc: (x) => String(x == null ? '' : x) };
+      const mk = (pode) => new Function('H', 'ico', 'esc', 'quando', fB + '\nreturn blocoPendentes;')(Object.assign({}, H, { pode: () => pode }), () => '', H.esc, () => '15/11/2026 10:00');
+      const todas = [{ status: 'ativo', login: 'ana' }, { status: 'pendente', login: 'novo.um', nome: 'Novo Um', criado: 'x' }, { status: 'pendente', login: 'novo.dois' }];
+      const h = mk(true)(todas);
+      ok(h.includes('2 cadastros aguardando') && (h.match(/data-cfg-acao="u-aprovar"/g) || []).length === 2 && (h.match(/data-cfg-acao="u-recusar"/g) || []).length === 2,
+         'cada pendente aparece com Liberar e Recusar (as acoes que ja existem)', h.length);
+      ok(!h.includes('"ana"'), 'conta ativa nao entra na caixa');
+      ok(mk(true)([{ status: 'ativo' }]) === '', 'sem pendente, a caixa nao aparece');
+      ok(!mk(false)(todas).includes('u-aprovar'), 'quem nao configura ve os pedidos, sem os botoes');
+    }
+    ok(CFG.includes('return blocoPendentes(todas) + blocoPedidos()'), 'a caixa fica no topo de Pessoas');
+  }
+
+  /* O PLANEJAMENTO SO LEITURA SEM LOGIN (PRD RF-32). */
+  sec('App AXIS: link de visualizacao abre o Planejamento so leitura, sem login');
+  {
+    const AXA = fs.readFileSync('axis-app.js', 'utf8');
+    const GT = fs.readFileSync('gantt.html', 'utf8');
+    const vkA = (AXA.match(/var VIEW_KEY = '([^']+)';/) || [])[1], vkG = (GT.match(/const VIEW_KEY = '([^']+)';/) || [])[1];
+    ok(vkA && vkA === vkG, 'o app liga o modo pela mesma chave do Gantt', vkA + ' / ' + vkG);
+    const fM = corpo(AXA, 'function modoVisao() {'), fC = corpo(AXA, 'function chaveVisao() {'), fL = corpo(AXA, 'function lerSessao() {');
+    ok(!!fM && !!fC && !!fL, 'o app tem o modo visualizacao');
+    if (fM && fC && fL) {
+      const roda = (search, store) => {
+        const ss = Object.assign({}, store || {});
+        const sessionStorage = { getItem: (k) => (k in ss ? ss[k] : null), setItem: (k, v) => { ss[k] = String(v); }, removeItem: (k) => { delete ss[k]; } };
+        const APP = {};
+        new Function('APP', 'location', 'sessionStorage', "var VIEW_KEY = '" + vkA + "';\n" + fM + '\n' + fC + '\n' + fL + '\nlerSessao();')(APP, { search }, sessionStorage);
+        return { APP, ss, chave: new Function('location', 'sessionStorage', fC + '\nreturn chaveVisao();')({ search }, sessionStorage) };
+      };
+      const a = roda('?view=' + vkA + '&k=abc');
+      ok(a.APP.visao === true && a.APP.papel === 'consulta' && a.APP.eu === null, 'sem sessao, o link entra como Consulta, sem conta', JSON.stringify(a.APP));
+      ok(a.ss.rm_view_key === 'abc' && a.chave === 'abc', 'a chave do link fica guardada na aba, como no Gantt');
+      const b = roda('?view=' + vkA, { rm_admin_token: 't1', rm_eu: JSON.stringify({ papel: 'admin', login: 'f' }) });
+      ok(b.APP.visao === false && b.APP.papel === 'admin', 'quem ja entrou com a conta segue com ela (o link nao rebaixa a sessao)');
+      ok(roda('?view=outra').APP.visao === false && roda('').APP.visao === false, 'sem a chave de modo certa, nada muda: pede login');
+    }
+    const fA = corpo(AXA, 'async function api(action, extra) {') || '';
+    ok(fA.includes('APP.visao && chaveVisao() ? { chave: chaveVisao() }'), 'no modo, a leitura leva a chave que o Worker confere (VIEW_CHAVE)');
+    const fD = corpo(AXA, 'function desenharVisao(manterRolagem) {') || '';
+    ok(fD.includes("r.tela !== 'planejamento'") && fD.includes('APP.telas.planejamento') && !fD.includes('htmlMenu') && !fD.includes("data-acao=\"novo\""),
+       'o modo so desenha o Planejamento, sem menu nem Nova demanda');
+    const fG = corpo(AXA, 'async function gravarAgora(patch, o) {') || '';
+    ok(fG.includes("['admin', 'analista', 'dev'].indexOf(APP.papel) < 0"), 'gravar continua recusado para Consulta (o papel do modo)');
   }
 
   Promise.all(pendentes).then(() => {

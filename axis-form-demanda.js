@@ -1200,6 +1200,9 @@
       var x = el('axf-' + k);
       if (x && !x.disabled && /^\d{4}-\d{2}-\d{2}$/.test(String(o[k] || ''))) x.value = o[k];
     });
+    // Aberto de dentro de um projeto (PRD RF-29): ja vem com ele escolhido.
+    var ps = el('axf-projeto');
+    if (ps && o.projeto_id && [].some.call(ps.options, function (x) { return x.value === o.projeto_id; })) ps.value = o.projeto_id;
   }
 
   function abrir(m, o) {
