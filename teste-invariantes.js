@@ -26468,6 +26468,29 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(/!EST\.sprintManual && EST\.sprintAuto !== sprint && EST\.sprint === EST\.sprintAuto/.test(lerTela('axis-tela-inicio.js')) &&
          /spr\.onchange = function \(\) \{ EST\.sprint = spr\.value; EST\.sprintManual = true;/.test(lerTela('axis-tela-inicio.js')),
          'e o Meu trabalho do app tambem: o padrao vira com a semana enquanto a pessoa nao escolhe outra sprint');
+      /* DIAS PARADOS POR FORNECEDOR (PRD RF-20, tarefa 8.0): `diasPorTerceiro`. */
+      {
+        const PT = require('./pausa.js');
+        const mel = [
+          { id: '1', pausa_historico: [{ de: '2026-10-25', ate: '2026-11-05', dias: 11, terceiro: { nome: 'Banco X', retorno: '2026-11-01' } }] },
+          { id: '2', pausado_em: '2026-11-10', pausa_terceiro: { nome: 'banco x', retorno: '2026-11-12' } },
+          { id: '3', pausado_em: '2026-11-14', pausa_terceiro: { nome: 'Fornecedor Y' } },
+          { id: '4', pausa_historico: [{ de: '2026-11-02', ate: '2026-11-03', dias: 1 }] },                         // interna: nao entra
+          { id: '5', pausa_historico: [{ de: '2026-09-01', ate: '2026-09-10', terceiro: { nome: 'Banco X' } }] },  // fora do mes
+          { id: '6', mesclado_em: '2026-11-10', pausado_em: '2026-11-01', pausa_terceiro: { nome: 'Banco X' } } ];
+        const r = PT.diasPorTerceiro(mel, '2026-11-01', '2026-11-30', '2026-11-16');
+        ok(r.length === 2 && r[0].nome === 'Banco X' && r[0].dias === 10 && r[0].tarefas === 2 && r[0].ids.join() === '1,2',
+           'diasPorTerceiro: so os dias que caem no mes, na unidade da pausa (25/10-05/11 da 4 a novembro; a em curso, de 10 a hoje 16, da 6); grafias do mesmo nome viram uma', JSON.stringify(r[0]));
+        const out = PT.diasPorTerceiro(mel.slice(0, 1), '2026-10-01', '2026-10-31', '2026-11-16')[0].dias;
+        ok(out === 7 && out + 4 === 11, 'e a soma dos meses bate com o total da pausa (7 em outubro + 4 em novembro = 11)', String(out));
+        ok(r[0].retornosVencidos === 2 && r[1].nome === 'Fornecedor Y' && r[1].dias === 2 && r[1].retornosVencidos === 0,
+           'diasPorTerceiro: conta os retornos que passaram da data prometida (retomada depois dela, ou em curso com ela vencida)', JSON.stringify(r));
+        ok(!PT.diasPorTerceiro(mel, '2026-12-01', '2026-12-31', '2026-11-16').length,
+           'diasPorTerceiro: um mes sem pausa por terceiro nao tem linha (a em curso so conta ate hoje)');
+        const RT = lerTela('axis-tela-relatorios.js');
+        ok(/function terceiros\(ctx\)/.test(RT) && /if \(ctx\.aba === 'terceiros'\) return terceiros\(ctx\);/.test(RT) && /P\.diasPorTerceiro\(D\.melhorias \|\| \[\], j\.de, j\.ate, H\.hoje\(\)\)/.test(RT),
+           'Relatorios ganhou a aba Terceiros, por mes, com a conta do pausa.js');
+      }
     }
     const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
     ok(/if \(sprint && \(!EST\.sprintPadrao \|\|[^\n]*\)\) \{\s*EST\.sprintPadrao = true; EST\.sprint = sprint; EST\.sprintAuto = sprint;/.test(INI) &&

@@ -1308,29 +1308,62 @@
       '.axa .fc-ck input{accent-color:var(--ac)}.axa .rl-modsel{display:none}' +
       // Os atalhos de periodo moram dentro de H.filtros; no computador ficam depois da busca, como sempre.
       '.axa .rl-atalhos{order:1}' +
-      '@container app (max-width: 760px){.axa .rl-pre{font-size:12px}.axa .rl-mods{display:none}.axa .rl-aside{order:2}' +
+      '.axa .gx-k4.rl-k3{grid-template-columns:repeat(3,minmax(0,1fr))}' +
+      '@container app (max-width: 760px){.axa .gx-k4.rl-k3{grid-template-columns:1fr}.axa .rl-pre{font-size:12px}.axa .rl-mods{display:none}.axa .rl-aside{order:2}' +
       '.axa .rl-modsel{display:flex;flex-direction:column;gap:6px}.axa .rl-modsel .in{width:100%}' +
       '.axa .rl-mes{display:inline-flex;align-items:center;min-height:44px;margin:-12px 0}' +
       '.axa .rl-fil > .row > label{flex:1 1 160px}.axa .rl-fil .in{width:100% !important;max-width:none !important}}';
     document.head.appendChild(st);
   }
 
+  /* ═══ TERCEIROS: DIAS PARADOS POR FORNECEDOR (PRD RF-20) ═══════════════════
+     Quanto cada fornecedor ou parceiro segurou do trabalho no mes: tarefas,
+     dias parados (so os que caem no mes) e retornos que venceram. A conta e
+     `PAUSA.diasPorTerceiro`; os dias continuam fora do prazo do dev e do
+     placar da sprint (RF-21) — aqui eles so ficam visiveis, para cobrar. */
+  function terceiros(ctx) {
+    var g = G(), D = ctx.D, P = raiz.PAUSA, alvo = g.alvoDe(ctx.param), j = g.janelaMes(alvo);
+    var hd = g.cabecalho('Terceiros · ' + esc(g.nomeMes(alvo)),
+      'Dias em que demandas ficaram pausadas aguardando um fornecedor ou parceiro. Esses dias não contam no prazo do dev nem no placar da sprint.',
+      g.seletorMes('relatorios/terceiros', alvo), '<span class="note"><a href="#relatorios/salvos">Relatórios</a> › Terceiros</span>');
+    if (!P || !P.diasPorTerceiro) return hd + H.vazio('alert', 'O módulo da pausa não carregou', 'pausa.js precisa vir antes deste arquivo.');
+    var linhas = P.diasPorTerceiro(D.melhorias || [], j.de, j.ate, H.hoje());
+    if (!linhas.length) return hd + H.vazio('check', 'Nenhuma demanda esperou terceiro em ' + esc(g.nomeMes(alvo)),
+      'Quando uma pausa é aprovada com "Aguardando terceiro", o fornecedor aparece aqui com os dias parados.');
+    var por = {}; (D.melhorias || []).forEach(function (m) { if (m && m.id) por[m.id] = m; });
+    var tot = linhas.reduce(function (t, l) { return { dias: t.dias + l.dias, venc: t.venc + l.retornosVencidos }; }, { dias: 0, venc: 0 });
+    return hd + '<div class="gx-g gx-k4 rl-k3">' +
+      g.k('Fornecedores', H.num(linhas.length), 'com demanda parada no mês') +
+      g.k('Dias parados', H.num(tot.dias), 'somados, só os que caem no mês', 'var(--wn-t)') +
+      g.k('Retornos vencidos', H.num(tot.venc), 'passaram da data prometida', tot.venc ? 'var(--dg-t)' : '') + '</div>' +
+      '<section class="pn"><div class="tbl tc"><table><thead><tr><th>Fornecedor</th><th>Tarefas</th><th>Dias parados</th><th>Retornos vencidos</th></tr></thead><tbody>' +
+      linhas.map(function (l) {
+        return '<tr><td data-l="Fornecedor" style="font-weight:700;color:var(--tx)">' + esc(l.nome) + '</td>' +
+          '<td data-l="Tarefas">' + l.ids.map(function (id) { var m = por[id]; return m ? '<a href="' + H.hrefItem(m) + '" class="mono">' + esc(m.codigo || 'demanda') + '</a>' : ''; }).join(' ') + '</td>' +
+          '<td data-l="Dias parados" class="mono">' + H.num(l.dias) + '</td>' +
+          '<td data-l="Retornos vencidos"' + (l.retornosVencidos ? ' style="color:var(--dg-t);font-weight:700"' : '') + '>' + H.num(l.retornosVencidos) + '</td></tr>';
+      }).join('') + '</tbody></table></div></section>';
+  }
+
   // ═══ Registro ══════════════════════════════════════════════════════════
   function abasDe(r) {
     var m = r.aba === 'time' && r.param ? '/' + r.param.split('/')[0] : '';
+    var mt = r.aba === 'terceiros' && r.param ? '/' + r.param.split('/')[0] : '';
     return [{ id: 'salvos', rotulo: 'Relatórios salvos' }, { id: 'entregues', rotulo: 'Entregues' },
-            { id: 'time', rotulo: 'Como o time andou', href: '#relatorios/time' + m }];
+            { id: 'time', rotulo: 'Como o time andou', href: '#relatorios/time' + m },
+            { id: 'terceiros', rotulo: 'Terceiros', href: '#relatorios/terceiros' + mt }];
   }
   raiz.AXIS_APP.tela({
     id: 'relatorios', rotulo: 'Relatórios', papeis: ['admin', 'consulta'],
-    abas: [{ id: 'salvos', rotulo: 'Relatórios salvos' }, { id: 'entregues', rotulo: 'Entregues' }, { id: 'time', rotulo: 'Como o time andou' }],
+    abas: [{ id: 'salvos', rotulo: 'Relatórios salvos' }, { id: 'entregues', rotulo: 'Entregues' }, { id: 'time', rotulo: 'Como o time andou' }, { id: 'terceiros', rotulo: 'Terceiros' }],
     abasDe: abasDe,
-    titulo: function (r) { return 'Relatórios · ' + ({ salvos: 'Relatórios salvos', entregues: 'Entregues', time: 'Como o time andou' }[r.aba] || ''); },
+    titulo: function (r) { return 'Relatórios · ' + ({ salvos: 'Relatórios salvos', entregues: 'Entregues', time: 'Como o time andou', terceiros: 'Terceiros' }[r.aba] || ''); },
     render: function (el, ctx) {
       if (!G()) return H.vazio('alert', 'As contas do gerencial não carregaram', 'axis-tela-paineis.js precisa vir antes deste arquivo.');
       G().css(); cssRel();
       if (ctx.aba === 'entregues') return entregues(ctx);
       if (ctx.aba === 'time') return time(ctx);
+      if (ctx.aba === 'terceiros') return terceiros(ctx);
       return salvos(ctx);
     },
     depois: function (el, ctx) {
