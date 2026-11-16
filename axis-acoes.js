@@ -724,6 +724,75 @@
     return f === '__fora__' ? SP.foraDaSprint(m) : SP.naSprint(m, f);
   }
 
+  /* ═══ OS AVISOS DO DEV (PRD RF-05 a RF-08, 16/11/2026) ════════════════════
+   *
+   * O que mudou no trabalho de quem olha e pede uma acao dele. DERIVADOS DA
+   * BASE, e nao de uma fila de eventos: cada aviso sai de um campo que a
+   * demanda ja tem, e a CHAVE e estavel (`tipo:id:carimbo`) — a mesma em
+   * qualquer aparelho, que e o que deixa o "lido" valer em todos (`aviso_lido`
+   * no Worker). Um aviso existe enquanto o estado que o gera existir.
+   *
+   *   nova            o historico registra o dev da demanda passando a ser voce,
+   *                   por outra pessoa (carimbo: a data da troca)
+   *   devolvida       o PM/PO devolveu com motivo e a demanda esta com voce
+   *                   (carimbo: o proprio motivo, resumido — muda se ele mudar)
+   *   pausa_aprovada  a pausa que voce pediu foi aprovada (carimbo: o dia do sim)
+   *   pausa_recusada  a ultima recusa de um pedido seu (carimbo: o dia do nao)
+   *   grill           o PM/PO pediu o seu parecer (carimbo: quando marcou)
+   *   terceiro        o retorno prometido pelo terceiro venceu (carimbo: a data)
+   *
+   * So os ultimos 30 dias entram (o que tem data): sem o corte, a primeira
+   * abertura despejaria meses de historico no sino. Mais novo primeiro. */
+  var AVISO_DIAS = 30;
+  function resumoTexto(t) {
+    var s = txt(t), h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 2147483647;
+    return s.length + '-' + h.toString(36);
+  }
+  function avisosDoDev(lista, c, hoje) {
+    var DN = mod(c, 'DEVNOME'), P = mod(c, 'PAUSA'), G = mod(c, 'GRILL'), DV = mod(c, 'DEVOLUCAO');
+    var nomes = (c && Array.isArray(c.nomes) && c.nomes.length) ? c.nomes : [txt((c || {}).quem)];
+    var meu = function (nome) { return nomes.some(function (n) { return txt(n) && (DN ? DN.eDe({ dev: nome }, n) : txt(nome) === txt(n)); }); };
+    var dia = txt(hoje).slice(0, 10);
+    var corte = '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dia)) {
+      var q = dia.split('-');
+      corte = new Date(Date.UTC(+q[0], +q[1] - 1, +q[2] - AVISO_DIAS)).toISOString().slice(0, 10);
+    }
+    var recente = function (d) { var x = txt(d).slice(0, 10); return !!x && (!corte || x >= corte); };
+    var out = [];
+    var poe = function (tipo, m, carimbo, em) {
+      out.push({ chave: tipo + ':' + m.id + ':' + carimbo, tipo: tipo, id: m.id, codigo: m.codigo || '', titulo: txt(m.titulo), em: txt(em).slice(0, 10) });
+    };
+    (lista || []).forEach(function (m) {
+      if (!m || !m.id || txt(m.mesclado_em) || m.oculto) return;
+      var minha = ehMeu(m, c);
+      var e = etapaGravada(m, c);
+      if (minha) {
+        // A troca de dono mais recente que te pos na demanda, feita por outra pessoa.
+        var hs = Array.isArray(m.historico) ? m.historico : [];
+        for (var i = hs.length - 1; i >= 0; i--) {
+          var h = hs[i] || {};
+          var mu = (h.mudancas || []).filter(function (x) { return x && x.campo === 'dev'; })[0];
+          if (!mu) continue;
+          if (meu(mu.para) && !meu(mu.de) && !meu(h.quem) && recente(h.em)) poe('nova', m, txt(h.em), h.em);
+          break;
+        }
+        if (DV && DV.houve(m) && ['planejado', 'em_andamento'].indexOf(e) >= 0) poe('devolvida', m, resumoTexto(m.validacao_obs), '');
+        if (G && G.pendente(m)) { var gd = G.dados(m); poe('grill', m, gd.marcado_em || 'sim', gd.marcado_em); }
+        if (P && P.retornoVencido && P.retornoVencido(m, dia)) { var t = P.terceiro(m); poe('terceiro', m, t.retorno, t.retorno); }
+      }
+      // A pausa e de quem PEDIU (pausa_por / pedido_por), mesmo que a demanda tenha mudado de dono.
+      if (txt(m.pausado_em) && txt(m.pausa_aprovada_em) && meu(m.pausa_por) && !meu(m.pausa_aprovada_por) && recente(m.pausa_aprovada_em)) {
+        poe('pausa_aprovada', m, txt(m.pausa_aprovada_em), m.pausa_aprovada_em);
+      }
+      var rs = Array.isArray(m.pausa_recusas) ? m.pausa_recusas.filter(Boolean) : [];
+      var ur = rs[rs.length - 1];
+      if (ur && meu(ur.pedido_por) && !txt(m.pausado_em) && recente(ur.em)) poe('pausa_recusada', m, txt(ur.em), ur.em);
+    });
+    return out.sort(function (a, b) { return b.em < a.em ? -1 : b.em > a.em ? 1 : 0; });
+  }
+
   /* O ARRASTE DO CARD ENTRE COLUNAS — `kbDrop` (admin.html) e `onDragOver`
      + `onDrop` (dev.html), por perfil. `soltarEm` devolve o que o gesto faz,
      sem gravar:
@@ -1153,7 +1222,7 @@
                        devsParaVincular: devsParaVincular, pessoasDaConversa: pessoasDaConversa,
                        sugestoesArroba: sugestoesArroba, escolheArroba: escolheArroba });
   Object.assign(api, { soltarEm: soltarEm, podeSoltar: podeSoltar, arrastavel: arrastavel, COLUNAS_BLOQUEADAS_MSG: COLUNAS_BLOQUEADAS_MSG,
-                       salesOpsLivre: salesOpsLivre, contaLivre: contaLivre });
+                       salesOpsLivre: salesOpsLivre, contaLivre: contaLivre, avisosDoDev: avisosDoDev });
   Object.assign(api, { soLeitura: soLeitura });
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 

@@ -1044,8 +1044,54 @@
   /* Nao ha servico de notificacao (e item novo do de-para). O sino mostra o
      que a propria base ja diz que espera alguem — a mesma leitura que as
      faixas do admin e do painel do dev fazem hoje. */
+  /* ═══ AVISOS POR EVENTO (PRD RF-05 a RF-08) ═══════════════════════════════
+     `AXIS_ACOES.avisosDoDev` deriva os avisos da base; `APP.lidos` sao as
+     chaves que esta conta ja leu (rota `avisos-lidos`), em qualquer aparelho.
+     Lidos saem do sino; a releitura de 30 s traz os novos sem recarregar. */
+  var AVISO_TXT = {
+    nova: ['user', 'var(--in-t)', function (c) { return '<b>' + c + '</b> passou para o seu nome'; }],
+    devolvida: ['undo', 'var(--wn-t)', function (c) { return '<b>' + c + '</b> devolvida pelo PM/PO: leia o motivo'; }],
+    pausa_aprovada: ['pause', 'var(--ok-t)', function (c) { return 'Pausa aprovada em <b>' + c + '</b>'; }],
+    pausa_recusada: ['ban', 'var(--dg-t)', function (c) { return 'Pausa recusada em <b>' + c + '</b>: leia o motivo'; }],
+    grill: ['flame', 'var(--wn-t)', function (c) { return '<b>' + c + '</b> pede o seu parecer (Grill)'; }],
+    terceiro: ['alert', 'var(--dg-t)', function (c) { return 'O retorno do terceiro venceu em <b>' + c + '</b>: hora de cobrar'; }]
+  };
+  function avisosAbertos() {
+    var AC = raiz.AXIS_ACOES;
+    if (!AC || !AC.avisosDoDev || APP.papel === 'consulta' || !APP.token) return [];
+    var lidos = APP.lidos || {};
+    return AC.avisosDoDev(visiveis(), AC.contexto(), hoje()).filter(function (a) { return !lidos[a.chave]; }).slice(0, 12);
+  }
+  function carregarLidos() {
+    return api('avisos-lidos', { op: 'listar' }).then(function (j) {
+      var l = {}; (j.chaves || []).forEach(function (k) { l[k] = true; });
+      APP.lidos = l;
+      atualizaSino();
+    }).catch(function () {});
+  }
+  function marcarLidos(chaves) {
+    var ks = (chaves || []).filter(Boolean);
+    if (!ks.length) return;
+    APP.lidos = APP.lidos || {};
+    ks.forEach(function (k) { APP.lidos[k] = true; });
+    atualizaSino();
+    api('avisos-lidos', { op: 'marcar', chaves: ks }).catch(function () {});
+  }
+  /* O numero do sino sem redesenhar a tela inteira (o clique num aviso ja
+     navega; marcar todos nao). */
+  function atualizaSino() {
+    var b = document.querySelector('[data-acao="ntf"]');
+    if (!b) return;
+    var n = notificacoes().length, d = b.querySelector('.dot');
+    if (n && !d) { d = document.createElement('span'); d.className = 'dot'; b.appendChild(d); }
+    if (d) { if (n) d.textContent = n; else d.remove(); }
+  }
+
   function notificacoes() {
-    var lista = [];
+    var lista = avisosAbertos().map(function (a) {
+      var t = AVISO_TXT[a.tipo] || ['bell', 'var(--tx2)', function (c) { return c; }];
+      return { ico: t[0], cor: t[1], txt: t[2](esc(a.codigo || a.titulo || 'Demanda')), href: '#item/' + encodeURIComponent(a.codigo || a.id), aviso: a.chave };
+    });
     var vs = visiveis();
     if (APP.papel === 'admin') {
       var val = vs.filter(function (m) { return colunaDe(m) === 'validacao'; });
@@ -1068,8 +1114,7 @@
         return prazoDe(m) === hoje() && !pausada(m) && !(raiz.PRAZO && raiz.PRAZO.relogioParou && raiz.PRAZO.relogioParou(colunaDe(m)));
       });
       if (hojeV.length) lista.push({ ico: 'clock', cor: 'var(--wn-t)', txt: '<b>' + plural(hojeV.length, 'demanda vence', 'demandas vencem') + '</b> hoje', href: '#inicio/meu' });
-      var dev = minhas.filter(function (m) { return raiz.DEVOLUCAO && raiz.DEVOLUCAO.houve && raiz.DEVOLUCAO.houve(m) && colunaDe(m) === 'em_andamento'; });
-      if (dev.length) lista.push({ ico: 'undo', cor: 'var(--wn-t)', txt: '<b>' + plural(dev.length, 'demanda devolvida', 'demandas devolvidas') + '</b> para ajuste', href: '#inicio/meu' });
+      // As devolvidas viraram aviso por evento (`avisosDoDev`, tipo `devolvida`), com o lido guardado.
     }
     var poker = vs.filter(function (m) { return colunaDe(m) === 'planning' && !pontosDe(m); });
     if (poker.length && APP.papel !== 'consulta') lista.push({ ico: 'cards', cor: 'var(--in-t)', txt: '<b>' + plural(poker.length, 'item', 'itens') + '</b> para estimar no Poker', href: '#poker' });
@@ -1272,9 +1317,18 @@
     var lista = notificacoes();
     var d = document.createElement('div');
     d.className = 'ntf';
-    d.innerHTML = '<span class="lab" style="padding:6px 10px">O QUE PEDE AÇÃO</span>' + (lista.length ? lista.map(function (n) {
-      return '<a class="ntf-it" href="' + n.href + '"><span style="color:' + n.cor + '">' + ico(n.ico) + '</span><span>' + n.txt + '</span></a>';
-    }).join('') : '<div class="pal-vazio">Nada pendente com você agora.</div>');
+    var comAviso = lista.filter(function (n) { return n.aviso; });
+    d.innerHTML = '<span class="lab" style="padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px">O QUE PEDE AÇÃO' +
+      (comAviso.length ? '<button type="button" class="ntf-lidos" data-ntf-lidos="1">Marcar avisos como lidos</button>' : '') + '</span>' +
+      (lista.length ? lista.map(function (n) {
+        return '<a class="ntf-it" href="' + n.href + '"' + (n.aviso ? ' data-aviso="' + esc(n.aviso) + '"' : '') + '><span style="color:' + n.cor + '">' + ico(n.ico) + '</span><span>' + n.txt + '</span></a>';
+      }).join('') : '<div class="pal-vazio">Nada pendente com você agora.</div>');
+    var bt = d.querySelector('[data-ntf-lidos]');
+    if (bt) bt.onclick = function (e) {
+      e.preventDefault(); e.stopPropagation();
+      marcarLidos(comAviso.map(function (n) { return n.aviso; }));
+      d.remove(); btn.setAttribute('aria-expanded', 'false');
+    };
     btn.parentNode.appendChild(d);
     btn.setAttribute('aria-expanded', 'true');
   }
@@ -1446,6 +1500,7 @@
         vazio('alert', 'Não foi possível ler os dados', String(e.message || e), '<button class="btnp" type="button" onclick="location.reload()">Tentar de novo</button>'));
     }
     if (APP.token) voltaDaSessao();
+    if (APP.token) carregarLidos();   // os avisos ja lidos por esta conta (RF-07)
     filaPinta();
     if (APP.token) setTimeout(filaProcessa, 3000);
   }
@@ -1457,6 +1512,9 @@
     }
     raizEl = document.getElementById('axa');
     document.addEventListener('click', function (e) {
+      // Um aviso clicado (no sino ou na aba Notificacoes) conta como lido (RF-07).
+      var av = e.target.closest('[data-aviso]');
+      if (av) marcarLidos([av.getAttribute('data-aviso')]);
       var a = e.target.closest('[data-acao]');
       if (a) {
         var acao = a.getAttribute('data-acao');

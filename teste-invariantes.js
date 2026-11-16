@@ -26468,6 +26468,46 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(/!EST\.sprintManual && EST\.sprintAuto !== sprint && EST\.sprint === EST\.sprintAuto/.test(lerTela('axis-tela-inicio.js')) &&
          /spr\.onchange = function \(\) \{ EST\.sprint = spr\.value; EST\.sprintManual = true;/.test(lerTela('axis-tela-inicio.js')),
          'e o Meu trabalho do app tambem: o padrao vira com a semana enquanto a pessoa nao escolhe outra sprint');
+      /* AVISOS NO SINO (PRD RF-05 a RF-08, tarefa 6.0): derivados da base, com
+         chave estavel, e o lido guardado no servidor. */
+      {
+        const ACa = require('./axis-acoes.js');
+        const Ra = { DEVNOME: require('./dev-nome.js'), PAUSA: require('./pausa.js'), GRILL: require('./grill.js'),
+                     DEVOLUCAO: require('./devolucao.js'), ETAPA: require('./etapa-demanda.js'), SPRINTPO: require('./sprint.js') };
+        const ca = { R: Ra, quem: 'Ana', nomes: ['Ana'], D: {} };
+        const Ma = (id, o) => Object.assign({ id, codigo: 'AX-' + id, titulo: 'T', dev: 'Ana', status_planejamento: 'em_andamento' }, o);
+        const base = [
+          Ma('1', { historico: [{ em: '2026-11-14T10:00:00Z', quem: 'Fernando', mudancas: [{ campo: 'dev', de: 'Bia', para: 'Ana' }] }] }),
+          Ma('2', { validacao_obs: 'refazer o calculo do saldo', status_planejamento: 'em_andamento' }),
+          Ma('3', { pausado_em: '2026-11-10', pausa_por: 'Ana', pausa_aprovada_por: 'Fernando', pausa_aprovada_em: '2026-11-12' }),
+          Ma('4', { pausa_recusas: [{ em: '2026-11-13', por: 'Fernando', motivo: 'segue pelo caminho B', pedido_por: 'Ana' }] }),
+          Ma('5', { status_planejamento: 'backlog', grill: { marcado: true, marcado_em: '2026-11-11', marcado_por: 'Fernando' } }),
+          Ma('6', { pausado_em: '2026-11-05', pausa_motivo: 'aguardando o banco', pausa_terceiro: { nome: 'Banco X', retorno: '2026-11-12' } }),
+          Ma('7', { historico: [{ em: '2026-09-01T10:00:00Z', quem: 'Fernando', mudancas: [{ campo: 'dev', de: '', para: 'Ana' }] }] }),
+          Ma('8', { historico: [{ em: '2026-11-14T10:00:00Z', quem: 'Ana', mudancas: [{ campo: 'dev', de: '', para: 'Ana' }] }] }),
+          Ma('9', { dev: 'Bia', validacao_obs: 'refazer', historico: [{ em: '2026-11-14T10:00:00Z', quem: 'Fernando', mudancas: [{ campo: 'dev', de: 'Ana', para: 'Bia' }] }] }),
+          Ma('10', { pausado_em: '2026-11-10', pausa_por: 'Fernando', pausa_aprovada_por: 'Fernando', pausa_aprovada_em: '2026-11-10' }) ];
+        const av = ACa.avisosDoDev(base, ca, '2026-11-16');
+        const por = {}; av.forEach((x) => { por[x.tipo] = (por[x.tipo] || []).concat(x.id); });
+        ok(JSON.stringify(por) === JSON.stringify({ nova: ['1'], pausa_recusada: ['4'], pausa_aprovada: ['3'], terceiro: ['6'], grill: ['5'], devolvida: ['2'] }),
+           'avisosDoDev: cada evento do RF-05 vira um aviso, do mais novo para o mais antigo (devolvida, sem data, por ultimo)', JSON.stringify(por));
+        ok(!av.some((x) => ['7', '8', '9', '10'].indexOf(x.id) >= 0),
+           'nao avisa: troca de dono de mais de 30 dias, a que a propria pessoa fez, demanda que saiu do seu nome, pausa que ela mesma aprovou');
+        const av2 = ACa.avisosDoDev(base, ca, '2026-11-16');
+        ok(av.map((x) => x.chave).join() === av2.map((x) => x.chave).join() && av.every((x) => x.chave.indexOf(x.tipo + ':' + x.id + ':') === 0),
+           'a chave e estavel (tipo:id:carimbo): a mesma em qualquer aparelho, e e ela que o lido guarda');
+        const outra = base.map((m) => (m.id === '2' ? Object.assign({}, m, { validacao_obs: 'outro motivo, novo' }) : m));
+        ok(ACa.avisosDoDev(outra, ca, '2026-11-16').find((x) => x.tipo === 'devolvida').chave !== av.find((x) => x.tipo === 'devolvida').chave,
+           'uma devolucao nova (outro motivo) e outro aviso, mesmo ja tendo lido a anterior');
+        const WA = lerTela('cloudflare-worker/worker.js'), AA = lerTela('axis-app.js');
+        const rota = (WA.match(/if \(body\.action === 'avisos-lidos'\) \{[\s\S]*?\n    \}\n/) || [''])[0];
+        ok(/CREATE TABLE IF NOT EXISTS aviso_lido/.test(WA) && /PRIMARY KEY \(usuario_id, chave\)/.test(WA) &&
+           /if \(!uAv\) return json\(\{ error: 'sem_conta'/.test(rota) && /\.slice\(0, 200\)/.test(rota) && /INSERT OR IGNORE INTO aviso_lido/.test(rota),
+           'o lido fica no D1 por conta (senha compartilhada nao tem), com teto por chamada e sem duplicar');
+        ok(/function avisosAbertos\(\)/.test(AA) && /return !lidos\[a\.chave\];/.test(AA) && /if \(av\) marcarLidos\(\[av\.getAttribute\('data-aviso'\)\]\);/.test(AA) &&
+           /carregarLidos\(\);/.test(AA) && !/plural\(dev\.length, 'demanda devolvida'/.test(AA),
+           'o sino mostra so os nao lidos, marca no clique, carrega os lidos ao abrir, e a linha agregada de devolvidas saiu (virou aviso por evento)');
+      }
     }
     const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
     ok(/if \(sprint && \(!EST\.sprintPadrao \|\|[^\n]*\)\) \{\s*EST\.sprintPadrao = true; EST\.sprint = sprint; EST\.sprintAuto = sprint;/.test(INI) &&
