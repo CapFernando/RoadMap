@@ -281,6 +281,7 @@
       '.axa button.cfg-sw{border:0;padding:0;cursor:pointer}' +
       '.axa button.cfg-sw:focus-visible,.axa .cfg-papel:focus-visible{outline:2px solid var(--ac);outline-offset:2px}' +
       '.axa .cfg-it{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;background:var(--sf2);font-size:13px}' +
+      '.axa .cfg-pend{border-color:rgba(var(--wn-rgb),.45);background:rgba(var(--wn-rgb),.06)}.axa .cfg-pend .cfg-it{flex-wrap:wrap}.axa .cfg-pend .btnp,.axa .cfg-pend .btn{min-height:44px}' +
       '.axa .cfg-it.hj{box-shadow:inset 3px 0 0 var(--ac)}' +
       '.axa .cfg-it.pass{opacity:.6}' +
       '.axa .cfg-ton{height:44px;border-radius:10px;border:1px solid var(--bd2)}' +
@@ -667,7 +668,7 @@
         '<td class="mono" style="white-space:nowrap" title="abertas / total" data-tc="fora">' + (p.dem.total ? p.dem.abertas + '/' + p.dem.total : '<span style="color:var(--tx4)">0</span>') + '</td></tr>';
     }).join('') : '<tr><td colspan="5">' + H.vazio('users', 'Ninguém neste filtro', q ? 'Nada casa com "' + est.pesBusca + '".' : '') + '</td></tr>';
 
-    return blocoPedidos() + '<div class="grid" style="grid-template-columns:minmax(0,1fr) 290px;align-items:start">' +
+    return blocoPendentes(todas) + blocoPedidos() + '<div class="grid" style="grid-template-columns:minmax(0,1fr) 290px;align-items:start">' +
       '<section class="pn" style="padding:14px 12px 6px"><div style="overflow-x:auto"><table class="tbl tc cfg-pes-tb"><thead><tr><th>PESSOA</th><th>PAPEL</th><th>FRENTE</th><th>CAP.</th><th title="Demandas abertas / total">DEM.</th></tr></thead><tbody>' +
       linhas + '</tbody></table></div></section>' + painelPessoa(sel, D) + '</div>' +
       '<span class="note">Capacidade = ' + raiz.SPRINTPO.PONTOS_POR_DEV + ' pontos por sprint para quem está na lista de devs ativos (a mesma conta do Gantt). Demandas casam pelo “nome nas demandas”.</span>' + blocoDevs(D) + blocoLink();
@@ -811,6 +812,25 @@
         return '<div class="cfg-it"><span style="flex:1;min-width:0" class="ell">' + esc(n) + '</span><span class="note">' + H.plural(qtdPorNome(n, D), 'demanda', 'demandas') + '</span>' +
           (edita ? '<button type="button" class="btns" data-cfg-acao="dev-incluir" data-cfg-dev="' + esc(n) + '">Reincluir</button>' : '') + '</div>';
       }).join('') + '</div>' : '') + '</section>';
+  }
+
+  /* OS CADASTROS AGUARDANDO LIBERACAO (PRD RF-31), em destaque no topo, com
+     Liberar e Recusar ali mesmo — as mesmas acoes do perfil da pessoa. Antes,
+     o pedido so aparecia no meio da lista, com um chip. */
+  function blocoPendentes(todas) {
+    var ps = (todas || []).filter(function (p) { return p.status === 'pendente'; });
+    if (!ps.length) return '';
+    var edita = H.pode('configurar');
+    return '<section class="pn cfg-pend" aria-label="Cadastros aguardando liberação"><h2 class="h2">' + ico('hourglass', 'style="color:var(--wn-t)"') + ' ' +
+      H.plural(ps.length, 'cadastro aguardando liberação', 'cadastros aguardando liberação') + '</h2>' +
+      '<span class="note">Liberar pede o papel — sem padrão: quem libera diz o que a pessoa pode fazer. Recusar apaga o cadastro; a pessoa pode pedir de novo.</span>' +
+      ps.map(function (p) {
+        var dL = ' data-cfg-login="' + esc(p.login || '') + '"';
+        return '<div class="cfg-it"><span style="flex:1;min-width:0;display:flex;flex-direction:column"><b class="ell">' + esc(p.nome || p.login) + '</b><span class="note" style="font-size:11.5px">' +
+          esc(p.email || p.login || '') + (p.criado ? ' · pediu em ' + esc(quando(p.criado)) : '') + '</span></span>' +
+          (edita ? '<span class="row" style="gap:8px;flex:0 0 auto"><button type="button" class="btnp" data-cfg-acao="u-aprovar"' + dL + '>Liberar…</button>' +
+            '<button type="button" class="btn perigo" data-cfg-acao="u-recusar"' + dL + '>Recusar</button></span>' : '') + '</div>';
+      }).join('') + '</section>';
   }
 
   /* OS PEDIDOS DE SENHA em aberto (rota `usuarios`, op `listar`): a mesma

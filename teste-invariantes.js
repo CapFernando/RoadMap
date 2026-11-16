@@ -30254,6 +30254,26 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a tela Sprints mostra a linha no topo e cada sprint abre ali mesmo');
   }
 
+  /* CADASTROS AGUARDANDO LIBERACAO EM DESTAQUE (PRD RF-31). */
+  sec('App AXIS: Configuracoes > Pessoas destaca quem aguarda liberacao');
+  {
+    const CFG = fs.readFileSync('axis-tela-configuracoes.js', 'utf8');
+    const fB = corpo(CFG, 'function blocoPendentes(todas) {');
+    ok(!!fB, 'a tela tem a caixa dos cadastros aguardando liberacao');
+    if (fB) {
+      const H = { pode: () => true, plural: (n, a, b) => n + ' ' + (n === 1 ? a : b), esc: (x) => String(x == null ? '' : x) };
+      const mk = (pode) => new Function('H', 'ico', 'esc', 'quando', fB + '\nreturn blocoPendentes;')(Object.assign({}, H, { pode: () => pode }), () => '', H.esc, () => '15/11/2026 10:00');
+      const todas = [{ status: 'ativo', login: 'ana' }, { status: 'pendente', login: 'novo.um', nome: 'Novo Um', criado: 'x' }, { status: 'pendente', login: 'novo.dois' }];
+      const h = mk(true)(todas);
+      ok(h.includes('2 cadastros aguardando') && (h.match(/data-cfg-acao="u-aprovar"/g) || []).length === 2 && (h.match(/data-cfg-acao="u-recusar"/g) || []).length === 2,
+         'cada pendente aparece com Liberar e Recusar (as acoes que ja existem)', h.length);
+      ok(!h.includes('"ana"'), 'conta ativa nao entra na caixa');
+      ok(mk(true)([{ status: 'ativo' }]) === '', 'sem pendente, a caixa nao aparece');
+      ok(!mk(false)(todas).includes('u-aprovar'), 'quem nao configura ve os pedidos, sem os botoes');
+    }
+    ok(CFG.includes('return blocoPendentes(todas) + blocoPedidos()'), 'a caixa fica no topo de Pessoas');
+  }
+
   Promise.all(pendentes).then(() => {
     console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
     process.exit(falhas ? 1 : 0);
