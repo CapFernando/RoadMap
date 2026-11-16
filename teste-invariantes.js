@@ -26468,6 +26468,38 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(/!EST\.sprintManual && EST\.sprintAuto !== sprint && EST\.sprint === EST\.sprintAuto/.test(lerTela('axis-tela-inicio.js')) &&
          /spr\.onchange = function \(\) \{ EST\.sprint = spr\.value; EST\.sprintManual = true;/.test(lerTela('axis-tela-inicio.js')),
          'e o Meu trabalho do app tambem: o padrao vira com a semana enquanto a pessoa nao escolhe outra sprint');
+      /* A PAUSA POR TERCEIRO ABRE E FECHA O ACOMPANHAMENTO (PRD RF-18 e RF-19, tarefa 7.0). */
+      {
+        const WP = lerTela('cloudflare-worker/worker.js');
+        const fonte = ['function limpaTexto(v, max) {', 'function chavePausaTerceiro(m) {', 'function pausasParaAcompanhar(melhorias, itens, hoje) {'].map((h) => corpo(WP, h));
+        ok(fonte.every(Boolean), 'a regra do acompanhamento da pausa existe no Worker');
+        if (fonte.every(Boolean)) {
+          const PA = new Function(fonte.join('\n') + '\nreturn pausasParaAcompanhar;')();
+          const mel = [
+            { id: 'a1', codigo: 'AX-1', titulo: 'Remessa', pausado_em: '2026-11-10', pausa_motivo: 'arquivo de remessa', pausa_terceiro: { nome: 'Banco X', contato: 'chamado 9', retorno: '2026-11-20' } },
+            { id: 'a2', codigo: 'AX-2', titulo: 'Sem data', pausado_em: '2026-11-12', pausa_terceiro: { nome: 'Fornecedor Y' } },
+            { id: 'a3', codigo: 'AX-3', titulo: 'Interna', pausado_em: '2026-11-12', pausa_terceiro: null },
+            { id: 'a4', codigo: 'AX-4', titulo: 'Retomada', pausado_em: '' } ];
+          const r1 = PA(mel, [], '2026-11-16');
+          ok(r1.criar.length === 2 && r1.criar[0].pessoa === 'Banco X' && r1.criar[0].retorno === '2026-11-20' && /AX-1/.test(r1.criar[0].atividade) &&
+             /Contato: chamado 9/.test(r1.criar[0].observacao) && r1.criar[0].origem.chave === 'pausa:a1:2026-11-10' && !r1.encerrar.length,
+             'aprovada a pausa por terceiro, nasce o acompanhamento com o fornecedor, o retorno prometido e a origem', JSON.stringify(r1.criar[0]));
+          ok(r1.criar[1].retorno === '2026-11-23' && /Sem data prometida/.test(r1.criar[1].observacao),
+             'sem data prometida, o retorno fica para daqui a 7 dias, e a observacao diz isso');
+          const itens = r1.criar.concat([{ id: 'fw-manual', atividade: 'Juridico', pessoa: 'Ana', retorno: '2026-11-18', concluido: false }]);
+          ok(!PA(mel, itens, '2026-11-17').criar.length, 'rodar de novo nao duplica (a chave ja existe)');
+          const retomada = mel.map((m) => (m.id === 'a1' ? Object.assign({}, m, { pausado_em: '', pausa_terceiro: null }) : m));
+          const r2 = PA(retomada, itens, '2026-11-18');
+          ok(r2.encerrar.join() === r1.criar[0].id && !r2.criar.length, 'retomada a demanda, so o acompanhamento DELA e encerrado; o escrito a mao nao se toca', JSON.stringify(r2));
+          const nova = mel.map((m) => (m.id === 'a1' ? Object.assign({}, m, { pausado_em: '2026-11-25' }) : m));
+          ok(PA(nova, itens, '2026-11-25').criar.some((x) => x.origem.chave === 'pausa:a1:2026-11-25'), 'uma pausa nova da mesma demanda e outro acompanhamento');
+        }
+        ok((WP.match(/await sincronizaAcompanhamentosDaPausa\(gh, data\.melhorias, hojeBR\(\)\);/g) || []).length === 2,
+           'a sincronizacao roda depois de gravar, no publish e no dev-publish');
+        ok(/\.\.\.\(it\.origem && it\.origem\.tipo === 'pausa_terceiro'/.test(WP),
+           'editar o acompanhamento na tela preserva a origem (senao a sincronizacao o recriaria)');
+        ok(/function daPausa\(it\)/.test(lerTela('axis-tela-acompanhamentos.js')), 'Acompanhamentos mostra que a linha nasceu da pausa e leva a demanda');
+      }
     }
     const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
     ok(/if \(sprint && \(!EST\.sprintPadrao \|\|[^\n]*\)\) \{\s*EST\.sprintPadrao = true; EST\.sprint = sprint; EST\.sprintAuto = sprint;/.test(INI) &&

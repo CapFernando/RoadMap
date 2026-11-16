@@ -34,6 +34,15 @@
   var esc = H.esc;
 
   var DIA_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  /* NASCEU DE UMA PAUSA POR TERCEIRO (PRD RF-18): o Worker cria e encerra
+     sozinho; a linha diz isso e leva a demanda. */
+  function daPausa(it) {
+    var o = it && it.origem;
+    if (!o || o.tipo !== 'pausa_terceiro') return '';
+    var m = ((A.APP.D || {}).melhorias || []).find(function (x) { return x && x.id === o.melhoria_id; });
+    return ' <a class="note" href="' + (m ? H.hrefItem(m) : '#acompanhamentos') + '" title="Criado e encerrado sozinho pela pausa por terceiro">' +
+      H.ico('pause') + ' pausa' + (m && m.codigo ? ' de ' + esc(m.codigo) : '') + '</a>';
+  }
   var NOME_W = 170;      // largura da coluna de nomes (px)
   var FAIXA_H = 26;      // altura de cada faixa de chips (px)
 
@@ -287,7 +296,7 @@
         var s = ROT_SIT[situacao(it, hoje)];
         return '<tr class="click" data-fw-it="' + esc(it.id) + '" tabindex="0"><td class="mono" style="white-space:nowrap">' + esc(H.dm(it.retorno)) + '</td>' +
           '<td style="white-space:nowrap;color:var(--tx)">' + esc(it.pessoa) + '</td>' +
-          '<td><span style="color:var(--tx);font-weight:600' + (it.concluido ? ';text-decoration:line-through;color:var(--tx3)' : '') + '">' + esc(it.atividade) + '</span>' +
+          '<td><span style="color:var(--tx);font-weight:600' + (it.concluido ? ';text-decoration:line-through;color:var(--tx3)' : '') + '">' + esc(it.atividade) + '</span>' + daPausa(it) +
           (it.observacao ? '<span class="note ell" style="display:block;max-width:520px">' + esc(it.observacao) + '</span>' : '') + '</td>' +
           '<td>' + H.chip(esc(s[0]), s[1]) + '</td></tr>';
       }).join('') + '</tbody></table></section>';
