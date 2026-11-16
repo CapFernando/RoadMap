@@ -27033,6 +27033,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(vk && vk === CF.VIEW_KEY && CF.linkVisualizacao('https://x/', 'k&1') === 'https://x/gantt.html?view=' + vk + '&k=k%261' &&
        CF.linkVisualizacao('https://x/', '') === 'https://x/gantt.html?view=' + vk,
        'o link de visualizacao do app e o do gantt (mesma chave de modo leitura e o &k= da VIEW_CHAVE)', vk);
+    ok(CF.linkPlanejamento('https://x/', 'k&1') === 'https://x/axis.html?view=' + vk + '&k=k%261#planejamento',
+       'o link do Planejamento sem login usa a mesma chave de modo leitura e o mesmo &k=', CF.linkPlanejamento('https://x/', 'k&1'));
 
     // ── O que ainda manda para as telas antigas ─────────────────────────
     const CFG = semComentario(lerTela('axis-tela-configuracoes.js'));
@@ -29360,7 +29362,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'Releitura a cada 30 s e ao voltar para a aba, nos dois (o app relia so ao voltar o foco depois de 1 minuto)', 'admin ' + intAdm + ' ms, app ' + AXA.RELEITURA_MS + ' ms');
     const toc = corpo(APJ, 'function telaOcupada() {') || '';
     ok(/document\.querySelector\('\.ovl, \.gv-fundo, \.fl\.aberto, \.ntf'\)/.test(toc) && /a\.tagName === 'TEXTAREA'/.test(toc) && /if \(_arrastando\) return true;/.test(toc) &&
-       /if \(_relendo \|\| _naFila \|\| !APP\.token \|\| !APP\.D \|\| _sessaoCaiu \|\| _noVinculo\) return;/.test(csv || '') &&
+       /if \(_relendo \|\| _naFila \|\| !\(APP\.token \|\| APP\.visao\) \|\| !APP\.D \|\| _sessaoCaiu \|\| _noVinculo\) return;/.test(csv || '') &&
        /Há alterações mais novas no servidor \(feitas no Planejamento, no Painel Dev ou por outra pessoa\)\. Esta tela está mostrando uma versão anterior\./.test(APJ) &&
        /data-acao="atualizar">Atualizar agora<\/button>/.test(APJ) && /data-acao="depois">Depois<\/button>/.test(APJ),
        'O que bloqueia o redesenho no app: formulario, caixa, gaveta, filtros abertos, campo de texto em uso e card no meio do arraste; nao rele no meio de uma gravacao nem com o passo do vinculo na tela; a faixa tem o texto e os botoes do admin.html');
@@ -30272,6 +30274,39 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(!mk(false)(todas).includes('u-aprovar'), 'quem nao configura ve os pedidos, sem os botoes');
     }
     ok(CFG.includes('return blocoPendentes(todas) + blocoPedidos()'), 'a caixa fica no topo de Pessoas');
+  }
+
+  /* O PLANEJAMENTO SO LEITURA SEM LOGIN (PRD RF-32). */
+  sec('App AXIS: link de visualizacao abre o Planejamento so leitura, sem login');
+  {
+    const AXA = fs.readFileSync('axis-app.js', 'utf8');
+    const GT = fs.readFileSync('gantt.html', 'utf8');
+    const vkA = (AXA.match(/var VIEW_KEY = '([^']+)';/) || [])[1], vkG = (GT.match(/const VIEW_KEY = '([^']+)';/) || [])[1];
+    ok(vkA && vkA === vkG, 'o app liga o modo pela mesma chave do Gantt', vkA + ' / ' + vkG);
+    const fM = corpo(AXA, 'function modoVisao() {'), fC = corpo(AXA, 'function chaveVisao() {'), fL = corpo(AXA, 'function lerSessao() {');
+    ok(!!fM && !!fC && !!fL, 'o app tem o modo visualizacao');
+    if (fM && fC && fL) {
+      const roda = (search, store) => {
+        const ss = Object.assign({}, store || {});
+        const sessionStorage = { getItem: (k) => (k in ss ? ss[k] : null), setItem: (k, v) => { ss[k] = String(v); }, removeItem: (k) => { delete ss[k]; } };
+        const APP = {};
+        new Function('APP', 'location', 'sessionStorage', "var VIEW_KEY = '" + vkA + "';\n" + fM + '\n' + fC + '\n' + fL + '\nlerSessao();')(APP, { search }, sessionStorage);
+        return { APP, ss, chave: new Function('location', 'sessionStorage', fC + '\nreturn chaveVisao();')({ search }, sessionStorage) };
+      };
+      const a = roda('?view=' + vkA + '&k=abc');
+      ok(a.APP.visao === true && a.APP.papel === 'consulta' && a.APP.eu === null, 'sem sessao, o link entra como Consulta, sem conta', JSON.stringify(a.APP));
+      ok(a.ss.rm_view_key === 'abc' && a.chave === 'abc', 'a chave do link fica guardada na aba, como no Gantt');
+      const b = roda('?view=' + vkA, { rm_admin_token: 't1', rm_eu: JSON.stringify({ papel: 'admin', login: 'f' }) });
+      ok(b.APP.visao === false && b.APP.papel === 'admin', 'quem ja entrou com a conta segue com ela (o link nao rebaixa a sessao)');
+      ok(roda('?view=outra').APP.visao === false && roda('').APP.visao === false, 'sem a chave de modo certa, nada muda: pede login');
+    }
+    const fA = corpo(AXA, 'async function api(action, extra) {') || '';
+    ok(fA.includes('APP.visao && chaveVisao() ? { chave: chaveVisao() }'), 'no modo, a leitura leva a chave que o Worker confere (VIEW_CHAVE)');
+    const fD = corpo(AXA, 'function desenharVisao(manterRolagem) {') || '';
+    ok(fD.includes("r.tela !== 'planejamento'") && fD.includes('APP.telas.planejamento') && !fD.includes('htmlMenu') && !fD.includes("data-acao=\"novo\""),
+       'o modo so desenha o Planejamento, sem menu nem Nova demanda');
+    const fG = corpo(AXA, 'async function gravarAgora(patch, o) {') || '';
+    ok(fG.includes("['admin', 'analista', 'dev'].indexOf(APP.papel) < 0"), 'gravar continua recusado para Consulta (o papel do modo)');
   }
 
   Promise.all(pendentes).then(() => {

@@ -183,6 +183,10 @@
   function linkVisualizacao(origem, chave) {
     return String(origem || '') + 'gantt.html?view=' + VIEW_KEY + (chave ? '&k=' + encodeURIComponent(chave) : '');
   }
+  /* O MESMO LINK NO APP (PRD RF-32): abre o Planejamento so leitura, sem login. */
+  function linkPlanejamento(origem, chave) {
+    return String(origem || '') + 'axis.html?view=' + VIEW_KEY + (chave ? '&k=' + encodeURIComponent(chave) : '') + '#planejamento';
+  }
 
   var DOMINIO = '@audaxcapitalsa.com.br';
   /* A CONTA NOVA — as conferencias de `uCriar` (admin.html), na mesma ordem.
@@ -202,7 +206,7 @@
 
   var REGRAS_CFG = { temaSalvar: temaSalvar, temaJuntar: temaJuntar, temaExcluir: temaExcluir, juntaDevEm: juntaDevEm,
                      devsJuntar: devsJuntar, devTirar: devTirar, devIncluir: devIncluir, naLista: naLista,
-                     perfilCom: perfilCom, linkVisualizacao: linkVisualizacao, VIEW_KEY: VIEW_KEY, STATUS_BLOQUEIO: STATUS_BLOQUEIO,
+                     perfilCom: perfilCom, linkVisualizacao: linkVisualizacao, linkPlanejamento: linkPlanejamento, VIEW_KEY: VIEW_KEY, STATUS_BLOQUEIO: STATUS_BLOQUEIO,
                      contaNova: contaNova, emailSugerido: emailSugerido, DOMINIO: DOMINIO };
   if (typeof module !== 'undefined' && module.exports) { module.exports = REGRAS_CFG; return; }
   raiz.AXIS_CFG = REGRAS_CFG;
@@ -852,8 +856,9 @@
   function blocoLink() {
     var chave = raiz.VIEW_CHAVE || '';
     return '<section class="pn"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h2 class="h2">Link de visualização sem login</h2>' +
-      '<button type="button" class="btn" data-cfg-acao="link-view">' + ico('clipboard') + ' Copiar link</button></div>' +
-      '<span class="note">Abre o Gantt em modo somente leitura, sem pedir senha — para quem acompanha e não tem conta. Quem tem conta entra aqui pelo perfil Consulta, com nome.' +
+      '<span class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btnp" data-cfg-acao="link-plan">' + ico('clipboard') + ' Copiar link do Planejamento</button>' +
+      '<button type="button" class="btn" data-cfg-acao="link-view">' + ico('clipboard') + ' Link do Gantt antigo</button></span></div>' +
+      '<span class="note">Abre o Planejamento em modo somente leitura, sem pedir senha — para quem acompanha e não tem conta. O link do Gantt antigo segue valendo para quem já o tem. Quem tem conta entra aqui pelo perfil Consulta, com nome.' +
       (chave ? '' : ' <span style="color:var(--wn-t)">A chave de leitura (VIEW_CHAVE) não está configurada neste ambiente: com a trava de leitura ligada no Worker, o link abre sem dados.</span>') + '</span></section>';
   }
 
@@ -1229,6 +1234,11 @@
       return gravaRaiz(function (base) { return devsJuntar(base, v.de, v.para); }, function (r) { return Object.keys(r.patch).length + ' demanda(s) agora são de "' + v.para + '".'; });
     },
 
+    'link-plan': async function () {
+      var link = linkPlanejamento(location.origin + location.pathname.replace(/[^\/]*$/, ''), raiz.VIEW_CHAVE || '');
+      try { await navigator.clipboard.writeText(link); H.toast('Link do Planejamento copiado!'); }
+      catch (_) { await caixa({ titulo: 'Copie o link', campos: [{ nome: 'link', rotulo: 'Link do Planejamento (somente leitura)', valor: link }], ok: 'Fechar' }); }
+    },
     'link-view': async function () {
       var link = linkVisualizacao(location.origin + location.pathname.replace(/[^\/]*$/, ''), raiz.VIEW_CHAVE || '');
       try { await navigator.clipboard.writeText(link); H.toast('Link de visualização copiado!'); }
