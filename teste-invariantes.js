@@ -26549,6 +26549,26 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
            /return h \+ cartaoVirada\(ctx\) \+ kpis/.test(INIv) && /return h \+ cartaoVirada\(ctx\) \+ kp \+ cols;/.test(INIv),
            'o cartao da virada aparece no Inicio e no "O que pede voce", so para a area de produto');
       }
+      /* USO DE ?antiga=1 (PRD RF-33, tarefa 4.0): o dado que decide quando as
+         telas antigas podem sair. */
+      {
+        const WU = lerTela('cloudflare-worker/worker.js'), IU = lerTela('axis-interface.js'), CU = lerTela('axis-tela-configuracoes.js');
+        const ua = (WU.match(/if \(body\.action === 'uso-antiga'\) \{[\s\S]*?\n    \}\n/) || [''])[0];
+        const ur = (WU.match(/if \(body\.action === 'uso-antiga-relatorio'\) \{[\s\S]*?\n    \}\n/) || [''])[0];
+        ok(/CREATE TABLE IF NOT EXISTS uso_antiga/.test(WU) && /'uso-antiga':\s+\{ max: 30/.test(WU) && /'uso-antiga-relatorio': \{ max: 20/.test(WU),
+           'uso de ?antiga=1: tabela no D1 e limite por IP nas duas acoes');
+        ok(/exigePapel\(env, body, \['admin', 'analista', 'dev', 'consulta'\], headers\)/.test(ua) &&
+           /PAGINAS_ANTIGAS\.includes\(pg\)/.test(ua) && /return json\(\{ error: 'pagina' \}, 400/.test(ua),
+           'registrar exige sessao e aceita so as paginas antigas conhecidas (o campo nao vira texto livre)');
+        ok(/exigePapel\(env, body, \['admin'\], headers\)/.test(ur) && /Math\.min\(180,/.test(ur),
+           'o relatorio e so de admin, com periodo limitado');
+        ok(/function registrarUsoAntiga\(\)/.test(IU) && /rm_ui_antiga_log/.test(IU) && /if \(ja\.indexOf\(pg\) >= 0\) return;/.test(IU) &&
+           /if \(querAntiga\(\)\) registrarUsoAntiga\(\);/.test(IU),
+           'a tela registra uma vez por aba e por pagina, e tambem depois de um login feito na propria tela');
+        ok(/\{ id: 'auditoria', rotulo: 'Auditoria', real: true \}/.test(CU) && /aba === 'auditoria' \? secAuditoria\(\)/.test(CU) &&
+           /H\.api\('uso-antiga-relatorio'/.test(CU),
+           'Configuracoes > Auditoria mostra quem ainda usa a interface antiga');
+      }
     }
     const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
     ok(/if \(sprint && \(!EST\.sprintPadrao \|\|[^\n]*\)\) \{\s*EST\.sprintPadrao = true; EST\.sprint = sprint; EST\.sprintAuto = sprint;/.test(INI) &&

@@ -257,6 +257,9 @@ const LIMITES = {
   'recuperar':      { max: 5,   janela: 60 },
   'usuarios':       { max: 40,  janela: 60 },
   'quem-sou':       { max: 60,  janela: 60 },
+  // Uma por aba e por pagina antiga aberta com ?antiga=1 (a tela deduplica).
+  'uso-antiga':     { max: 30,  janela: 60 },
+  'uso-antiga-relatorio': { max: 20, janela: 60 },
   // Uma por pagina aberta: a tela pede a lista ao carregar e guarda.
   'colaboradores':  { max: 20,  janela: 60 },
   'demanda-nova':   { max: 20,  janela: 60 },   // abertura por HTTP: 20/min por IP
@@ -3705,6 +3708,12 @@ async function contasMigrarAgora(db) {
      Viana), e so enquanto ninguem tem a marca: no dia do deploy ninguem perde
      nem ganha poder, e depois disso quem decide e a tela. */
   await colunaSeFaltar(db, 'usuario', 'area_produto', 'INTEGER NOT NULL DEFAULT 0');
+  /* USO DA SAIDA DE EMERGENCIA `?antiga=1` (PRD RF-33). E o dado que decide
+     quando as telas antigas podem sair: cada linha = uma aba que abriu uma
+     pagina antiga pedindo a interface de antes. `usuario_id` vazio = sessao
+     pela senha compartilhada, sem pessoa por tras. */
+  await db.prepare(`CREATE TABLE IF NOT EXISTS uso_antiga (
+    usuario_id TEXT, pagina TEXT NOT NULL, em TEXT NOT NULL)`).run();
   try {
     await db.prepare(`UPDATE usuario SET area_produto = 1
                        WHERE login IN ('fernando', 'mateus.viana')
@@ -7666,6 +7675,39 @@ async function rotear(request, env, _histFila) {
     }
 
     // Quem sou eu — o painel usa para saber o papel e mostrar so o que cabe.
+    /* ═══ ?antiga=1: REGISTRO E RELATORIO (PRD RF-33) ══════════════════════
+     * `uso-antiga`: qualquer sessao valida registra que abriu uma pagina antiga
+     * com a saida de emergencia. A pagina vem de uma lista fechada — o campo
+     * nao vira deposito de texto livre. `uso-antiga-relatorio`: so admin. */
+    if (body.action === 'uso-antiga') {
+      // Qualquer papel registra: a pergunta e so "ha sessao", e exigePapel ja responde.
+      const permUso = await exigePapel(env, body, ['admin', 'analista', 'dev', 'consulta'], headers);
+      if (permUso.recusa) return permUso.recusa;
+      const identUA = permUso.ident;
+      const PAGINAS_ANTIGAS = ['admin.html', 'dev.html', 'gantt.html', 'poker.html', 'follow.html',
+                               'importar.html', 'mensageria.html', 'projetos.html'];
+      const pg = String(body.pagina || '').trim().toLowerCase();
+      if (!PAGINAS_ANTIGAS.includes(pg)) return json({ error: 'pagina' }, 400, headers);
+      if (!env.POKER_DB) return json({ ok: true, registrado: false }, 200, headers);
+      await contasMigrar(env.POKER_DB);
+      await env.POKER_DB.prepare('INSERT INTO uso_antiga (usuario_id, pagina, em) VALUES (?, ?, ?)')
+        .bind(identUA.usuario ? identUA.usuario.id : null, pg, new Date().toISOString()).run();
+      return json({ ok: true, registrado: true }, 200, headers);
+    }
+    if (body.action === 'uso-antiga-relatorio') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      const permUA = await exigePapel(env, body, ['admin'], headers);
+      if (permUA.recusa) return permUA.recusa;
+      await contasMigrar(env.POKER_DB);
+      const dias = Math.min(180, Math.max(1, parseInt(body.dias, 10) || 30));
+      const desde = new Date(Date.now() - dias * 86400 * 1000).toISOString();
+      const r = await env.POKER_DB.prepare(
+        `SELECT u.login AS login, u.nome AS nome, x.pagina AS pagina, COUNT(*) AS vezes, MAX(x.em) AS ultima
+           FROM uso_antiga x LEFT JOIN usuario u ON u.id = x.usuario_id
+          WHERE x.em >= ? GROUP BY x.usuario_id, x.pagina ORDER BY ultima DESC LIMIT 500`).bind(desde).all();
+      return json({ ok: true, dias, linhas: r.results || [] }, 200, headers);
+    }
+
     if (body.action === 'quem-sou') {
       const ident = await identifica(env, body);
       if (!ident) return json({ error: 'credencial' }, 401, headers);

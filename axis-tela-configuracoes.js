@@ -237,7 +237,7 @@
       { id: 'widget', rotulo: 'Widget', real: false }
     ] },
     { grp: 'SEGURANÇA', itens: [
-      { id: 'auditoria', rotulo: 'Auditoria', real: false }
+      { id: 'auditoria', rotulo: 'Auditoria', real: true }
     ] }
   ];
   var TODAS = [];
@@ -1108,6 +1108,7 @@
       return chamaConta('interface', { login: login, nova: liga },
         liga ? '"' + login + '" passa a usar a interface nova na próxima tela que abrir.' : '"' + login + '" volta às telas de sempre.');
     },
+    'uso-antiga-reler': async function () { carregarUsoAntiga(true); },
     'u-interface-admins': async function () {
       if (window.confirmar && !(await window.confirmar({ titulo: 'Interface nova para todos os admins',
           texto: 'Todos os admins ativos passam a usar o app AXIS na próxima tela que abrirem. Dá para desligar um a um depois.', ok: 'Ligar' }))) return;
@@ -1407,6 +1408,43 @@
   // ════════════════════════════════════════════════════════════════════════
   /* Cada uma diz o que o prototipo promete e o que o RoadMap faz HOJE no
      lugar — em vez de uma tela vazia ou de numero inventado. */
+  /* AUDITORIA · USO DA INTERFACE ANTIGA (PRD RF-33). Quem ainda abre as telas
+     antigas pela saida de emergencia `?antiga=1`, nos ultimos 30 dias: e o
+     dado que diz quando elas podem sair (tarefa 13.0). Le uma vez por minuto. */
+  var usoAntiga = { linhas: null, erro: '', em: 0, carregando: false, dias: 30 };
+  function carregarUsoAntiga(forcar) {
+    if (usoAntiga.carregando || (!forcar && usoAntiga.linhas && Date.now() - usoAntiga.em < 60000)) return;
+    usoAntiga.carregando = true; usoAntiga.erro = '';
+    H.api('uso-antiga-relatorio', { dias: usoAntiga.dias }).then(function (j) {
+      usoAntiga.linhas = j.linhas || []; usoAntiga.em = Date.now();
+    }).catch(function (e) {
+      usoAntiga.erro = e.status === 401 || e.status === 403 ? 'Esta sessão não tem permissão para ver o uso.' : String(e.message || e);
+    }).then(function () {
+      usoAntiga.carregando = false;
+      var alvo = document.getElementById('cfg-uso-antiga');
+      if (alvo) alvo.innerHTML = corpoUsoAntiga();
+    });
+  }
+  function corpoUsoAntiga() {
+    if (usoAntiga.erro) return '<span class="note" style="color:var(--dg-t)">' + esc(usoAntiga.erro) + '</span>';
+    if (!usoAntiga.linhas) return '<span class="note">Carregando…</span>';
+    if (!usoAntiga.linhas.length) return H.vazio('check', 'Ninguém usou a interface antiga nos últimos ' + usoAntiga.dias + ' dias',
+      'Quando este quadro passar um mês vazio, as telas antigas podem passar a levar ao app.');
+    var total = usoAntiga.linhas.reduce(function (t, l) { return t + (l.vezes || 0); }, 0);
+    return '<span class="note">' + H.plural(total, 'abertura', 'aberturas') + ' de tela antiga com <span class="mono">?antiga=1</span> nos últimos ' + usoAntiga.dias + ' dias.</span>' +
+      '<div class="tbl tc"><table><thead><tr><th>Pessoa</th><th>Tela</th><th>Vezes</th><th>Última</th></tr></thead><tbody>' +
+      usoAntiga.linhas.map(function (l) {
+        return '<tr><td data-l="Pessoa">' + esc(l.nome || l.login || 'Senha compartilhada') + (l.login ? ' <span class="note mono">' + esc(l.login) + '</span>' : '') + '</td>' +
+          '<td data-l="Tela" class="mono">' + esc(l.pagina) + '</td><td data-l="Vezes">' + (l.vezes || 0) + '</td>' +
+          '<td data-l="Última">' + esc(l.ultima ? H.dma(String(l.ultima).slice(0, 10)) : '—') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  function secAuditoria() {
+    return cab('Auditoria', 'Uso da saída de emergência para a interface antiga.', '<button type="button" class="btn" data-cfg-acao="uso-antiga-reler">' + ico('refresh') + ' Atualizar</button>') +
+      '<section class="pn" style="display:flex;flex-direction:column;gap:10px"><h2 class="h2">Interface antiga (?antiga=1)</h2>' +
+      '<div id="cfg-uso-antiga" style="display:flex;flex-direction:column;gap:10px">' + corpoUsoAntiga() + '</div></section>';
+  }
+
   function secFutura(id, ctx) {
     var F = {
       marca: { t: 'Empresa e marca', sub: 'O AXIS será whitelabel: cada empresa com a sua cor, o seu logo, o seu nome e o seu endereço.',
@@ -1467,6 +1505,7 @@
         : aba === 'pessoas' ? secPessoas(ctx)
         : aba === 'sprint' ? secSprint(ctx)
         : aba === 'aparencia' ? secAparencia(ctx)
+        : aba === 'auditoria' ? secAuditoria()
         : secFutura(aba, ctx);
       return '<div class="cfg">' + nav(aba) + '<div class="view" style="min-width:0">' + corpo + '</div></div>';
     },
@@ -1474,6 +1513,7 @@
       var aba = ctx.aba || 'catalogo';
       if (aba === 'pessoas') carregarContas(false);
       if (aba === 'aparencia') pintarTons(el);
+      if (aba === 'auditoria') carregarUsoAntiga(false);
 
       // Buscas: so a lista redesenha, o campo fica com o foco. Por delegacao,
       // porque a secao do catalogo e redesenhada inteira ao escolher sistema.
