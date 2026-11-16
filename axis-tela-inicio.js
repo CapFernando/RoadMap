@@ -133,6 +133,15 @@
       '.axa .ini-fora-l{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}',
       '.axa .ini-fora .ini-rl{color:var(--ac-t);min-height:32px}',
       '@container app (max-width: 760px){.axa .ini-fora .ini-rl{min-height:44px}}',
+      /* A VIRADA DA SPRINT (PRD RF-15 a RF-17): um roteiro curto no topo do Inicio da area de produto. */
+      '.axa .ini-virada{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-radius:16px;background:rgba(var(--ac-rgb),.08);border:1px solid rgba(var(--ac-rgb),.4)}',
+      '.axa .ini-vir{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;justify-content:space-between}',
+      '.axa .ini-vir+.ini-vir{border-top:1px solid var(--bd);padding-top:10px}',
+      '.axa .ini-vir-t{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 280px;font-size:13px;color:var(--tx2);line-height:19px}',
+      '.axa .ini-vir-t b{color:var(--tx)}',
+      '.axa .ini-vir-t .h{font-size:14px;font-weight:800;color:var(--tx);display:flex;align-items:center;gap:6px}',
+      '.axa .ini-vir.dg .h{color:var(--dg-t)}',
+      '@container app (max-width: 760px){.axa .ini-vir .btnp,.axa .ini-vir .btns{min-height:44px;flex:1 1 100%;justify-content:center}}',
       /* Cronograma */
       '.axa .ini-cr{padding:0;gap:0;overflow-x:auto}',
       '.axa .ini-cr .ln{display:grid;border-bottom:1px solid var(--bd3);min-height:54px}',
@@ -425,7 +434,7 @@
     var dir = '<div style="display:flex;flex-direction:column;gap:20px;min-width:0">' +
       aguardando(ctx, vs, base) + painelSprint(ctx, sprint) + '</div>';
 
-    return h + kpis + '<div class="ini-dois">' + secLista + dir + '</div>';
+    return h + cartaoVirada(ctx) + kpis + '<div class="ini-dois">' + secLista + dir + '</div>';
   }
 
   function linhaItem(m, ctx, o) {
@@ -615,6 +624,43 @@
           '<button type="button" class="ini-rl" data-ini="fora" data-m="' + H.esc(g.motivo) + '" data-r="' + H.esc(g.rotulo) + '"' +
           (g.ids.length === 1 ? ' data-id="' + H.esc(g.ids[0]) + '"' : '') + '>' + FORA_ACAO[g.motivo] + '</button></span>';
       }).join('') + '</div>';
+  }
+
+  /* O CARTAO DA VIRADA DA SPRINT (PRD RF-15 a RF-17), so para a area de
+     produto: sprint antiga sem fechar, o checklist do ultimo dia e o convite
+     para iniciar. A regra e `SPRINTPO.viradaDoDia`; os botoes levam aos
+     fluxos que ja existem em Sprints — aqui nada grava. */
+  function cartaoVirada(ctx) {
+    var S = window.SPRINTPO;
+    if (!S || !S.viradaDoDia || !H.donoDaSprint || !H.donoDaSprint()) return '';
+    var v = S.viradaDoDia(ctx.D, H.hoje(), feriados(ctx), H.colunaDe, { prazo: window.PRAZO });
+    var rc = function (r) { return H.esc(S.rotuloCurto(r)); };
+    var linhas = [];
+    v.vencidasAbertas.forEach(function (p) {
+      linhas.push('<div class="ini-vir dg"><span class="ini-vir-t"><span class="h">' + H.ico('alert') + ' A ' + rc(p.rotulo) + ' terminou e não foi fechada</span>' +
+        '<span>' + (p.pendentes ? H.plural(p.pendentes, 'demanda precisa', 'demandas precisam') + ' de destino e motivo.' : 'Nada pendente: só falta registrar o fechamento.') + '</span></span>' +
+        '<a class="btnp" href="#sprints/encerrar">Fechar a ' + rc(p.rotulo) + '</a></div>');
+    });
+    if (v.fecharHoje) {
+      var f = v.fecharHoje;
+      linhas.push('<div class="ini-vir"><span class="ini-vir-t"><span class="h">' + H.ico('flag') + ' A ' + rc(f.rotulo) + ' termina hoje</span>' +
+        '<span>' + (f.pendentes ? '<b>' + H.plural(f.pendentes, 'demanda sem entregar', 'demandas sem entregar') + '</b>: ' +
+          [f.pausadas ? H.plural(f.pausadas, 'pausada (já vai para a próxima sprint)', 'pausadas (já vão para a próxima sprint)') : '',
+           f.vencidas ? H.plural(f.vencidas, 'vencida', 'vencidas') : '',
+           f.semDestino ? H.plural(f.semDestino, 'sem destino', 'sem destino') + ', para decidir' : ''].filter(Boolean).join(' · ') + '.'
+          : 'Tudo o que entrou já foi entregue.') + '</span></span>' +
+        '<a class="btns" href="#sprints/encerrar">Preparar o fechamento</a></div>');
+    }
+    if (v.iniciarHoje) {
+      var i = v.iniciarHoje;
+      linhas.push('<div class="ini-vir"><span class="ini-vir-t"><span class="h">' + H.ico('refresh') + ' A ' + rc(i.rotulo) + ' começou e ainda não foi iniciada</span>' +
+        '<span>Ao iniciar entram <b>' + H.plural(i.comDono, 'demanda com dono', 'demandas com dono') + '</b>' +
+        (i.semDono ? ', ' + H.plural(i.semDono, 'sem dono (vai para a fila do time)', 'sem dono (vão para a fila do time)') : '') +
+        (i.vencidas ? ', ' + H.plural(i.vencidas, 'vencida que sobe como prioritária', 'vencidas que sobem como prioritárias') : '') +
+        (i.pausadas ? ', ' + H.plural(i.pausadas, 'pausada que transborda', 'pausadas que transbordam') : '') + '.</span></span>' +
+        '<a class="btnp" href="#sprints">Iniciar a ' + rc(i.rotulo) + '</a></div>');
+    }
+    return linhas.length ? '<section class="ini-virada" aria-label="Virada da sprint">' + linhas.join('') + '</section>' : '';
   }
 
   /* AS COLUNAS DO PAINEL DO DEV (`COLUMNS`, dev.html), com a ordem do quadro
@@ -968,7 +1014,7 @@
       coluna('PRAZO VENCIDO', 'var(--dg)', atr, function (m) { return cartao(m, ctx, { comDev: true }); }) +
       coluna('PARA ESTIMAR', 'var(--in)', pok, function (m) { return cartao(m, ctx, { comDev: true, meta: 'sem pontos do Poker' }); }) +
       '</div>';
-    return h + kp + cols;
+    return h + cartaoVirada(ctx) + kp + cols;
   }
 
   // ═════════════════════════════════════════════════════════════════════

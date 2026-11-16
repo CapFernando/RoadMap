@@ -1201,6 +1201,56 @@
     return historico(m).some(function (h) { return h && h.devolvida_area && txt(h.de) === r; });
   }
 
+  /* ═══ A VIRADA DO DIA (PRD RF-15 a RF-17, 16/11/2026) ═════════════════════
+   *
+   * "S1-11 e S2-11 terminaram e não foram fechadas", e a S3-11 ainda montava
+   * na segunda de manhã, escondendo tarefas do time. Fechar e iniciar são
+   * gestos da área de produto, e continuam sendo — esta função só diz, para o
+   * dia de hoje, o que a virada pede, para o Início lembrar no dia certo:
+   *
+   *   fecharHoje   hoje é o último dia útil da sprint atual e ela não fechou:
+   *                { rotulo, pendentes, pausadas, vencidas, semDestino }
+   *   iniciarHoje  a sprint atual já começou no calendário e ninguém a iniciou:
+   *                { rotulo, comDono, semDono, vencidas, pausadas }
+   *                (fica até ser iniciada, e não só no primeiro dia: sem isso,
+   *                quem chega na terça perdia o convite)
+   *   vencidasAbertas  sprints anteriores que terminaram e não fecharam
+   *                (`pendentesDeFechamento`, sem a atual)
+   *
+   * `opts.prazo` (PRAZO) conta as vencidas, como em `iniciar`: sem ele, zero —
+   * contar com uma regra adivinhada mentiria no checklist.                   */
+  function viradaDoDia(dados, hoje, feriados, etapaDe, opts) {
+    var o = opts || {};
+    var dia = iso(hoje) || new Date().toISOString().slice(0, 10);
+    var atual = rotuloDeData(dia, feriados);
+    var fx = faixaDaSprint(atual, feriados);
+    var sit = atual ? situacaoDaSprint(dados, atual) : '';
+    var P = o.prazo && typeof o.prazo.estaAtrasada === 'function' ? o.prazo : null;
+    var etapa = function (m) { return etapaDe ? etapaDe(m) : txt(m.status_planejamento); };
+    var fechar = null;
+    if (fx && dia === fx.ate && sit !== 'fechada') {
+      var pend = balancoDaSprint(dados, atual, etapaDe).pendentes;
+      var pausada = function (m) { return !!txt(m.pausado_em); };
+      fechar = { rotulo: atual, pendentes: pend.length,
+                 pausadas: pend.filter(pausada).length,
+                 vencidas: P ? pend.filter(function (m) { return P.estaAtrasada(m, etapa(m), dia); }).length : 0,
+                 semDestino: pend.filter(function (m) { return !pausada(m); }).length };
+    }
+    var iniciar = null;
+    if (fx && dia >= fx.de && sit === 'montando') {
+      // O que ENTRA no trabalho da semana: concluida e negada ja nao pedem nada.
+      var naS = demandasDaSprint(dados, atual).filter(function (m) { return ['concluido', 'negada'].indexOf(etapa(m)) < 0; });
+      iniciar = { rotulo: atual,
+                  comDono: naS.filter(function (m) { return !!txt(m.dev); }).length,
+                  semDono: naS.filter(function (m) { return !txt(m.dev); }).length,
+                  vencidas: P ? vencidasParaPriorizar(dados, atual, dia, { prazo: P, etapaDe: etapaDe })
+                    .filter(function (m) { return doPO(m) !== atual; }).length : 0,
+                  pausadas: pausadasParaTransbordar(dados, atual, { etapaDe: etapaDe }).length };
+    }
+    var vencidas = pendentesDeFechamento(dados, dia, feriados, etapaDe).filter(function (p) { return p.rotulo !== atual; });
+    return { atual: atual, fecharHoje: fechar, iniciarHoje: iniciar, vencidasAbertas: vencidas };
+  }
+
   /** O QUE SOBROU NA SPRINT — o que o fechamento precisa decidir.
    *
    *  `entregues` são as concluídas pelo PM/PO; `aguardando` o dev já entregou e
@@ -1990,6 +2040,7 @@
     naPoolDoTime: naPoolDoTime,
     rotulosFechados: rotulosFechados,
     sprintVencida: sprintVencida,
+    viradaDoDia: viradaDoDia,
     pendentesDeFechamento: pendentesDeFechamento,
     balancoDaSprint: balancoDaSprint,
     esteveNaSprint: esteveNaSprint,

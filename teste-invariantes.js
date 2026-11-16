@@ -26509,6 +26509,46 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
            /if \(q === 'fora'\) \{/.test(INIf) && !/no Backlog fora desta sprint/.test(INIf),
            'o Meu trabalho desenha a faixa com o que o quadro nao mostrou, cada motivo tem o seu gesto, e o rodape antigo do Backlog saiu');
       }
+      /* A VIRADA DA SPRINT ASSISTIDA (PRD RF-15 a RF-17, tarefa 3.0): `viradaDoDia`
+         diz, para o dia, o que a virada pede — o Inicio da area de produto lembra. */
+      {
+        const SV = require('./sprint.js'), PV = require('./prazo.js');
+        const MV = (id, o) => Object.assign({ id, codigo: 'AX-' + id, titulo: 'T', status_planejamento: 'em_andamento' }, o);
+        const base = () => ({ sprints: [], feriados: [], melhorias: [
+          MV('a', { dev: 'Ana', sprint_po: 'S3-11-2026' }),
+          MV('b', { dev: '', sprint_po: 'S3-11-2026', status_planejamento: 'planejado' }),
+          MV('c', { dev: 'Ana', sprint_po: 'S3-11-2026', pausado_em: '2026-11-17' }),
+          MV('d', { dev: 'Bia', sprint_po: 'S3-11-2026', entrega: '2026-11-18' }),
+          MV('e', { dev: 'Bia', sprint_po: 'S3-11-2026', status_planejamento: 'concluido', concluido_em: '2026-11-19' }),
+          MV('f', { dev: 'Caio', sprint_po: 'S1-11-2026' }) ] });
+        const v16 = SV.viradaDoDia(base(), '2026-11-16', [], null, { prazo: PV });
+        ok(v16.atual === 'S3-11-2026' && !v16.fecharHoje && v16.iniciarHoje && v16.iniciarHoje.comDono === 3 && v16.iniciarHoje.semDono === 1,
+           'viradaDoDia: no primeiro dia da S3-11, em montagem, convida a iniciar e diz quantas entram com e sem dono', JSON.stringify(v16));
+        ok(v16.vencidasAbertas.length === 1 && v16.vencidasAbertas[0].rotulo === 'S1-11-2026',
+           'viradaDoDia: a S1-11, que terminou sem fechar, aparece como vencida aberta (e a atual nao)', JSON.stringify(v16.vencidasAbertas));
+        const v20 = SV.viradaDoDia(base(), '2026-11-20', [], null, { prazo: PV });
+        ok(v20.fecharHoje && v20.fecharHoje.rotulo === 'S3-11-2026' && v20.fecharHoje.pendentes === 4 && v20.fecharHoje.pausadas === 1 &&
+           v20.fecharHoje.semDestino === 3 && v20.fecharHoje.vencidas === 1,
+           'viradaDoDia: no ultimo dia util, o checklist conta as pendentes, as pausadas (ja com destino), as sem destino e as vencidas', JSON.stringify(v20.fecharHoje));
+        ok(SV.viradaDoDia(base(), '2026-11-20', [], null, {}).fecharHoje.vencidas === 0,
+           'viradaDoDia: sem a regra de prazo injetada, nao conta vencida nenhuma — contar com regra adivinhada mentiria');
+        const fer = SV.viradaDoDia(base(), '2026-11-19', ['2026-11-20'], null, { prazo: PV });
+        ok(fer.fecharHoje && fer.fecharHoje.rotulo === 'S3-11-2026' && !SV.viradaDoDia(base(), '2026-11-19', [], null, {}).fecharHoje,
+           'viradaDoDia: com feriado na sexta (20/11), o ultimo dia util e a quinta');
+        const d1 = SV.faixaDaSprint(SV.sprintSeguinte('S5-11-2026', []), []).de;
+        ok(SV.viradaDoDia(base(), d1, [], null, {}).atual === 'S1-12-2026' && d1 === '2026-12-01',
+           'viradaDoDia: na virada do mes, o primeiro dia da S1-12 ja e da S1-12', d1);
+        const fechada = base(); fechada.sprints = [{ rotulo: 'S3-11-2026', iniciada_em: '2026-11-16', em: '2026-11-20' }];
+        const vf = SV.viradaDoDia(fechada, '2026-11-20', [], null, { prazo: PV });
+        ok(!vf.fecharHoje && !vf.iniciarHoje, 'viradaDoDia: sprint ja fechada nao pede nada', JSON.stringify(vf));
+        const iniciada = base(); iniciada.sprints = [{ rotulo: 'S3-11-2026', iniciada_em: '2026-11-16' }];
+        ok(!SV.viradaDoDia(iniciada, '2026-11-18', [], null, {}).iniciarHoje,
+           'viradaDoDia: depois de iniciada, o convite some');
+        const INIv = lerTela('axis-tela-inicio.js');
+        ok(/function cartaoVirada\(ctx\) \{/.test(INIv) && /if \(!S \|\| !S\.viradaDoDia \|\| !H\.donoDaSprint \|\| !H\.donoDaSprint\(\)\) return '';/.test(INIv) &&
+           /return h \+ cartaoVirada\(ctx\) \+ kpis/.test(INIv) && /return h \+ cartaoVirada\(ctx\) \+ kp \+ cols;/.test(INIv),
+           'o cartao da virada aparece no Inicio e no "O que pede voce", so para a area de produto');
+      }
     }
     const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
     ok(/if \(sprint && \(!EST\.sprintPadrao \|\|[^\n]*\)\) \{\s*EST\.sprintPadrao = true; EST\.sprint = sprint; EST\.sprintAuto = sprint;/.test(INI) &&
