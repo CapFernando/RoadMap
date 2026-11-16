@@ -30198,6 +30198,28 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     }
   }
 
+  /* CRIAR DEMANDA DE DENTRO DO PROJETO (PRD RF-29). */
+  sec('App AXIS: o projeto cria demanda ja vinculada a ele');
+  {
+    const FRM = fs.readFileSync('axis-form-demanda.js', 'utf8');
+    const fP = corpo(FRM, 'function preencheNova(o) {');
+    ok(!!fP, 'o formulario tem o preenchimento da demanda nova');
+    if (fP) {
+      const campos = { 'axf-projeto': { value: '', options: [{ value: '' }, { value: 'p1' }, { value: 'p2' }] } };
+      const pre = new Function('el', fP + '\nreturn preencheNova;')((id) => campos[id] || null);
+      pre({ projeto_id: 'p2' });
+      ok(campos['axf-projeto'].value === 'p2', 'aberto de dentro do projeto, o formulario ja vem com ele escolhido');
+      campos['axf-projeto'].value = '';
+      pre({ projeto_id: 'p9' });
+      ok(campos['axf-projeto'].value === '', 'projeto que nao esta na lista (pendente/recusado) nao e forcado no campo');
+    }
+    ok(FRM.includes("projeto_id: val('axf-projeto')"), 'e o projeto escolhido vai junto na gravacao da demanda nova');
+    const PJ = fs.readFileSync('axis-tela-projetos.js', 'utf8');
+    const fPode = corpo(PJ, 'function podeCriarNoProjeto(p) {') || PJ.match(/function podeCriarNoProjeto\(p\) \{[^\n]*\}/)?.[0] || '';
+    ok(fPode.includes("H.pode('gravar')") && fPode.includes("aprovacao(p) === 'aprovado'"), 'o botao so aparece para quem grava e em projeto aprovado');
+    ok(PJ.includes("raiz.AXIS_FORM.abrir(null, { projeto_id: pc.id })"), 'o botao abre o formulario de demanda nova com o projeto');
+  }
+
   Promise.all(pendentes).then(() => {
     console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
     process.exit(falhas ? 1 : 0);
