@@ -1153,7 +1153,7 @@
                        devsParaVincular: devsParaVincular, pessoasDaConversa: pessoasDaConversa,
                        sugestoesArroba: sugestoesArroba, escolheArroba: escolheArroba });
   Object.assign(api, { soltarEm: soltarEm, podeSoltar: podeSoltar, arrastavel: arrastavel, COLUNAS_BLOQUEADAS_MSG: COLUNAS_BLOQUEADAS_MSG,
-                       salesOpsLivre: salesOpsLivre, contaLivre: contaLivre });
+                       salesOpsLivre: salesOpsLivre, contaLivre: contaLivre, horasPlanejadas: horasPlanejadas });
   Object.assign(api, { soLeitura: soLeitura });
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
@@ -1698,16 +1698,45 @@
           opcoes: ds.map(function (d) { return { v: d, r: rotEtapa(d), d: NOTA[d] }; }) });
       }
       var hz = horasDaEntrega(m, c);
+      /* O RASCUNHO DA ENTREGA (PRD RF-09): o que o dev foi escrevendo no Item
+         preenche a caixa. Sem rede, segue sem ele — nunca trava a entrega. */
+      var rasc = null;
+      try { rasc = await H.api('rascunho-ler', { id: m.id }); } catch (_) { rasc = null; }
+      var hp = horasPlanejadas(m.inicio, m.entrega, (c.D || {}).feriados);
       campos.push({ nome: 'horas', rotulo: 'Horas de desenvolvimento', tipo: 'numero', passo: '0.25', valor: hz.horas, obrig: true,
-        nota: hz.somado ? 'Somado de ' + hz.n + (hz.n === 1 ? ' passo' : ' passos') + ' das subtarefas.' : '' });
-      campos.push({ nome: 'implementacao', rotulo: 'O que foi implementado', tipo: 'area', valor: m.implementacao || '', dica: 'É o texto que a área e o PM/PO leem para validar.', obrig: true });
+        nota: [hz.somado ? 'Somado de ' + hz.n + (hz.n === 1 ? ' passo' : ' passos') + ' das subtarefas.' : '',
+               hp ? 'Planejado: ' + hp.horas + ' h (' + hp.dias + (hp.dias === 1 ? ' dia útil' : ' dias úteis') + ' × 8 h).' : ''].filter(Boolean).join(' ') });
+      campos.push({ nome: 'implementacao', rotulo: 'O que foi implementado', tipo: 'area', valor: m.implementacao || (rasc && rasc.texto) || '', dica: 'É o texto que a área e o PM/PO leem para validar.', obrig: true,
+        nota: !m.implementacao && rasc && rasc.texto ? 'Veio do seu rascunho da entrega.' : '' });
       campos.push({ nome: 'resumo', rotulo: 'Resumo da entrega', tipo: 'area', linhas: 2, valor: m.resumo_entrega || '', dica: 'Vai para o relatório e a apresentação.' });
       var fixo = campos[0].nome === 'destino' ? {} : { destino: ds[0] };
       fixo.naCaixa = { horas: 1 };
       var v = await caixa({ titulo: 'Registrar entrega de ' + cod(m), campos: campos, ok: 'Registrar entrega', valida: validaCom('entregar', m, fixo) });
-      if (v) return aplicar('entregar', m, Object.assign({ destino: fixo.destino }, v));
+      if (!v) return;
+      var out = await aplicar('entregar', m, Object.assign({ destino: fixo.destino }, v));
+      // Entregue, o rascunho cumpriu o papel: sai do servidor.
+      if (out && out.ok !== false && rasc && rasc.texto) H.api('rascunho-gravar', { id: m.id, texto: '' }).catch(function () {});
+      return out;
     }
   };
+
+  /* AS HORAS PLANEJADAS (PRD RF-11) — a mesma conta do `calcHorasPlanejadas`
+     do admin.html: dias uteis (sem fim de semana e sem feriado) de `inicio` a
+     `entrega`, inclusive, x 8 h. So uma SUGESTAO na caixa de entregar: as
+     horas reais continuam sendo do dev. `null` sem as duas datas. */
+  function horasPlanejadas(inicio, entrega, feriados) {
+    var a = txt(inicio).slice(0, 10), b = txt(entrega).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(a) || !/^\d{4}-\d{2}-\d{2}$/.test(b) || b < a) return null;
+    var fer = {};
+    (feriados || []).forEach(function (f) { var d = f && typeof f === 'object' ? f.data : f; if (d) fer[String(d).slice(0, 10)] = 1; });
+    var q = a.split('-'), d = new Date(Date.UTC(+q[0], +q[1] - 1, +q[2])), dias = 0;
+    while (d.toISOString().slice(0, 10) <= b) {
+      var dw = d.getUTCDay(), iso = d.toISOString().slice(0, 10);
+      if (dw !== 0 && dw !== 6 && !fer[iso]) dias++;
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return { dias: dias, horas: dias * 8 };
+  }
 
   // ── Os gestos do painel do dev e a conversa ──────────────────────────
   /** O id de demanda nova (`uid`, dev.html). */

@@ -257,6 +257,9 @@ const LIMITES = {
   'recuperar':      { max: 5,   janela: 60 },
   'usuarios':       { max: 40,  janela: 60 },
   'quem-sou':       { max: 60,  janela: 60 },
+  // Rascunho da entrega: salvo ao parar de digitar, lido ao abrir a demanda.
+  'rascunho-ler':   { max: 60,  janela: 60 },
+  'rascunho-gravar': { max: 60, janela: 60 },
   // Uma por pagina aberta: a tela pede a lista ao carregar e guarda.
   'colaboradores':  { max: 20,  janela: 60 },
   'demanda-nova':   { max: 20,  janela: 60 },   // abertura por HTTP: 20/min por IP
@@ -2736,6 +2739,19 @@ function podeMarcarComite(ident) {
  *
  *  Compara pelo conteudo, e nao por presenca: quem nao mexeu reenvia igual, e
  *  igual nao e tentativa. */
+/* A DEMANDA E DESTA CONTA? O criterio da API (`meuDono`): o nome da conta, os
+ * nomes declarados (`nome_demandas`) e o derivado do e-mail, todos por
+ * igualdade sem acento e sem caixa, contra cada nome do campo `dev`. */
+function demandaDaConta(m, ident) {
+  const u = (ident && ident.usuario) || null;
+  if (!u || !m) return false;
+  const norm = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const eu = nomeNaDemanda(ident);
+  const declarados = String(u.nome_demandas || '').split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
+  const aceitos = [...declarados, nomeDemandasDoEmail(u.email || '', eu), eu].filter(Boolean).map(norm);
+  return String(m.dev || '').split('/').map(x => norm(x)).filter(Boolean).some(n => aceitos.includes(n));
+}
+
 function preservaComite(recebido, servidor, autorizado) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const antes = new Map();
@@ -3705,6 +3721,14 @@ async function contasMigrarAgora(db) {
      Viana), e so enquanto ninguem tem a marca: no dia do deploy ninguem perde
      nem ganha poder, e depois disso quem decide e a tela. */
   await colunaSeFaltar(db, 'usuario', 'area_produto', 'INTEGER NOT NULL DEFAULT 0');
+  /* RASCUNHO DA ENTREGA (PRD RF-09 e RF-10). O texto do que foi implementado,
+     escrito aos poucos pelo dev, fica AQUI e nao na base de demandas: a base e
+     lida inteira por todas as telas e pelo painel publico, e o rascunho e so
+     do dono ate ele entregar. Uma linha por conta e demanda. */
+  await db.prepare(`CREATE TABLE IF NOT EXISTS entrega_rascunho (
+    usuario_id TEXT NOT NULL, melhoria_id TEXT NOT NULL,
+    texto TEXT NOT NULL, horas REAL, atualizado_em TEXT NOT NULL,
+    PRIMARY KEY (usuario_id, melhoria_id))`).run();
   try {
     await db.prepare(`UPDATE usuario SET area_produto = 1
                        WHERE login IN ('fernando', 'mateus.viana')
@@ -7666,6 +7690,45 @@ async function rotear(request, env, _histFila) {
     }
 
     // Quem sou eu — o painel usa para saber o papel e mostrar so o que cabe.
+    /* ═══ RASCUNHO DA ENTREGA (PRD RF-09 e RF-10) ══════════════════════════
+     * `rascunho-ler { id }` e `rascunho-gravar { id, texto, horas }`. So o DONO
+     * da demanda (o mesmo criterio de nomes da API, `demandaDaConta`) le e grava
+     * o proprio rascunho; texto vazio apaga. Fica no D1, por conta: segue o dev
+     * em outro aparelho e nunca entra na base publica. */
+    if (body.action === 'rascunho-ler' || body.action === 'rascunho-gravar') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      const permR = await exigePapel(env, body, ['admin', 'analista', 'dev'], headers);
+      if (permR.recusa) return permR.recusa;
+      const uR = permR.ident.usuario;
+      if (!uR) return json({ error: 'sem_conta', detail: 'O rascunho exige login com conta propria.' }, 400, headers);
+      const idR = limpaTexto(body.id, 60);
+      if (!idR) return json({ error: 'id', detail: 'Informe o id da demanda.' }, 400, headers);
+      const baseR = JSON.parse(await (await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } })).text());
+      const mR = ((baseR && baseR.melhorias) || []).find(x => x && x.id === idR);
+      if (!mR) return json({ error: 'nao_encontrada' }, 404, headers);
+      if (!demandaDaConta(mR, permR.ident)) {
+        return json({ error: 'nao_sua', detail: 'O rascunho da entrega e de quem esta com a demanda (' + (mR.dev || 'sem responsavel') + ').' }, 403, headers);
+      }
+      await contasMigrar(env.POKER_DB);
+      if (body.action === 'rascunho-ler') {
+        const rr = await env.POKER_DB.prepare('SELECT texto, horas, atualizado_em FROM entrega_rascunho WHERE usuario_id = ? AND melhoria_id = ?')
+          .bind(uR.id, idR).first();
+        return json(Object.assign({ ok: true }, rr || {}), 200, headers);
+      }
+      const textoR = String(body.texto == null ? '' : body.texto).slice(0, 8000);
+      if (!textoR.trim()) {
+        await env.POKER_DB.prepare('DELETE FROM entrega_rascunho WHERE usuario_id = ? AND melhoria_id = ?').bind(uR.id, idR).run();
+        return json({ ok: true, apagado: true }, 200, headers);
+      }
+      const horasR = Number(body.horas);
+      const agoraR = new Date().toISOString();
+      await env.POKER_DB.prepare(`INSERT INTO entrega_rascunho (usuario_id, melhoria_id, texto, horas, atualizado_em) VALUES (?, ?, ?, ?, ?)
+                                   ON CONFLICT(usuario_id, melhoria_id) DO UPDATE SET texto = excluded.texto, horas = excluded.horas, atualizado_em = excluded.atualizado_em`)
+        .bind(uR.id, idR, textoR, Number.isFinite(horasR) && horasR >= 0 ? horasR : null, agoraR).run();
+      return json({ ok: true, atualizado_em: agoraR }, 200, headers);
+    }
+
     if (body.action === 'quem-sou') {
       const ident = await identifica(env, body);
       if (!ident) return json({ error: 'credencial' }, 401, headers);

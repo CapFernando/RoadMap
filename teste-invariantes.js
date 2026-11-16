@@ -26468,6 +26468,41 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(/!EST\.sprintManual && EST\.sprintAuto !== sprint && EST\.sprint === EST\.sprintAuto/.test(lerTela('axis-tela-inicio.js')) &&
          /spr\.onchange = function \(\) \{ EST\.sprint = spr\.value; EST\.sprintManual = true;/.test(lerTela('axis-tela-inicio.js')),
          'e o Meu trabalho do app tambem: o padrao vira com a semana enquanto a pessoa nao escolhe outra sprint');
+      /* RASCUNHO DA ENTREGA E HORAS PLANEJADAS (PRD RF-09 a RF-12, tarefa 9.0). */
+      {
+        const ACr = require('./axis-acoes.js');
+        const ADMr = lerTela('admin.html');
+        const calc = corpo(ADMr, 'function calcHorasPlanejadas(inicio, entrega) {');
+        ok(!!calc, 'o calcHorasPlanejadas do admin existe para comparar');
+        if (calc) {
+          const casos = [['2026-11-16', '2026-11-20', []], ['2026-11-16', '2026-11-20', ['2026-11-20']], ['2026-11-14', '2026-11-16', []],
+                         ['2026-11-20', '2026-11-16', []], ['2026-10-26', '2026-11-06', [{ data: '2026-11-02' }]], ['', '2026-11-20', []]];
+          const div = casos.filter(([i, e, f]) => {
+            const adm = new Function('state', calc + '\nreturn calcHorasPlanejadas;')({ feriados: f })(i, e);
+            const app = ACr.horasPlanejadas(i, e, f);
+            return (adm == null ? null : adm) !== (app ? app.horas : null);
+          });
+          ok(!div.length, 'horas planejadas do app = calcHorasPlanejadas do admin (dias uteis x 8 h, feriado e fim de semana fora)', div.map((c) => c.join(' ')).join(' | '));
+        }
+        const WR = lerTela('cloudflare-worker/worker.js');
+        const rota = (WR.match(/if \(body\.action === 'rascunho-ler' \|\| body\.action === 'rascunho-gravar'\) \{[\s\S]*?\n    \}\n/) || [''])[0];
+        ok(/CREATE TABLE IF NOT EXISTS entrega_rascunho/.test(WR) && /PRIMARY KEY \(usuario_id, melhoria_id\)/.test(WR) &&
+           /if \(!uR\) return json\(\{ error: 'sem_conta'/.test(rota) && /if \(!demandaDaConta\(mR, permR\.ident\)\)/.test(rota) && /error: 'nao_sua'/.test(rota) &&
+           /DELETE FROM entrega_rascunho/.test(rota) && /\.slice\(0, 8000\)/.test(rota),
+           'o rascunho fica no D1 por conta e demanda, so o dono le e grava, texto vazio apaga, com teto de tamanho');
+        const dc = corpo(WR, 'function demandaDaConta(m, ident) {');
+        if (dc) {
+          const f = new Function('nomeNaDemanda', 'nomeDemandasDoEmail', dc + '\nreturn demandaDaConta;')((i) => i.usuario.nome, () => '');
+          ok(f({ dev: 'João Siqueira' }, { usuario: { nome: 'Joao Siqueira' } }) && f({ dev: 'Ana / João Siqueira' }, { usuario: { nome: 'x', nome_demandas: 'João Siqueira' } }) &&
+             !f({ dev: 'Crisley Almeida' }, { usuario: { nome: 'João Siqueira' } }) && !f({ dev: 'João' }, { usuario: null }),
+             'demandaDaConta: o nome da conta ou os declarados, sem acento e sem caixa, contra cada dev da demanda; sem conta, nao');
+        }
+        const ITr = lerTela('axis-tela-item.js'), ACs = lerTela('axis-acoes.js');
+        ok(/function areaRascunho\(m, col\)/.test(ITr) && /if \(!H\.minha\(m\) \|\|/.test(ITr) && /tm = setTimeout\(salva, 1200\)/.test(ITr) &&
+           /H\.api\('rascunho-ler', \{ id: m\.id \}\)/.test(ACs) && /valor: m\.implementacao \|\| \(rasc && rasc\.texto\) \|\| ''/.test(ACs) &&
+           /H\.api\('rascunho-gravar', \{ id: m\.id, texto: '' \}\)/.test(ACs) && /Planejado: ' \+ hp\.horas \+ ' h/.test(ACs),
+           'o Item tem o rascunho do dono, salvo ao parar de digitar; a caixa de entregar vem com ele e com as horas planejadas, e entregar o apaga');
+      }
     }
     const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
     ok(/if \(sprint && \(!EST\.sprintPadrao \|\|[^\n]*\)\) \{\s*EST\.sprintPadrao = true; EST\.sprint = sprint; EST\.sprintAuto = sprint;/.test(INI) &&
