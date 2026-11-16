@@ -862,13 +862,24 @@
   /* O LINK DE VISUALIZACAO SEM LOGIN (gantt.html, `copiarLinkVisualizacao`).
      O app novo e so com conta — a consulta e o perfil de quem so le —, entao o
      link continua abrindo o Gantt em modo so-leitura, para quem nao tem conta. */
+  /* A chave do link vem do Worker, so para admin (`chave-visualizacao`): ela
+     nao fica no codigo do site, que e publico. `raiz.VIEW_CHAVE` segue valendo
+     para quem a configura localmente. */
+  var chaveView = { valor: null };
+  async function chaveDoLink() {
+    if (raiz.VIEW_CHAVE) return raiz.VIEW_CHAVE;
+    if (chaveView.valor !== null) return chaveView.valor;
+    try { var j = await H.api('chave-visualizacao'); chaveView.valor = String((j && j.chave) || ''); }
+    catch (_) { return ''; }
+    return chaveView.valor;
+  }
   function blocoLink() {
-    var chave = raiz.VIEW_CHAVE || '';
+    var chave = raiz.VIEW_CHAVE || chaveView.valor || '';
     return '<section class="pn"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h2 class="h2">Link de visualização sem login</h2>' +
       '<span class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btnp" data-cfg-acao="link-plan">' + ico('clipboard') + ' Copiar link do Planejamento</button>' +
       '<button type="button" class="btn" data-cfg-acao="link-view">' + ico('clipboard') + ' Link do Gantt antigo</button></span></div>' +
       '<span class="note">Abre o Planejamento em modo somente leitura, sem pedir senha — para quem acompanha e não tem conta. O link do Gantt antigo segue valendo para quem já o tem. Quem tem conta entra aqui pelo perfil Consulta, com nome.' +
-      (chave ? '' : ' <span style="color:var(--wn-t)">A chave de leitura (VIEW_CHAVE) não está configurada neste ambiente: com a trava de leitura ligada no Worker, o link abre sem dados.</span>') + '</span></section>';
+      (chave || chaveView.valor === null ? '' : ' <span style="color:var(--wn-t)">A chave de leitura (VIEW_CHAVE) não está configurada no Worker: com a trava de leitura ligada, o link abre sem dados.</span>') + '</span></section>';
   }
 
   function secPessoas(ctx) {
@@ -1255,7 +1266,9 @@
     },
 
     'link-plan': async function () {
-      var link = linkPlanejamento(location.origin + location.pathname.replace(/[^\/]*$/, ''), raiz.VIEW_CHAVE || '');
+      var chave = await chaveDoLink();
+      if (!chave) { H.toast('A chave de leitura (VIEW_CHAVE) não está configurada no Worker: o link abriria sem dados.', 'erro'); return; }
+      var link = linkPlanejamento(location.origin + location.pathname.replace(/[^\/]*$/, ''), chave);
       try { await navigator.clipboard.writeText(link); H.toast('Link do Planejamento copiado!'); }
       catch (_) { await caixa({ titulo: 'Copie o link', campos: [{ nome: 'link', rotulo: 'Link do Planejamento (somente leitura)', valor: link }], ok: 'Fechar' }); }
     },
@@ -1286,7 +1299,7 @@
       esp.rodando = ''; esp.progresso = ''; pintarEspelho();
     },
     'link-view': async function () {
-      var link = linkVisualizacao(location.origin + location.pathname.replace(/[^\/]*$/, ''), raiz.VIEW_CHAVE || '');
+      var link = linkVisualizacao(location.origin + location.pathname.replace(/[^\/]*$/, ''), await chaveDoLink());
       try { await navigator.clipboard.writeText(link); H.toast('Link de visualização copiado!'); }
       catch (_) { await caixa({ titulo: 'Copie o link', campos: [{ nome: 'link', rotulo: 'Link de visualização', valor: link }], ok: 'Fechar' }); }
     }

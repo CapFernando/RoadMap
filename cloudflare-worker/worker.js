@@ -266,6 +266,7 @@ const LIMITES = {
   'rascunho-ler':   { max: 60,  janela: 60 },
   'rascunho-gravar': { max: 60, janela: 60 },
   'espelho-d1':     { max: 30,  janela: 60 },   // admin: status, comparar e a carga em fatias
+  'chave-visualizacao': { max: 20, janela: 60 }, // admin: a chave que vai no link sem login
   // Uma por pagina aberta: a tela pede a lista ao carregar e guarda.
   'colaboradores':  { max: 20,  janela: 60 },
   'demanda-nova':   { max: 20,  janela: 60 },   // abertura por HTTP: 20/min por IP
@@ -8183,6 +8184,18 @@ async function rotear(request, env, _histFila) {
      *   op `sincronizar` → leva ao D1 o que difere, ate o teto por chamada; a
      *                      tela repete enquanto `restam` > 0 (a carga inicial
      *                      e esta mesma operacao com o D1 vazio). */
+    /* ═══ A CHAVE DO LINK DE VISUALIZACAO, SO PARA O ADMIN ══════════════════
+     * O link sem login (Planejamento no app, Gantt antigo) leva `&k=` com a
+     * VIEW_CHAVE, que o Worker confere na leitura. A chave NAO vai no codigo do
+     * site (o repositorio e publico): quem copia o link pede a chave aqui, com
+     * a sessao de admin, e so quem recebe o link consegue ler. Trocar a chave
+     * (`wrangler secret put VIEW_CHAVE`) invalida os links antigos. */
+    if (body.action === 'chave-visualizacao') {
+      const permV = await exigePapel(env, body, ['admin'], headers);
+      if (permV.recusa) return permV.recusa;
+      return json({ ok: true, chave: String(env.VIEW_CHAVE || '').trim() }, 200, headers);
+    }
+
     if (body.action === 'espelho-d1') {
       const permE = await exigePapel(env, body, ['admin'], headers);
       if (permE.recusa) return permE.recusa;
