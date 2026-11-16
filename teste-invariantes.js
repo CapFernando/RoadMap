@@ -30690,6 +30690,19 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(AXA2.includes("entre o arquivo de demandas e o banco (D1)") && AXA2.includes("'#configuracoes/espelho'"), 'diferenca vira aviso no sino, levando a Configuracoes');
   }
 
+  /* A CHAVE DO LINK SEM LOGIN VEM DO WORKER, SO PARA ADMIN: o site e publico e
+     a chave nao pode estar no codigo dele. */
+  sec('Link de visualizacao: a chave vem do Worker, so para admin');
+  {
+    const fV = corpo(W, "if (body.action === 'chave-visualizacao') {") || '';
+    ok(fV.includes("exigePapel(env, body, ['admin'], headers)") && fV.includes('env.VIEW_CHAVE'), 'so admin recebe a VIEW_CHAVE');
+    ok(/'chave-visualizacao':\s*\{ max: \d+, janela: 60 \}/.test(W), 'a rota tem limite por minuto');
+    const CFG = fs.readFileSync('axis-tela-configuracoes.js', 'utf8');
+    ok(CFG.includes("H.api('chave-visualizacao')") && CFG.includes('var chave = await chaveDoLink();'), 'Configuracoes pede a chave ao Worker na hora de copiar o link');
+    ok(!/VIEW_CHAVE\s*=\s*['"][^'"]+['"]/.test(fs.readdirSync('.').filter((f) => /\.(js|html)$/.test(f) && f !== 'teste-invariantes.js').map((f) => fs.readFileSync(f, 'utf8')).join('\n')),
+       'nenhuma tela do site publico traz a chave escrita no codigo');
+  }
+
   Promise.all(pendentes).then(() => {
     console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
     process.exit(falhas ? 1 : 0);
