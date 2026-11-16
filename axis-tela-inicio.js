@@ -1194,7 +1194,7 @@
     var limite = maisDias(hoje, -14);
     var dev = ctx.papel === 'dev';
     var acao = A.notificacoes().map(function (n) {
-      return { tipo: 'acao', ico: n.ico, cor: n.cor, t: n.txt, d: 'Pede ação', href: n.href, em: '', nv: true };
+      return { tipo: 'acao', ico: n.ico, cor: n.cor, t: n.txt, d: 'Pede ação', href: n.href, em: '', nv: true, aviso: n.aviso || '' };
     });
     // As demandas "do usuario": as dele para o dev; o time para o PM/PO, que
     // e quem responde por todas.
@@ -1247,7 +1247,7 @@
       '<div class="row" style="flex-wrap:wrap">' + bt('acao', 'Pedem ação', it.acao.length) + bt('men', 'Menções', it.men.length) + bt('hist', 'Mudanças', it.hist.length) + bt('todas', 'Todas') + '</div></header>';
     var vazioTxt = { acao: 'Nada pendente com você agora.', men: 'Ninguém mencionou você nas mensagens das demandas.', hist: 'Nenhuma mudança feita por outra pessoa nos últimos 14 dias.', todas: 'Nada por aqui.' }[f];
     var corpo = mostra.length ? mostra.map(function (n) {
-      var tag = n.href ? 'a href="' + n.href + '"' : 'div';
+      var tag = n.href ? 'a href="' + n.href + '"' + (n.aviso ? ' data-aviso="' + H.esc(n.aviso) + '"' : '') : 'div';
       return '<' + tag + ' class="ini-nt' + (n.nv ? ' nv' : '') + '"><span class="ic" style="color:' + n.cor + '">' + H.ico(n.ico) + '</span>' +
         '<span class="cx"><span>' + n.t + '</span><span class="note" style="font-size:12.5px">' + n.d + '</span></span>' +
         '<span class="qd">' + (n.em ? H.esc(quando(n.em)) : '') + (n.nv ? '<span class="pt"></span>' : '') + '</span></' + (n.href ? 'a' : 'div') + '>';

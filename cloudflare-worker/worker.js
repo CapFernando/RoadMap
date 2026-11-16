@@ -260,6 +260,8 @@ const LIMITES = {
   // Uma por aba e por pagina antiga aberta com ?antiga=1 (a tela deduplica).
   'uso-antiga':     { max: 30,  janela: 60 },
   'uso-antiga-relatorio': { max: 20, janela: 60 },
+  // Avisos lidos: uma leitura ao abrir e uma marcacao por clique no sino.
+  'avisos-lidos':   { max: 60,  janela: 60 },
   // Uma por pagina aberta: a tela pede a lista ao carregar e guarda.
   'colaboradores':  { max: 20,  janela: 60 },
   'demanda-nova':   { max: 20,  janela: 60 },   // abertura por HTTP: 20/min por IP
@@ -3717,6 +3719,13 @@ async function contasMigrarAgora(db) {
      pela senha compartilhada, sem pessoa por tras. */
   await db.prepare(`CREATE TABLE IF NOT EXISTS uso_antiga (
     usuario_id TEXT, pagina TEXT NOT NULL, em TEXT NOT NULL)`).run();
+  /* AVISOS LIDOS (PRD RF-07). Os avisos do sino sao derivados da base, com uma
+     chave estavel (`tipo:id:carimbo`, `avisosDoDev` em axis-acoes.js); aqui fica
+     so QUAIS chaves cada conta ja leu — e e isso que faz o lido valer em
+     qualquer aparelho. */
+  await db.prepare(`CREATE TABLE IF NOT EXISTS aviso_lido (
+    usuario_id TEXT NOT NULL, chave TEXT NOT NULL, lido_em TEXT NOT NULL,
+    PRIMARY KEY (usuario_id, chave))`).run();
   try {
     await db.prepare(`UPDATE usuario SET area_produto = 1
                        WHERE login IN ('fernando', 'mateus.viana')
@@ -7737,6 +7746,31 @@ async function rotear(request, env, _histFila) {
            FROM uso_antiga x LEFT JOIN usuario u ON u.id = x.usuario_id
           WHERE x.em >= ? GROUP BY x.usuario_id, x.pagina ORDER BY ultima DESC LIMIT 500`).bind(desde).all();
       return json({ ok: true, dias, linhas: r.results || [] }, 200, headers);
+    }
+
+    /* ═══ AVISOS LIDOS (PRD RF-07) ════════════════════════════════════════
+     * `op: 'listar'` devolve as chaves lidas pela conta (as 1000 mais novas);
+     * `op: 'marcar'` grava ate 200 chaves. So conta propria: a senha
+     * compartilhada nao tem pessoa, e um lido sem dono nao serve a ninguem. */
+    if (body.action === 'avisos-lidos') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      const permAv = await exigePapel(env, body, ['admin', 'analista', 'dev', 'consulta'], headers);
+      if (permAv.recusa) return permAv.recusa;
+      const uAv = permAv.ident.usuario;
+      if (!uAv) return json({ error: 'sem_conta', detail: 'Avisos lidos exigem login com conta propria.' }, 400, headers);
+      await contasMigrar(env.POKER_DB);
+      if (String(body.op || 'listar') === 'marcar') {
+        const chaves = (Array.isArray(body.chaves) ? body.chaves : []).map(c => String(c || '').slice(0, 160)).filter(Boolean).slice(0, 200);
+        const agoraAv = new Date().toISOString();
+        for (const ch of chaves) {
+          await env.POKER_DB.prepare('INSERT OR IGNORE INTO aviso_lido (usuario_id, chave, lido_em) VALUES (?, ?, ?)')
+            .bind(uAv.id, ch, agoraAv).run();
+        }
+        return json({ ok: true, marcadas: chaves.length }, 200, headers);
+      }
+      const rAv = await env.POKER_DB.prepare(
+        'SELECT chave FROM aviso_lido WHERE usuario_id = ? ORDER BY lido_em DESC LIMIT 1000').bind(uAv.id).all();
+      return json({ ok: true, chaves: (rAv.results || []).map(x => x.chave) }, 200, headers);
     }
 
     if (body.action === 'quem-sou') {
