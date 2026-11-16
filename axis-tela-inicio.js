@@ -48,7 +48,9 @@
     ntfLimite: 30,
     mostrar: '',           // Meu trabalho do dev: '' (no meu nome + fila), 'meu', 'fila'
     sprint: '',            // Meu trabalho do dev: '' (todas), '__fora__' ou o rotulo
-    sprintPadrao: false,   // a sprint atual so e escolhida na primeira montagem
+    sprintPadrao: false,   // a sprint atual ja foi escolhida como padrao
+    sprintAuto: '',        // qual era a "atual" quando o padrao foi aplicado
+    sprintManual: false,   // a pessoa escolheu a sprint no filtro (o padrao nao a troca)
     mais: {},              // Meu trabalho: colunas abertas por inteiro ("e mais N")
     etapa: ''              // Meu trabalho no celular: a etapa a vista (uma por vez)
   };
@@ -762,8 +764,14 @@
        no nome dele e a fila do time, com o filtro "Mostrar". */
     var AC = window.AXIS_ACOES;
     var cx = AC && AC.contexto ? AC.contexto() : null;
-    // A sprint atual e o padrao (368342d): escolhida so na primeira montagem.
-    if (!EST.sprintPadrao && sprint) { EST.sprintPadrao = true; EST.sprint = sprint; }
+    /* A SPRINT ATUAL E O PADRAO (368342d) — E ACOMPANHA O CALENDARIO (16/11/2026).
+       Era escolhida so na primeira montagem: quem deixou o app aberto de sexta
+       para segunda continuava filtrando a sprint da semana passada, e as tarefas
+       da nova "nao apareciam no Meu trabalho". Agora, enquanto a pessoa nao
+       escolheu outra no filtro, o padrao vira junto com a semana. */
+    if (sprint && (!EST.sprintPadrao || (!EST.sprintManual && EST.sprintAuto !== sprint && EST.sprint === EST.sprintAuto))) {
+      EST.sprintPadrao = true; EST.sprint = sprint; EST.sprintAuto = sprint;
+    }
     var opsSprint = AC && AC.sprintsDoPainel ? AC.sprintsDoPainel(vs, cx, sprint) : [];
     // A escolha sobrevive ao redesenho, a nao ser que a sprint tenha saido da lista.
     if (EST.sprint && !opsSprint.some(function (o) { return o.v === EST.sprint; })) EST.sprint = '';
@@ -1228,11 +1236,11 @@
         if (q === 'ntf') { EST.ntfFiltro = b.getAttribute('data-f'); EST.ntfLimite = 30; redesenha(el, ctx); return; }
         if (q === 'ntf-mais') { EST.ntfLimite += 30; redesenha(el, ctx); return; }
         // O Limpar do Meu trabalho volta para a sprint atual e so o seu time (o padrao).
-        if (q === 'limpar') { EST.sprint = H.sprintAtual() || ''; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
-        if (q === 'sprint-todas') { EST.sprint = ''; redesenha(el, ctx); return; }
+        if (q === 'limpar') { EST.sprint = EST.sprintAuto = H.sprintAtual() || ''; EST.sprintManual = false; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
+        if (q === 'sprint-todas') { EST.sprint = ''; EST.sprintManual = true; redesenha(el, ctx); return; }
         // A faixa e o numero do prazo vencido levam ate a demanda (dev.html: `devIrPara`, `limparFiltrosDev`).
         if (q === 'risco-abre') { irParaDemanda(el, ctx, b.getAttribute('data-id')); return; }
-        if (q === 'risco-limpa') { EST.sprint = ''; EST.mostrar = ''; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
+        if (q === 'risco-limpa') { EST.sprint = ''; EST.sprintManual = true; EST.mostrar = ''; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
         if (q === 'risco') {
           var um = el.querySelectorAll('[data-ini="risco-abre"]');
           var fx = el.querySelector('#ini-risco');
@@ -1254,7 +1262,7 @@
     var mo = el.querySelector('[data-ini="mostrar"]');
     if (mo) mo.onchange = function () { EST.mostrar = mo.value; redesenha(el, ctx); var n = el.querySelector('[data-ini="mostrar"]'); if (n) n.focus(); };
     var spr = el.querySelector('[data-ini="sprint"]');
-    if (spr) spr.onchange = function () { EST.sprint = spr.value; redesenha(el, ctx); var n = el.querySelector('[data-ini="sprint"]'); if (n) n.focus(); };
+    if (spr) spr.onchange = function () { EST.sprint = spr.value; EST.sprintManual = true; redesenha(el, ctx); var n = el.querySelector('[data-ini="sprint"]'); if (n) n.focus(); };
     // Tipo, Tema, Periodo e o periodo da produtividade (dev.html): redesenha e devolve o foco.
     [].forEach.call(el.querySelectorAll('[data-meu]'), function (s) {
       s.onchange = function () {
