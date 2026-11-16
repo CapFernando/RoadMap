@@ -528,8 +528,10 @@
     } else {
       if (r.status === 401) r.erro = MSG_SESSAO;
       var msg = r.erro || 'Não foi possível salvar.';
-      if (r.itens && r.itens.length > 1) msg += ' (e mais ' + (r.itens.length - 1) + ': ' + r.itens.slice(1).map(function (x) { return x.codigo; }).join(', ') + ')';
+      if (r.itens && r.itens.length > 1 && r.codigo !== 'ja_tem_dono') msg += ' (e mais ' + (r.itens.length - 1) + ': ' + r.itens.slice(1).map(function (x) { return x.codigo; }).join(', ') + ')';
       toast(msg, 'erro');
+      // Outra pessoa pegou antes (PRD RF-14): a tela rele, para a fila mostrar o dono certo.
+      if (r.codigo === 'ja_tem_dono') carregar().then(function () { desenhar(true); }).catch(function () {});
     }
     return r;
   }
