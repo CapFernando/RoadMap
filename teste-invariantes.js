@@ -26468,6 +26468,47 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(/!EST\.sprintManual && EST\.sprintAuto !== sprint && EST\.sprint === EST\.sprintAuto/.test(lerTela('axis-tela-inicio.js')) &&
          /spr\.onchange = function \(\) \{ EST\.sprint = spr\.value; EST\.sprintManual = true;/.test(lerTela('axis-tela-inicio.js')),
          'e o Meu trabalho do app tambem: o padrao vira com a semana enquanto a pessoa nao escolhe outra sprint');
+      /* "POR QUE NAO ESTOU VENDO?" (PRD RF-01 a RF-03, tarefa 1.0): `motivosFora`
+         agrupa o que e do dev e o Meu trabalho nao mostra, pelo motivo. */
+      {
+        const ACf = require('./axis-acoes.js');
+        const R = { SPRINTPO: require('./sprint.js'), DEVNOME: require('./dev-nome.js'), ETAPA: require('./etapa-demanda.js') };
+        const H16 = '2026-11-16';
+        const M = (id, o) => Object.assign({ id, codigo: 'AX-' + id, titulo: 'T ' + id, dev: 'Ana', status_planejamento: 'em_andamento', tipo: 'evolucao' }, o);
+        const Df = { feriados: [], melhorias: [
+          M('a', { sprint_po: 'S3-11-2026' }),                                    // na tela
+          M('b', { sprint_po: 'S4-11-2026', status_planejamento: 'planejado' }),  // sprint futura
+          M('c', { sprint_po: 'S2-11-2026' }),                                    // outra sprint, aberta
+          M('d', { status_planejamento: 'backlog' }),                             // sem sprint
+          M('e', { sprint_po: 'S3-11-2026', tipo: 'sustentacao' }),               // escondida pelo Tipo
+          M('f', { sprint_po: 'S3-11-2026', status_planejamento: 'concluido' }),  // concluida fora do mes
+          M('g', { sprint_po: 'S2-11-2026', status_planejamento: 'concluido' }),  // concluida de outra sprint: nao conta
+          M('h', { sprint_po: 'S4-11-2026', dev: 'Bia' }),                        // de outra pessoa
+          M('i', { sprint_po: 'S4-11-2026', status_planejamento: 'negada' }),     // negada
+          M('j', { sprint_po: 'S4-11-2026', mesclado_em: '2026-11-10' }),         // mesclada
+          M('k', { sprint_po: 'S4-11-2026', oculto: true }) ] };                  // oculta
+        const cf = { R, D: Df, quem: 'Ana', nomes: ['Ana'] };
+        const filtros = (o) => Object.assign({ sprint: 'S3-11-2026', mostrar: '', colunaDe: (m) => m.status_planejamento,
+          casaFiltro: (m) => m.tipo !== 'sustentacao', noMes: (m) => m.id !== 'f' }, o);
+        const resumo = (gs) => gs.map((g) => g.motivo + (g.rotulo ? ':' + g.rotulo : '') + '=' + g.ids.join('')).join(' ');
+        const rf = ACf.motivosFora(Df.melhorias, cf, filtros(), H16);
+        ok(resumo(rf) === 'sprint_futura:S4-11-2026=b outra_sprint:S2-11-2026=c fora_da_sprint=d filtro=e concluida_fora_do_mes=f',
+           'motivosFora: cada tarefa do dev fora da tela cai no seu motivo, na ordem da faixa (sprint futura, outra sprint, sem sprint, filtro, concluida fora do mes)', resumo(rf));
+        ok(!rf.some((g) => /[ghijk]/.test(g.ids.join(''))),
+           'motivosFora: tarefa de outra pessoa, negada, mesclada, oculta e a concluida de outra sprint nao contam');
+        const rm = ACf.motivosFora(Df.melhorias, cf, filtros({ mostrar: 'fila' }), H16);
+        ok(resumo(rm) === 'mostrar=abcde', 'motivosFora: com "So a fila do time", as abertas no nome do dev aparecem como escondidas pelo Mostrar', resumo(rm));
+        const rt = ACf.motivosFora(Df.melhorias, cf, filtros({ sprint: '', casaFiltro: () => true, noMes: () => true }), H16);
+        ok(rt.length === 0, 'motivosFora: sem filtro nenhum, nada esta fora da tela e a faixa nao aparece (RF-03)', resumo(rt));
+        const rfo = ACf.motivosFora(Df.melhorias, cf, filtros({ sprint: '__fora__' }), H16);
+        // `e` e da S3-11 e do Tipo filtrado: o motivo de sprint vem antes do filtro, porque e o primeiro a escondê-la.
+        ok(resumo(rfo) === 'sprint_futura:S4-11-2026=b outra_sprint:S2-11-2026=c outra_sprint:S3-11-2026=ae',
+           'motivosFora: com "Fora da sprint" escolhido, as tarefas da sprint atual tambem aparecem, como outra sprint', resumo(rfo));
+        const INIf = lerTela('axis-tela-inicio.js');
+        ok(/AC\.motivosFora\(vs, cx, \{ sprint: EST\.sprint, mostrar: EST\.mostrar,/.test(INIf) && /return !visiveis\[id\];/.test(INIf) &&
+           /if \(q === 'fora'\) \{/.test(INIf) && !/no Backlog fora desta sprint/.test(INIf),
+           'o Meu trabalho desenha a faixa com o que o quadro nao mostrou, cada motivo tem o seu gesto, e o rodape antigo do Backlog saiu');
+      }
     }
     const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
     ok(/if \(sprint && \(!EST\.sprintPadrao \|\|[^\n]*\)\) \{\s*EST\.sprintPadrao = true; EST\.sprint = sprint; EST\.sprintAuto = sprint;/.test(INI) &&

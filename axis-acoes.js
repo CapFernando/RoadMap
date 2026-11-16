@@ -724,6 +724,67 @@
     return f === '__fora__' ? SP.foraDaSprint(m) : SP.naSprint(m, f);
   }
 
+  /* "POR QUE NAO ESTOU VENDO?" (PRD RF-01 a RF-03, 16/11/2026). As tarefas no
+     nome do dev que o Meu trabalho NAO esta mostrando, agrupadas pelo motivo.
+     Nasceu de "as tarefas da S3-11 nao aparecem": o filtro escondia, e a tela
+     nao dizia nada — para quem olha, filtrado e sumido eram a mesma coisa.
+
+     `f` = os filtros DA TELA, como funcoes, para esta regra nao ter a sua copia
+     deles: { sprint, mostrar, casaFiltro(m) (tipo, tema e periodo),
+     noMes(m) (a concluida que entra no "Concluido no mes"), colunaDe(m) }.
+
+     Devolve [{ motivo, rotulo, ids }], na ordem em que a tela lista:
+       sprint_futura   aberta numa sprint que ainda nao comecou (rotulo = ela)
+       outra_sprint    aberta numa sprint que ja comecou, nao a escolhida
+       fora_da_sprint  aberta sem sprint, com uma sprint escolhida no filtro
+       filtro          escondida pelo Tipo, Tema ou Periodo
+       mostrar         escondida pelo "Mostrar: so a fila do time"
+       concluida_fora_do_mes  concluida que passaria nos filtros, mas fora do mes
+     A CONCLUIDA SO CONTA NO ULTIMO: centenas de concluidas de sprints passadas
+     estao fora de qualquer sprint escolhida, e lista-las seria ruido — o
+     que importa e a que o dev procura na sprint certa e nao acha. Negada,
+     mesclada e oculta nao contam: nao sao trabalho. */
+  var ORDEM_MOTIVOS = ['sprint_futura', 'outra_sprint', 'fora_da_sprint', 'filtro', 'mostrar', 'concluida_fora_do_mes'];
+  function motivosFora(lista, c, f, hoje) {
+    var SP = mod(c, 'SPRINTPO');
+    var o = f || {};
+    var col = typeof o.colunaDe === 'function' ? o.colunaDe : function (m) { return etapaGravada(m, c); };
+    var casaFiltro = typeof o.casaFiltro === 'function' ? o.casaFiltro : function () { return true; };
+    var noMes = typeof o.noMes === 'function' ? o.noMes : function () { return true; };
+    var feriados = (((c || {}).D || {}).feriados) || [];
+    var futura = function (s) {
+      var fx = SP && SP.faixaDaSprint ? SP.faixaDaSprint(s, feriados) : null;
+      return !!(fx && txt(hoje) && fx.de > txt(hoje));
+    };
+    var grupos = {};
+    var poe = function (motivo, rotulo, m) {
+      var k = motivo + '|' + rotulo;
+      (grupos[k] = grupos[k] || { motivo: motivo, rotulo: rotulo, ids: [] }).ids.push(m.id);
+    };
+    (lista || []).forEach(function (m) {
+      if (!m || !m.id || txt(m.mesclado_em) || m.oculto || !ehMeu(m, c)) return;
+      if (etapaGravada(m, c) === 'negada') return;
+      var mostra = o.mostrar !== 'fila';
+      var naSprint = casaSprintDoPainel(m, c, o.sprint);
+      var noFiltro = casaFiltro(m);
+      if (col(m) === 'concluido') {
+        if (mostra && naSprint && noFiltro && !noMes(m)) poe('concluida_fora_do_mes', '', m);
+        return;
+      }
+      if (!mostra) { poe('mostrar', '', m); return; }
+      if (!naSprint) {
+        var s = SP ? SP.doPO(m) : '';
+        if (!s) poe('fora_da_sprint', '', m);
+        else poe(futura(s) ? 'sprint_futura' : 'outra_sprint', s, m);
+        return;
+      }
+      if (!noFiltro) poe('filtro', '', m);
+    });
+    return Object.keys(grupos).map(function (k) { return grupos[k]; }).sort(function (a, b) {
+      return ORDEM_MOTIVOS.indexOf(a.motivo) - ORDEM_MOTIVOS.indexOf(b.motivo) || (a.rotulo < b.rotulo ? -1 : a.rotulo > b.rotulo ? 1 : 0);
+    });
+  }
+
   /* O ARRASTE DO CARD ENTRE COLUNAS — `kbDrop` (admin.html) e `onDragOver`
      + `onDrop` (dev.html), por perfil. `soltarEm` devolve o que o gesto faz,
      sem gravar:
@@ -1149,7 +1210,7 @@
   };
   Object.assign(REGRAS, REGRAS_DO_DEV);
   Object.assign(api, { SUB: SUB, donoDoCard: donoDoCard, mostraNoPainel: mostraNoPainel, doMeuTime: doMeuTime, timeDeOutro: timeDeOutro,
-                       sprintsDoPainel: sprintsDoPainel, casaSprintDoPainel: casaSprintDoPainel,
+                       sprintsDoPainel: sprintsDoPainel, casaSprintDoPainel: casaSprintDoPainel, motivosFora: motivosFora,
                        devsParaVincular: devsParaVincular, pessoasDaConversa: pessoasDaConversa,
                        sugestoesArroba: sugestoesArroba, escolheArroba: escolheArroba });
   Object.assign(api, { soltarEm: soltarEm, podeSoltar: podeSoltar, arrastavel: arrastavel, COLUNAS_BLOQUEADAS_MSG: COLUNAS_BLOQUEADAS_MSG,
