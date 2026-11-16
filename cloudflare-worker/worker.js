@@ -257,6 +257,7 @@ const LIMITES = {
   'recuperar':      { max: 5,   janela: 60 },
   'usuarios':       { max: 40,  janela: 60 },
   'quem-sou':       { max: 60,  janela: 60 },
+  'espelho-d1':     { max: 30,  janela: 60 },   // admin: status, comparar e a carga em fatias
   // Uma por pagina aberta: a tela pede a lista ao carregar e guarda.
   'colaboradores':  { max: 20,  janela: 60 },
   'demanda-nova':   { max: 20,  janela: 60 },   // abertura por HTTP: 20/min por IP
@@ -1088,7 +1089,200 @@ function textoDaBaseFila(data, fila) {
   if (!HIST_NA_BASE && data && Array.isArray(data.melhorias)) {
     for (const m of data.melhorias) { if (m && 'historico' in m) delete m.historico; }
   }
+  /* O ESPELHO NO D1 (PRD RF-35/36, passo 1) pede o texto de cada demanda.
+     Montado aqui, ele sai DO MESMO stringify do arquivo — nenhuma demanda e
+     serializada duas vezes — e o arquivo fica identico ao de sempre (a
+     invariante compara). Desligado, o caminho e o de antes. */
+  if (fila && fila.espelhoLigado && data && Array.isArray(data.melhorias)) {
+    const r = textoComEspelho(data);
+    fila.espelho = r.espelho;
+    return r.texto;
+  }
   return JSON.stringify(data);
+}
+
+/* ═══ O ESPELHO DA BASE NO D1 (PRD RF-35 e RF-36, passo 1) ═══════════════════
+ *
+ * GRAVACAO DUPLA: o `melhorias.json` segue sendo a fonte; depois de cada
+ * gravacao bem-sucedida, as demandas que mudaram sao copiadas para a tabela
+ * `demanda` (uma linha por demanda, o JSON inteiro em `corpo`) e as chaves de
+ * topo para `base_meta`. Uma comparacao diaria (cron) confere os dois.
+ *
+ * LIGADO POR `ESPELHO_D1=1`. Sem a variavel, nada disto roda: nenhum custo e
+ * nenhuma consulta a mais em gravacao alguma.
+ *
+ * O PLANO E O FREE (10 ms de CPU por requisicao; 50 consultas ao D1 por
+ * requisicao; 100 parametros por consulta). Por isso:
+ *   • o texto de cada demanda sai do stringify que o arquivo ja faz;
+ *   • "mudou?" e o SHA-1 do texto (nativo, `crypto.subtle`) contra o guardado,
+ *     lido numa consulta so (`id, hash`);
+ *   • so o que mudou e gravado, 20 linhas por INSERT (5 parametros cada) e no
+ *     maximo ESPELHO_MAX_LINHAS por requisicao — o resto fica para a proxima
+ *     gravacao, a sincronizacao manual ou o cron, e a comparacao acusa;
+ *   • roda no `waitUntil`, depois da resposta: a tela nao espera o espelho.
+ * Falha no D1 so vai para o log: a gravacao no GitHub ja aconteceu e vale. */
+const ESPELHO_MAX_LINHAS = 200;
+const ESPELHO_LINHAS_POR_INSERT = 20;
+const ESPELHO_MARCA = '__espelho_d1_melhorias__';
+const ESPELHO_META_FORA = ['melhorias'];
+
+function espelhoLigado(env) { return String((env && env.ESPELHO_D1) || '').trim() === '1'; }
+
+/** O texto do arquivo e, de brinde, o de cada demanda e de cada chave de topo.
+ *  A saida e a MESMA de `JSON.stringify(data)`: `melhorias` vira uma marca, o
+ *  resto e serializado normalmente e a marca e trocada pelo array montado a mao
+ *  (troca por funcao, para um `$` no texto nao ser lido como padrao). */
+function textoComEspelho(data) {
+  const ms = data.melhorias;
+  const partes = ms.map(m => { const t = JSON.stringify(m); return t === undefined ? 'null' : t; });
+  data.melhorias = ESPELHO_MARCA;
+  let texto;
+  try { texto = JSON.stringify(data); } finally { data.melhorias = ms; }
+  const arr = '[' + partes.join(',') + ']';
+  const marca = JSON.stringify(ESPELHO_MARCA);
+  const i = texto.indexOf(marca);
+  texto = texto.slice(0, i) + arr + texto.slice(i + marca.length);
+  const demandas = [];
+  ms.forEach((m, k) => { if (m && m.id) demandas.push({ id: String(m.id), codigo: m.codigo == null ? '' : String(m.codigo), corpo: partes[k] }); });
+  const meta = {};
+  Object.keys(data).forEach(k => {
+    if (ESPELHO_META_FORA.indexOf(k) >= 0) return;
+    const t = JSON.stringify(data[k]);
+    if (t !== undefined) meta[k] = t;
+  });
+  return { texto, espelho: { demandas, meta } };
+}
+
+async function espelhoHash(texto) {
+  const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(String(texto)));
+  return [...new Uint8Array(buf)].map(b => (b < 16 ? '0' : '') + b.toString(16)).join('');
+}
+
+let _criouEspelho = false;
+async function espelhoTabelas(db) {
+  if (_criouEspelho) return;
+  await db.batch([
+    db.prepare('CREATE TABLE IF NOT EXISTS demanda (id TEXT PRIMARY KEY, codigo TEXT, corpo TEXT NOT NULL, ' +
+      'hash TEXT NOT NULL, versao INTEGER NOT NULL DEFAULT 1, atualizado_em TEXT NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS base_meta (chave TEXT PRIMARY KEY, corpo TEXT NOT NULL, ' +
+      'hash TEXT NOT NULL, atualizado_em TEXT NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS espelho_execucao (em TEXT NOT NULL, origem TEXT NOT NULL, ' +
+      'diferencas INTEGER NOT NULL, detalhe TEXT NOT NULL)'),
+  ]);
+  _criouEspelho = true;
+}
+
+/** O QUE FALTA NO D1 para ele bater com a base — puro (a suite o executa).
+ *  `base` = { demandas: [{id, hash}], meta: {chave: hash} }; `d1` = as mesmas
+ *  formas lidas do banco. `atualizado_em` muda a cada gravacao e nao conta. */
+function espelhoDiferencas(base, d1) {
+  const naBase = new Map((base.demandas || []).map(x => [x.id, x.hash]));
+  const noD1 = new Map((d1.demandas || []).map(x => [x.id, x.hash]));
+  const faltando = [], diferentes = [], sobrando = [];
+  naBase.forEach((h, id) => { if (!noD1.has(id)) faltando.push(id); else if (noD1.get(id) !== h) diferentes.push(id); });
+  noD1.forEach((_h, id) => { if (!naBase.has(id)) sobrando.push(id); });
+  const meta = [];
+  const bm = base.meta || {}, dm = d1.meta || {};
+  Object.keys(bm).forEach(k => { if (k !== 'atualizado_em' && bm[k] !== dm[k]) meta.push(k); });
+  Object.keys(dm).forEach(k => { if (k !== 'atualizado_em' && !(k in bm)) meta.push(k); });
+  return { faltando, diferentes, sobrando, meta,
+           total: faltando.length + diferentes.length + sobrando.length + meta.length };
+}
+
+async function espelhoLerD1(db) {
+  const r = await db.batch([
+    db.prepare('SELECT id, hash FROM demanda'),
+    db.prepare('SELECT chave, hash FROM base_meta'),
+  ]);
+  const meta = {};
+  ((r[1] && r[1].results) || []).forEach(x => { meta[x.chave] = x.hash; });
+  return { demandas: ((r[0] && r[0].results) || []).map(x => ({ id: x.id, hash: x.hash })), meta };
+}
+
+/** Hash de tudo o que a gravacao (ou a leitura do arquivo) produziu. */
+async function espelhoComHash(espelho) {
+  const demandas = await Promise.all((espelho.demandas || []).map(async d => Object.assign({ hash: await espelhoHash(d.corpo) }, d)));
+  const meta = {}, metaTxt = espelho.meta || {};
+  await Promise.all(Object.keys(metaTxt).map(async k => { meta[k] = await espelhoHash(metaTxt[k]); }));
+  return { demandas, meta, metaTxt };
+}
+
+/** Leva ao D1 o que difere, ate o teto. Devolve o que ficou por fazer. */
+async function espelhoSincroniza(db, espelho, max) {
+  await espelhoTabelas(db);
+  const base = await espelhoComHash(espelho);
+  const dif = espelhoDiferencas(base, await espelhoLerD1(db));
+  const porId = new Map(base.demandas.map(d => [d.id, d]));
+  const teto = max == null ? ESPELHO_MAX_LINHAS : max;
+  const gravar = dif.faltando.concat(dif.diferentes).slice(0, teto).map(id => porId.get(id));
+  const agora = new Date().toISOString();
+  const stmts = [];
+  for (let i = 0; i < gravar.length; i += ESPELHO_LINHAS_POR_INSERT) {
+    const lote = gravar.slice(i, i + ESPELHO_LINHAS_POR_INSERT);
+    stmts.push(db.prepare('INSERT INTO demanda (id, codigo, corpo, hash, atualizado_em) VALUES ' +
+      lote.map(() => '(?, ?, ?, ?, ?)').join(', ') +
+      ' ON CONFLICT(id) DO UPDATE SET codigo = excluded.codigo, corpo = excluded.corpo, hash = excluded.hash, ' +
+      'versao = demanda.versao + 1, atualizado_em = excluded.atualizado_em')
+      .bind(...lote.flatMap(d => [d.id, d.codigo, d.corpo, d.hash, agora])));
+  }
+  const apagar = dif.sobrando.slice(0, 90);
+  if (apagar.length) stmts.push(db.prepare('DELETE FROM demanda WHERE id IN (' + apagar.map(() => '?').join(',') + ')').bind(...apagar));
+  dif.meta.forEach(k => {
+    if (k in base.metaTxt) {
+      stmts.push(db.prepare('INSERT INTO base_meta (chave, corpo, hash, atualizado_em) VALUES (?, ?, ?, ?) ' +
+        'ON CONFLICT(chave) DO UPDATE SET corpo = excluded.corpo, hash = excluded.hash, atualizado_em = excluded.atualizado_em')
+        .bind(k, base.metaTxt[k], base.meta[k], agora));
+    } else stmts.push(db.prepare('DELETE FROM base_meta WHERE chave = ?').bind(k));
+  });
+  if (stmts.length) await db.batch(stmts);
+  const restam = (dif.faltando.length + dif.diferentes.length - gravar.length) + (dif.sobrando.length - apagar.length);
+  return { gravadas: gravar.length, apagadas: apagar.length, meta: dif.meta.length, restam, total: base.demandas.length };
+}
+
+/** Le a base do arquivo e devolve o mesmo formato que a gravacao produz. */
+async function espelhoDaBaseNoArquivo(gh) {
+  const r = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(), { headers: { Accept: 'application/vnd.github.raw' } });
+  if (!r.ok) throw new Error('arquivo: HTTP ' + r.status);
+  const data = JSON.parse(await r.text());
+  if (!data || !Array.isArray(data.melhorias)) throw new Error('arquivo sem melhorias');
+  return textoComEspelho(data).espelho;
+}
+
+/** A COMPARACAO (cron diario e o botao de Configuracoes): grava uma linha em
+ *  `espelho_execucao` com o numero de diferencas e as primeiras de cada tipo. */
+async function espelhoCompara(env, gh, origem) {
+  const db = env.POKER_DB;
+  await espelhoTabelas(db);
+  const base = await espelhoComHash(await espelhoDaBaseNoArquivo(gh));
+  const dif = espelhoDiferencas(base, await espelhoLerD1(db));
+  const detalhe = { demandas: base.demandas.length, faltando: dif.faltando.slice(0, 20), diferentes: dif.diferentes.slice(0, 20),
+                    sobrando: dif.sobrando.slice(0, 20), meta: dif.meta.slice(0, 20),
+                    n: { faltando: dif.faltando.length, diferentes: dif.diferentes.length, sobrando: dif.sobrando.length, meta: dif.meta.length } };
+  const em = new Date().toISOString();
+  await db.batch([
+    db.prepare('INSERT INTO espelho_execucao (em, origem, diferencas, detalhe) VALUES (?, ?, ?, ?)').bind(em, origem, dif.total, JSON.stringify(detalhe)),
+    db.prepare('DELETE FROM espelho_execucao WHERE rowid NOT IN (SELECT rowid FROM espelho_execucao ORDER BY em DESC LIMIT 60)'),
+  ]);
+  console.log(JSON.stringify({ acao: 'espelho-comparar', ok: true, origem, diferencas: dif.total, demandas: base.demandas.length }));
+  return { em, origem, diferencas: dif.total, detalhe };
+}
+
+async function espelhoUltima(db) {
+  try {
+    await espelhoTabelas(db);
+    const r = await db.prepare('SELECT em, origem, diferencas, detalhe FROM espelho_execucao ORDER BY em DESC LIMIT 1').first();
+    if (!r) return null;
+    let detalhe = {}; try { detalhe = JSON.parse(r.detalhe); } catch (_) {}
+    return { em: r.em, origem: r.origem, diferencas: r.diferencas, detalhe };
+  } catch (_) { return null; }
+}
+
+function ghCliente(env) {
+  const nome = env.DATA_REPO || REPO_NAME_PADRAO;
+  return (path, opts = {}) => fetch('https://api.github.com/repos/' + REPO_OWNER + '/' + nome + (path ? '/' + path : ''), {
+    ...opts,
+    headers: { Authorization: 'token ' + env.GH_TOKEN, Accept: 'application/vnd.github.v3+json', 'User-Agent': 'audax-roadmap-worker', ...(opts.headers || {}) },
+  });
 }
 
 /* Junta duas trilhas sem repetir evento: a mesma entrada pode chegar pela copia
@@ -4283,14 +4477,33 @@ export default {
   /* A FILA DO HISTORICO E POR REQUISICAO. As rotas recolhem as entradas novas
      ao gravar (`textoDaBase`); elas so vao para o D1 se a rota terminou bem —
      gravacao recusada ou com conflito nao deixa evento que nao aconteceu. */
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const _histFila = [];
+    _histFila.espelhoLigado = espelhoLigado(env) && !!(env && env.POKER_DB);
     const resp = await rotear(request, env, _histFila);
     if (_histFila.length && resp && resp.status >= 200 && resp.status < 300) {
       try { await guardaHistorico(env, _histFila); }
       catch (e) { console.log('historico: ' + ((e && e.message) || e)); }
     }
+    /* A GRAVACAO DUPLA: so se a rota terminou bem (como o historico) e depois
+       da resposta. Erro aqui nao volta para a tela: a base ja foi gravada. */
+    if (_histFila.espelho && resp && resp.status >= 200 && resp.status < 300) {
+      const t0 = Date.now();
+      const tarefa = espelhoSincroniza(env.POKER_DB, _histFila.espelho)
+        .then(r => console.log(JSON.stringify({ acao: 'espelho-gravar', ok: true, ms: Date.now() - t0, gravadas: r.gravadas, apagadas: r.apagadas, meta: r.meta, restam: r.restam })))
+        .catch(e => console.log(JSON.stringify({ acao: 'espelho-gravar', ok: false, ms: Date.now() - t0, motivo: String((e && e.message) || e) })));
+      if (ctx && ctx.waitUntil) ctx.waitUntil(tarefa); else await tarefa;
+    }
     return resp;
+  },
+
+  /* A COMPARACAO DIARIA (wrangler.toml, [triggers] crons). Desligada junto com
+     o espelho: sem ESPELHO_D1=1 o cron acorda e volta. */
+  async scheduled(event, env, ctx) {
+    if (!espelhoLigado(env) || !env.POKER_DB) return;
+    const tarefa = espelhoCompara(env, ghCliente(env), 'cron')
+      .catch(e => console.log(JSON.stringify({ acao: 'espelho-comparar', ok: false, origem: 'cron', motivo: String((e && e.message) || e) })));
+    if (ctx && ctx.waitUntil) ctx.waitUntil(tarefa); else await tarefa;
   },
 };
 
@@ -7669,8 +7882,45 @@ async function rotear(request, env, _histFila) {
     if (body.action === 'quem-sou') {
       const ident = await identifica(env, body);
       if (!ident) return json({ error: 'credencial' }, 401, headers);
+      /* DIFERENCA NO ESPELHO VIRA AVISO NO SINO DA AREA DE PRODUTO (PRD, Fase 4):
+         a ultima comparacao vai junto so para quem e da area, e so com o
+         espelho ligado — uma consulta curta, sem custo para os demais. */
+      let espelho_dif = 0;
+      if (espelhoLigado(env) && env.POKER_DB && ident.usuario && ident.usuario.area_produto) {
+        const u = await espelhoUltima(env.POKER_DB);
+        espelho_dif = u ? Number(u.diferencas) || 0 : 0;
+      }
       return json({ ok: true, papel: ident.papel, usuario: ident.usuario,
-                    legado: !ident.usuario }, 200, headers);
+                    legado: !ident.usuario, espelho_dif }, 200, headers);
+    }
+
+    /* ═══ O ESPELHO DA BASE NO D1 (PRD RF-35/36, passo 1) — so admin ═══════
+     *   op `status`      → a ultima comparacao e se o espelho esta ligado;
+     *   op `comparar`    → compara agora (o mesmo do cron) e grava o resultado;
+     *   op `sincronizar` → leva ao D1 o que difere, ate o teto por chamada; a
+     *                      tela repete enquanto `restam` > 0 (a carga inicial
+     *                      e esta mesma operacao com o D1 vazio). */
+    if (body.action === 'espelho-d1') {
+      const permE = await exigePapel(env, body, ['admin'], headers);
+      if (permE.recusa) return permE.recusa;
+      const db = env.POKER_DB;
+      if (!db) return json({ error: 'indisponivel', detail: 'O banco D1 não está disponível neste ambiente.' }, 503, headers);
+      const ligado = espelhoLigado(env);
+      const op = String(body.op || 'status');
+      try {
+        if (op === 'status') return json({ ok: true, ligado, ultima: await espelhoUltima(db) }, 200, headers);
+        if (!ligado) return json({ error: 'desligado', detail: 'O espelho no D1 está desligado (variável ESPELHO_D1 do Worker).' }, 409, headers);
+        if (op === 'comparar') return json({ ok: true, ligado, ultima: await espelhoCompara(env, gh, 'manual') }, 200, headers);
+        if (op === 'sincronizar') {
+          const r = await espelhoSincroniza(db, await espelhoDaBaseNoArquivo(gh));
+          console.log(JSON.stringify({ acao: 'espelho-sincronizar', ok: true, gravadas: r.gravadas, apagadas: r.apagadas, restam: r.restam }));
+          return json(Object.assign({ ok: true }, r), 200, headers);
+        }
+        return json({ error: 'op', detail: 'Operação desconhecida.' }, 400, headers);
+      } catch (e) {
+        console.log(JSON.stringify({ acao: 'espelho-d1', ok: false, op, motivo: String((e && e.message) || e) }));
+        return json({ error: 'espelho', detail: 'O espelho no D1 falhou: ' + String((e && e.message) || e).slice(0, 200) }, 502, headers);
+      }
     }
 
     // Gestao de usuarios — so admin.

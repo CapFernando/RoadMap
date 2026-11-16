@@ -30154,6 +30154,69 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a fila roda sozinha e a releitura mantem na tela o que ainda esta na fila');
   }
 
+  /* O ESPELHO DA BASE NO D1 (PRD RF-35/36, tarefa 14): gravacao dupla e a
+     comparacao diaria. O arquivo tem de sair IDENTICO, ligado ou nao. */
+  sec('Worker: espelho da base no D1 (gravacao dupla e comparacao)');
+  {
+    const pre = "const ESPELHO_MARCA = '__espelho_d1_melhorias__'; const ESPELHO_META_FORA = ['melhorias']; const HIST_NA_BASE = false;\n";
+    const fT = corpo(W, 'function textoComEspelho(data) {');
+    const fF = corpo(W, 'function textoDaBaseFila(data, fila) {');
+    const fD = corpo(W, 'function espelhoDiferencas(base, d1) {');
+    ok(!!fT && !!fF && !!fD, 'o worker tem o texto com espelho, o gancho da gravacao e a comparacao');
+    if (fT && fF) {
+      const [txtEsp, txtFila] = new Function(pre + fT + '\n' + fF + '\nreturn [textoComEspelho, textoDaBaseFila];')();
+      const base = () => ({
+        atualizado_em: '2026-11-16T10:00:00Z', temas: [{ id: 't1', nome: 'A $& $1 "x"' }],
+        melhorias: [{ id: 'a', codigo: 'AX-1', titulo: 'preço $$ e \\ barra', historico: [{ em: 'x' }], n: 1.5, z: null },
+                    { id: 'b', codigo: 'AX-2', titulo: '__espelho_d1_melhorias__', desc: 'linha\nnova' }, null, { titulo: 'sem id' }],
+        sprints: [], feriados: ['2026-11-20'], devs_perfil: { Ana: { axcred: true } }
+      });
+      const b1 = base(), b2 = base();
+      const fila = []; fila.espelhoLigado = true;
+      const tLig = txtFila(b1, fila), tDes = txtFila(b2, []);
+      ok(tLig === tDes, 'ligado ou desligado, o arquivo sai identico (inclusive com $, aspas, barra e a propria marca no texto)');
+      ok(JSON.stringify(JSON.parse(tLig)) === tLig && !('historico' in JSON.parse(tLig).melhorias[0]), 'e e o JSON de sempre, sem o historico dentro da demanda');
+      const e = fila.espelho;
+      ok(e && e.demandas.length === 2 && e.demandas.map((d) => d.id).join() === 'a,b', 'o espelho leva so as demandas com id', e && e.demandas.map((d) => d.id).join());
+      ok(e && e.demandas[0].corpo === JSON.stringify(JSON.parse(tLig).melhorias[0]) && e.demandas[0].codigo === 'AX-1', 'o corpo de cada demanda e exatamente o trecho dela no arquivo');
+      ok(e && Object.keys(e.meta).sort().join() === 'atualizado_em,devs_perfil,feriados,sprints,temas' && e.meta.temas === JSON.stringify(b1.temas),
+         'as chaves de topo (menos melhorias) vao para base_meta', e && Object.keys(e.meta).join());
+      const f2 = []; txtFila(base(), f2);
+      ok(!f2.espelho, 'desligado, a gravacao nao monta espelho nenhum');
+      ok(Array.isArray(b1.melhorias) && b1.melhorias.length === 4, 'a base volta intacta depois de montar o texto');
+    }
+    if (fD) {
+      const dif = new Function(fD + '\nreturn espelhoDiferencas;')();
+      const zero = dif({ demandas: [{ id: 'a', hash: '1' }, { id: 'b', hash: '2' }], meta: { temas: 'x', atualizado_em: 'q' } },
+                       { demandas: [{ id: 'b', hash: '2' }, { id: 'a', hash: '1' }], meta: { temas: 'x', atualizado_em: 'OUTRO' } });
+      ok(zero.total === 0, 'iguais (em outra ordem, e com atualizado_em diferente) = zero diferencas', JSON.stringify(zero));
+      const r = dif({ demandas: [{ id: 'a', hash: '1' }, { id: 'b', hash: '2' }, { id: 'c', hash: '3' }], meta: { temas: 'x', sprints: 's' } },
+                    { demandas: [{ id: 'a', hash: '1' }, { id: 'b', hash: 'velho' }, { id: 'z', hash: '9' }], meta: { temas: 'y', feriados: 'f' } });
+      ok(r.faltando.join() === 'c' && r.diferentes.join() === 'b' && r.sobrando.join() === 'z' && r.meta.sort().join() === 'feriados,sprints,temas' && r.total === 6,
+         'acusa a que falta, a diferente, a que sobra e cada chave de topo', JSON.stringify(r));
+    }
+    const fFetch = corpo(W, 'async fetch(request, env, ctx) {') || '';
+    ok(fFetch.includes("_histFila.espelhoLigado = espelhoLigado(env) && !!(env && env.POKER_DB);") &&
+       fFetch.includes('if (_histFila.espelho && resp && resp.status >= 200 && resp.status < 300)') && fFetch.includes('ctx.waitUntil(tarefa)'),
+       'a copia so acontece se a gravacao deu certo, e depois da resposta (waitUntil)');
+    ok(/\.catch\(e => console\.log\(JSON\.stringify\(\{ acao: 'espelho-gravar', ok: false/.test(fFetch), 'falha no D1 so vai para o log: nao derruba a resposta da gravacao');
+    const fSch = corpo(W, 'async scheduled(event, env, ctx) {') || '';
+    ok(fSch.startsWith('\n    if (!espelhoLigado(env) || !env.POKER_DB) return;') || fSch.includes('if (!espelhoLigado(env) || !env.POKER_DB) return;'), 'o cron so trabalha com ESPELHO_D1=1');
+    ok(/function espelhoLigado\(env\) \{ return String\(\(env && env\.ESPELHO_D1\) \|\| ''\)\.trim\(\) === '1'; \}/.test(W), 'ligado e exatamente ESPELHO_D1=1');
+    const LPI = +((W.match(/const ESPELHO_LINHAS_POR_INSERT = (\d+);/) || [])[1]), MAX = +((W.match(/const ESPELHO_MAX_LINHAS = (\d+);/) || [])[1]);
+    ok(LPI * 5 <= 100 && Math.ceil(MAX / LPI) + 1 + 2 <= 40, 'cada INSERT cabe nos 100 parametros do D1 e a chamada fica longe das 50 consultas do plano Free', LPI + ' por insert, ' + MAX + ' por chamada');
+    const WT = fs.readFileSync('cloudflare-worker/wrangler.toml', 'utf8');
+    ok(/\[triggers\]\s*\ncrons = \["0 9 \* \* \*"\]/.test(WT), 'o wrangler.toml declara o cron diario');
+    const fQ = corpo(W, "if (body.action === 'quem-sou') {") || '';
+    ok(fQ.includes('espelhoLigado(env) && env.POKER_DB && ident.usuario && ident.usuario.area_produto'), 'a diferenca so vai no quem-sou da area de produto, com o espelho ligado');
+    const fE = corpo(W, "if (body.action === 'espelho-d1') {") || '';
+    ok(fE.includes("exigePapel(env, body, ['admin'], headers)") && fE.includes("if (!ligado) return json({ error: 'desligado'"), 'comparar e sincronizar sao so do admin, e so com o espelho ligado');
+    const INT = fs.readFileSync('axis-interface.js', 'utf8');
+    ok(INT.includes('e.espelho_dif = Number(j.espelho_dif) || 0;'), 'o app guarda o numero na sessao, como as outras marcas da conta');
+    const AXA2 = fs.readFileSync('axis-app.js', 'utf8');
+    ok(AXA2.includes("entre o arquivo de demandas e o banco (D1)") && AXA2.includes("'#configuracoes/espelho'"), 'diferenca vira aviso no sino, levando a Configuracoes');
+  }
+
   Promise.all(pendentes).then(() => {
     console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
     process.exit(falhas ? 1 : 0);
