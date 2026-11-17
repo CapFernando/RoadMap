@@ -35,8 +35,8 @@
       '.axa .ct-num{width:100%;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px}',
       '.axa .ct-num .k{padding:10px;align-items:center}',
       '.axa .ct-num b{font-size:18px}',
-      '.axa .ct-pref{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;padding:4px 0}',
-      '.axa .ct-pref>span:first-child{display:flex;flex-direction:column;gap:2px;min-width:0}',
+      '.axa .ct-pref{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 12px;font-size:13px;padding:4px 0}',
+      '.axa .ct-pref>span:first-child{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 200px}',
       '.axa .ct-pref .v{height:32px;white-space:nowrap}',
       '.axa .ct-pref .nd{font-size:12px;color:var(--tx4);white-space:nowrap}',
       '.axa .ct-pre{margin:0;padding:14px;border-radius:12px;background:var(--side);border:1px solid var(--bd);font-size:11.5px;line-height:18px;color:var(--tx2);white-space:pre-wrap;word-break:break-all}',
@@ -134,7 +134,7 @@
       '<pre class="mono ct-pre">' + H.esc(exemplo) + '</pre>' +
       '</section>';
 
-    return '<header style="display:flex;flex-direction:column;gap:6px"><h1 class="h1">Minha conta</h1>' +
+    return '<header style="display:flex;flex-direction:column;flex-wrap:nowrap;gap:6px"><h1 class="h1">Minha conta</h1>' +
       '<span class="sub">Login e senha são os do RoadMap. Aqui ficam seus dados, a troca de senha e a preferência de tema.</span></header>' +
       '<div class="ct-grid">' + cartao + '<div style="display:flex;flex-direction:column;gap:16px;min-width:0">' + prefs + api + '</div></div>';
   }
@@ -159,7 +159,7 @@
     var atual = nomesDem[0] || '';
     var lista = nomesDaBase(ctx.D || {});
     if (atual && lista.indexOf(atual) < 0) lista.unshift(atual);
-    return '<span class="row" style="gap:6px;flex-wrap:wrap">' +
+    return '<span class="row" style="gap:8px;flex-wrap:wrap">' +
       '<select class="in" id="ct-nome" style="height:32px" aria-label="Nome nas demandas">' + opcoesNome(lista, atual) + '</select>' +
       '<button type="button" class="btns" data-ct="nome">Salvar</button></span>';
   }

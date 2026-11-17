@@ -1395,12 +1395,12 @@
         '<h1 class="h1">Resumo de ' + esc(H.dataLonga(s.dia)) + '</h1>' +
         '<span class="sub">' + (s.facil.length ? 'quem fechou: ' + esc(s.facil.join(', ')) + ' · ' : '') + H.plural(s.pessoas.length, 'participante', 'participantes') + '. Os pontos já estão gravados nos itens.</span></div>' +
         '<div class="row"><button type="button" class="btn" data-pk="copiar-resumo" data-dia="' + s.dia + '">Copiar resumo</button>' + (H.pode('trabalho') ? '<a href="#sprints/planning" class="btnp">Levar para a planning</a>' : '') + '</div></header>' +
-      '<div class="row" style="gap:6px;flex-wrap:wrap">' + dias + '</div>' +
+      '<div class="row" style="gap:8px;flex-wrap:wrap">' + dias + '</div>' +
       '<div class="pk-k5">' + H.kpi('Itens pontuados', s.itens.length) + H.kpi('Pontos', '<span style="color:var(--ac-t)">' + s.pontos + '</span>') +
         H.kpi('Unânimes', '<span style="color:var(--ok-t)">' + s.unanimes + '</span>', s.divergentes ? s.divergentes + ' divergentes' : '') +
         H.kpi('Negadas no dia', '<span style="color:var(--wn-t)">' + neg.length + '</span>', neg.length ? esc(neg.map(function (m) { return m.codigo; }).join(', ')) + ' (sala ou Admin)' : 'na sala ou no Admin') +
         H.kpi('Tempo médio por item', media ? media + ' min' : '—', 'entre uma gravação e a outra') + '</div>' +
-      '<section class="pn" style="overflow-x:auto"><table class="tbl"><thead><tr><th>ITEM</th><th>VOTOS</th><th>DIVERGÊNCIA</th><th>RESULTADO</th><th>DECISÃO</th><th>ETAPA HOJE</th></tr></thead><tbody>' + linhas + '</tbody></table></section>';
+      '<section class="pn" style="overflow-x:auto"><table class="tbl pk-res"><thead><tr><th>ITEM</th><th>VOTOS</th><th>DIVERGÊNCIA</th><th>RESULTADO</th><th>DECISÃO</th><th>ETAPA HOJE</th></tr></thead><tbody>' + linhas + '</tbody></table></section>';
   }
 
   function textoResumo(dia) {
@@ -1417,6 +1417,8 @@
     st.id = 'css-tela-poker';
     st.textContent = [
       '.axa .pk-hd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px}',
+      // Resumo da votacao: votos e decisao numa linha so; a secao ja rola de lado (16/11/2026).
+      '.axa .pk-res td.mono,.axa .pk-res td.note{white-space:nowrap}',
       '.axa .pk-2{display:grid;gap:16px;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:start}',
       '.axa .pk-g{display:grid;gap:18px;grid-template-columns:minmax(0,1fr) 300px;align-items:start}',
       '.axa .pk-k3{display:grid;gap:10px;grid-template-columns:repeat(3,minmax(0,1fr))}',

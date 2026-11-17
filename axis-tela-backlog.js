@@ -58,6 +58,12 @@
       '.axa .bk-fil .in{height:38px;border-radius:10px;background:var(--sf);font-size:12.5px}',
       '.axa .bk-fil input.in{flex:1 1 280px;min-width:0;font-size:13px}',
       '.axa .bk-fil select.in{max-width:260px}',
+      // A seta do select do app, que o `background` da linha .bk-fil .in apagava (16/11/2026).
+      '.axa .bk-fil select.in{background-image:linear-gradient(45deg,transparent 50%,var(--tx3) 50%),linear-gradient(135deg,var(--tx3) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:30px}',
+      /* FILTROS NO PADRAO DO QUADRO (16/11/2026): no computador, grade de colunas iguais, 40px e 12px entre caixas. */
+      '@container app (min-width: 761px){.axa .bk-fil{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;grid-auto-flow:row dense}' +
+        '.axa .bk-fil input.in{grid-column:span 2;height:40px}.axa .bk-fil select.in{width:100%;max-width:none;height:40px}' +
+        '.axa .bk-fil .fsp{display:flex;width:100%}.axa .bk-fil .fsp .fsp-btn.in{min-width:0;max-width:none;width:100%;height:40px}.axa .bk-fil>.btns,.axa .bk-fil>button{height:40px;justify-content:center}}',
       '.axa .bk-tab{min-width:980px;display:flex;flex-direction:column;gap:14px}',
       '.axa .bk-cols,.axa .bk-ln{display:grid;grid-template-columns:84px minmax(0,1fr) 104px 168px 62px 58px 60px 104px;gap:12px;align-items:center}',
       '.axa .bk-cols{padding:0 16px;font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--tx3)}',
@@ -86,6 +92,8 @@
       // As marcas da linha (no ar, vinculos, soma) e a previa da descricao (`renderMelhorias`, admin.html).
       '.axa .bk-ln .bk-mk{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}',
       '.axa .bk-ln .bk-mk .chip{height:20px;padding:0 7px;font-size:11px;gap:4px}',
+      // Chip mais largo que a coluna: uma linha, corta com reticencias (16/11/2026).
+      '.axa .bk-ln .bk-mk .chip{display:block;max-width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:20px}.axa .bk-ln .bk-mk .chip i{margin-right:4px;vertical-align:-1px}',
       '.axa .bk-ln .bk-ds{font-size:12px;line-height:17px;color:var(--tx3);margin-top:3px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}',
       '.axa .bk-mais{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 16px;font-size:12.5px;color:var(--tx3)}',
       '.axa .bk-vl{padding:11px 13px;border-radius:12px;display:flex;flex-direction:column;gap:4px;background:var(--sf2);border:1px solid var(--bd);text-decoration:none;color:var(--tx)}',

@@ -68,13 +68,18 @@
       '.axa .ini-hd .h1{font-size:30px;line-height:36px}',
       '.axa .ini-data{font-size:13px;color:var(--tx3)}',
       '.axa .ini-busca{width:260px;cursor:pointer;color:var(--tx4);background:var(--sf);text-align:left}',
-      '.axa .ini-kg{display:grid;gap:14px;grid-template-columns:repeat(5,minmax(0,1fr))}',
-      '.axa .ini-kg.seis{grid-template-columns:repeat(5,minmax(0,1fr)) minmax(0,1.6fr)}',
+      // Indicadores com largura minima de 150px: em tela media eram seis colunas e o rotulo quebrava palavra por palavra (16/11/2026).
+      '.axa .ini-kg{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}',
+      '.axa .ini-kg.seis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}',
       '.axa .ini-kg .k{border-radius:16px;gap:6px;text-decoration:none;color:inherit}',
       '.axa .ini-kg .kn{font-size:12px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.axa .ini-kg .kv small{font-size:15px;color:var(--tx3);font-weight:700}',
       '.axa .ini-dois{display:grid;gap:20px;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);align-items:start}',
       '.axa .ini-sec{padding:20px;border-radius:18px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd);display:flex;flex-direction:column;gap:10px;min-width:0}',
+      /* A LINHA DO ITEM OLHA A LARGURA DA SECAO (16/11/2026): ao lado do painel da direita a secao fica
+         estreita mesmo em tela grande, e as colunas fixas espremiam o titulo a zero. */
+      '.axa .ini-sec{container-type:inline-size}',
+      '@container (max-width: 560px){.axa .ini-it{grid-template-columns:62px minmax(0,1fr) !important;row-gap:6px !important}.axa .ini-it .st{grid-column:2}.axa .ini-it .pz{grid-column:2;text-align:left !important}}',
       '.axa .ini-sec>.cab{display:flex;justify-content:space-between;align-items:center;gap:10px}',
       '.axa .ini-sec h2{margin:0;font-family:var(--font-title);font-size:18px;font-weight:700}',
       '.axa .ini-sec .cab a{font-size:13px;text-decoration:none}',
@@ -120,6 +125,13 @@
         '.axa .ini-qd .qd-col.vazia.trava .qd-trava{display:none}}',
       '.axa button.k{font:inherit;text-align:left;color:inherit;cursor:pointer;width:100%}',
       '.axa .ini-fil{display:flex;flex-wrap:wrap;gap:10px;align-items:center}',
+      /* FILTROS NO PADRAO DO QUADRO (16/11/2026): grade de colunas iguais, nome dentro da caixa, 40px e 12px
+         entre caixas. O Periodo leva ano e mes lado a lado na mesma celula, que ocupa duas colunas. */
+      '@container app (min-width: 761px){.axa .ini-fil{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-items:stretch;grid-auto-flow:row dense;flex:1 1 100%;width:100%;box-sizing:border-box}' +
+        '.axa .ini-fil .qd-par{position:relative;display:block;min-width:0}.axa .ini-fil .qd-par:has(select + select){display:grid;grid-template-columns:1fr 1fr;gap:8px;grid-column:span 2}' +
+        '.axa .ini-fil .qd-par>label{position:absolute;left:13px;top:5px;z-index:1;font-size:10px;line-height:12px;letter-spacing:.03em;pointer-events:none}' +
+        '.axa .ini-fil .qd-sel,.axa .ini-fil select.in{width:100%;max-width:none;height:40px !important;padding-top:13px}' +
+        '.axa .ini-fil .fsp{display:flex;width:100%}.axa .ini-fil .fsp .fsp-btn.in{min-width:0;max-width:none;width:100%}.axa .ini-fil>.btnp,.axa .ini-fil>.btns,.axa .ini-fil>button{height:40px;justify-content:center}}',
       // A faixa do prazo vencido (`risco-dev`, dev.html): quantas, quais (cada uma abre), e as escondidas pelo filtro.
       '.axa .ini-risco{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:10px 14px;border-radius:12px;background:rgba(var(--dg-rgb),.1);border:1px solid rgba(var(--dg-rgb),.35);color:var(--dg-t);font-size:13px;line-height:20px}',
       '.axa .ini-risco:focus{outline:2px solid rgba(var(--dg-rgb),.6);outline-offset:2px}',
