@@ -11227,8 +11227,15 @@ ok(/<script src="busca-demanda\.js\?v=/.test(DEV),
 /* VER E ABERTO; GRAVAR CONTINUA EXIGINDO POSSE. Esta e a fronteira que nao pode
    mudar de lugar sem alguem perceber: consultar solto e util, gravar solto e uma
    pessoa mexendo na demanda da outra. */
-ok(/if \(!ehAdm && !meuDono\(alvo\)\)/.test(WC),
-   'atualizar/entregar continuam recusando o que nao e seu (403 nao_sua)');
+ok(/if \(!ehAdm && !meuDono\(alvo\) && !soLivre\)/.test(WC) &&
+   /const soLivre = contaSalesOpsLivre\(ident\) && alvo\.dados_bi !== true;/.test(WC),
+   'atualizar/entregar continuam recusando o que nao e seu (403 nao_sua) — salvo a conta liberada do Sales Ops, fora de Dados/BI (17/11/2026)');
+{
+  /* A LIBERACAO DA API SEGUE A MARCA DA CONTA (17/11/2026). */
+  const WF = require('fs').readFileSync(__dirname + '/cloudflare-worker/worker.js', 'utf8');
+  ok(WF.includes('function contaSalesOpsLivre(ident) {') && WF.includes('return SALES_OPS_SEM_TRAVA && contaKanbanLivre(ident);'),
+     'pela API a liberacao do Kanban segue a marca kanban_livre da conta, a mesma da tela');
+}
 ok(!/demanda-consultar[\s\S]{0,400}?nao_sua/.test(WC),
    'e consultar NAO exige posse — e deliberado');
 
@@ -21353,7 +21360,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!/body\.dev == null/.test(rota) && !/!body\.dev\b/.test(rota),
        'e OMITIR o campo continua herdando a conta — so `null` significa sem dono');
     // Desde 02/11/2026 quem nao e dono da sprint tambem so abre no Backlog.
-    ok(/const sp = \(semDono \|\| !donoNova\) \? 'backlog' : spPedido;/.test(rota),
+    ok(/const sp = \(semDono \|\| !\(donoNova \|\| contaSalesOpsLivre\(perm\.ident\)\)\) \? 'backlog' : spPedido;/.test(rota),
        'sem dono (ou aberta por quem nao e dono da sprint) a demanda nasce em Backlog, e nao e movida em silencio depois');
 
     /* ── Os tres bloqueados, EXECUTADOS ──────────────────────────────────
@@ -25017,7 +25024,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'o publish (Admin e Gantt) passa pelo dono, inclusive iniciar e fechar sprint');
       ok(/const _donoDev = ehDonoDaSprint\(_ident\);/.test(WKS) && /nascendoForaDoBacklog\(data, antesDev\)/.test(WKS),
          'o painel do dev tambem');
-      ok(/const sp = \(semDono \|\| !donoNova\) \? 'backlog' : spPedido;/.test(WKS),
+      ok(/const sp = \(semDono \|\| !\(donoNova \|\| contaSalesOpsLivre\(perm\.ident\)\)\) \? 'backlog' : spPedido;/.test(WKS),
          'e a API de criacao abre no Backlog para quem nao e dono');
       ok(SP.ehDonoDaSprint({ papel: 'admin', login: 'fernando', area_produto: true }) && !SP.ehDonoDaSprint({ papel: 'admin', login: 'joao.siqueira' }) &&
          /SPRINTPO\.ehDonoDaSprint\(_eu\)/.test(ADMIN) && /SPRINTPO\.ehDonoDaSprint\(/.test(GANTT) &&

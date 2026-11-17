@@ -2872,6 +2872,17 @@ function contaKanbanLivre(ident) {
 function demandaSalesOpsLivre(m) {
   return !!m && m.dados_bi !== true;
 }
+/* A MESMA LIBERACAO NA API (17/11/2026): "Mesma possibilidade de movimentacao
+ * do Kanban em tela deve ser permitido movimentar via endpoint" — o Rikelme nao
+ * conseguia pela API. A conta liberada (papel dev) mexe em qualquer demanda que
+ * nao seja Dados/BI, como no Kanban (axis-acoes.js, `salesOpsLivre`). */
+function contaSalesOpsLivre(ident) {
+  // A marca da conta (`kanban_livre`, 16/11/2026), a mesma do painel do dev.
+  return SALES_OPS_SEM_TRAVA && contaKanbanLivre(ident);
+}
+const ETAPAS_SALES_OPS_API = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento',
+                              'validacao_area', 'validacao', 'concluido'];
+
 function salesOpsForaDasTravas(data, servidor, ident) {
   if (!SALES_OPS_SEM_TRAVA || !contaKanbanLivre(ident) || !data || !Array.isArray(data.melhorias)) return data;
   const antes = new Map(((servidor && servidor.melhorias) || []).map(v => [v && v.id, v]));
@@ -6332,7 +6343,8 @@ async function rotear(request, env, _histFila) {
         return json({ error: 'nao_encontrada',
                       detail: 'Informe "codigo" (ex.: AX-042) ou "id" de uma demanda existente.' }, 404, headers);
       }
-      if (!ehAdm && !meuDono(alvo)) {
+      const soLivre = contaSalesOpsLivre(ident) && alvo.dados_bi !== true;
+      if (!ehAdm && !meuDono(alvo) && !soLivre) {
         return json({ error: 'nao_sua',
                       detail: 'Esta demanda esta com ' + (alvo.dev || 'outra pessoa') +
                               '. Pela API voce altera apenas as suas.' }, 403, headers);
@@ -6384,7 +6396,7 @@ async function rotear(request, env, _histFila) {
         return json({ error: 'em_validacao',
                       detail: 'Demanda ja esta aguardando validacao do PM/PO.' }, 409, headers);
       }
-      if (emValidacao && (typeof body.etapa === 'string' && body.etapa.trim())) {
+      if (emValidacao && !soLivre && (typeof body.etapa === 'string' && body.etapa.trim())) {
         return json({ error: 'em_validacao',
                       detail: 'Demanda com o PM/PO: a etapa nao muda por aqui. Corrija o texto e as ' +
                               'horas se precisar; para mudar de etapa, peca ao PM/PO para devolver.' }, 409, headers);
@@ -6493,7 +6505,41 @@ async function rotear(request, env, _histFila) {
           }
           m.horas_realizadas = h; mudou.push('horas_realizadas');
         }
+        /* A SPRINT PELA API, so para a conta liberada (17/11/2026): no Kanban e no
+           formulario ela ja escolhe a sprint. "" tira da sprint. Sprint fechada
+           nao recebe nem perde demanda. */
+        if (soLivre && typeof body.sprint_po === 'string') {
+          const nova = body.sprint_po.trim();
+          const fechadas = new Set(((atual.sprints) || []).filter(x => x && x.em && x.rotulo).map(x => String(x.rotulo)));
+          if (nova && !/^S[1-5]-(0[1-9]|1[0-2])-\d{4}$/.test(nova)) {
+            return json({ error: 'sprint_po', detail: 'Sprint invalida. O formato e S1-11-2026.' }, 400, headers);
+          }
+          if ((nova && fechadas.has(nova)) || (m.sprint_po && fechadas.has(String(m.sprint_po)) && nova !== m.sprint_po)) {
+            return json({ error: 'sprint_fechada', detail: 'Sprint fechada nao recebe nem perde demanda.' }, 409, headers);
+          }
+          if (nova !== String(m.sprint_po || '')) {
+            const quemSp = (ident.usuario && (ident.usuario.nome_demandas || ident.usuario.nome)) || eu || 'API';
+            m.sprint_po = nova; m.sprint_po_em = hojeBR(); m.sprint_po_por = quemSp;
+            if (!Array.isArray(m.sprint_po_historico)) m.sprint_po_historico = [];
+            m.sprint_po_historico.push(nova ? { sprint: nova, em: hojeBR(), por: quemSp } : { sprint: '', em: hojeBR(), por: quemSp, motivo: 'retirada pela API' });
+            mudou.push('sprint_po');
+          }
+        }
         if (typeof body.etapa === 'string' && body.etapa.trim()) {
+          const e = body.etapa.trim();
+          if (soLivre && ETAPAS_SALES_OPS_API.includes(e)) {
+            if (['validacao_area', 'validacao', 'concluido'].includes(e) && faltaHoras(m)) {
+              return json({ error: 'horas_realizadas',
+                            detail: 'Para ir a ' + e + ' informe as horas trabalhadas (horas_realizadas maior que zero) nesta mesma chamada.' }, 400, headers);
+            }
+            if (['validacao_area', 'validacao'].includes(e) && !m.entregue_em) m.entregue_em = new Date().toISOString();
+            if (e === 'concluido' && !m.concluido_em) { m.concluido_em = hojeBR(); m.status = 'concluida'; }
+            m.status_planejamento = e; mudou.push('etapa');
+          } else if (soLivre) {
+            return json({ error: 'etapa', detail: 'Etapa invalida. Negar e do PM/PO.', aceitas: ETAPAS_SALES_OPS_API }, 400, headers);
+          }
+        }
+        if (!soLivre && typeof body.etapa === 'string' && body.etapa.trim()) {
           const e = body.etapa.trim();
           if (!ETAPAS_DEV.includes(e)) {
             return json({ error: 'etapa',
@@ -7585,7 +7631,8 @@ async function rotear(request, env, _histFila) {
       /* QUEM NAO E DONO DA SPRINT ABRE NO BACKLOG (02/11/2026), mesmo pedindo
          outra etapa — e sem `inicio`, que no backlog viraria "em andamento". */
       const donoNova = ehDonoDaSprint(perm.ident);
-      const sp = (semDono || !donoNova) ? 'backlog' : spPedido;
+      // Conta liberada do Sales Ops escolhe a etapa inicial, como no formulario (17/11/2026).
+      const sp = (semDono || !(donoNova || contaSalesOpsLivre(perm.ident))) ? 'backlog' : spPedido;
       const agora = new Date().toISOString();
       const nova = {
         id: 'ep-' + Date.now().toString(36) + '-' + crypto.randomUUID().slice(0, 6),
