@@ -1250,6 +1250,14 @@
     var quemPediu = txt((a || {}).solicitante);
     if (!quemPediu && txt(c.papel) !== 'admin') return falha('Escreva o nome de quem pediu: é quem homologa a entrega.', 'solicitante');
     if (quemPediu === txt(m.solicitante)) return falha('É o mesmo solicitante de antes.', 'solicitante');
+    // O nome sai do cadastro (Configuracoes › Solicitantes): pessoa ativa, gravada pelo nome oficial.
+    var SO = mod(c, 'SOLICITANTES');
+    if (SO && quemPediu) {
+      var vs = SO.valida(quemPediu, null, ((c && c.D) || {}).solicitantes);
+      if (!vs.ok) return falha(vs.erro, 'solicitante');
+      quemPediu = vs.nome;
+      if (quemPediu === txt(m.solicitante)) return falha('É o mesmo solicitante de antes.', 'solicitante');
+    }
     var CO = mod(c, 'COLABORADORES');
     return { ok: true, patch: { solicitante: quemPediu, solicitante_email: CO ? CO.emailPara(quemPediu, m) : txt(m.solicitante_email) },
              msg: quemPediu ? 'Solicitante: ' + quemPediu + '.' : 'Solicitante apagado.' };

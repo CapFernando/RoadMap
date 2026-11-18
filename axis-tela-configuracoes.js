@@ -233,7 +233,8 @@
     ] },
     { grp: 'CADASTROS', itens: [
       { id: 'pessoas', rotulo: 'Pessoas e perfis', real: true },
-      { id: 'catalogo', rotulo: 'Catálogo de sistemas', real: true }
+      { id: 'catalogo', rotulo: 'Catálogo de sistemas', real: true },
+      { id: 'solicitantes', rotulo: 'Solicitantes', real: true }
     ] },
     { grp: 'INTEGRAÇÕES', itens: [
       // A secao e uma tela propria (axis-tela-api.js): o item leva ate ela.
@@ -299,6 +300,10 @@
          borda transparente com margem negativa: o desenho fica. */
       '@container app (max-width: 760px){' +
       '.axa .cfg-pes-tb tr{grid-template-columns:minmax(0,1fr) auto !important;padding:10px 12px !important;margin-bottom:8px}' +
+      // Solicitantes: cada linha vira um cartao (nome, area e demandas; os botoes a direita; os apelidos ficam no Editar).
+      '.axa .cfg-sol-tb thead{display:none}.axa .cfg-sol-tb tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:10px 4px;border-bottom:1px solid var(--bd)}' +
+      '.axa .cfg-sol-tb td{display:block;padding:0 !important;border:0 !important}.axa .cfg-sol-tb td[data-tc="Também escrito"]{display:none}' +
+      '.axa .cfg-sol-tb td[data-tc="topo-fim"]{grid-column:2;grid-row:1 / span 3;align-self:center}.axa .cfg-sol-tb td[data-tc="Demandas"]::before{content:"Demandas: ";font-family:inherit;color:var(--tx3)}' +
       '.axa .cfg-pes-tb tr.on{border-color:rgba(var(--ac-rgb),.55)}' +
       '.axa .cfg-pes-tb [data-tc="topo-fim"] > .row{justify-content:flex-end}' +
       '.axa .cfg-papeis{grid-template-columns:repeat(2,minmax(0,1fr)) !important}.axa .cfg-papel{height:44px !important}' +
@@ -1546,6 +1551,175 @@
   }
 
   // ════════════════════════════════════════════════════════════════════════
+  // SOLICITANTES — o cadastro de quem pede demanda (solicitantes.js, 18/11/2026)
+  // ════════════════════════════════════════════════════════════════════════
+  /* A lista mora na base, chave do topo `solicitantes`. Cada gravacao daqui
+     tambem passa as demandas para o nome oficial (o de-para), na MESMA
+     publicacao: cadastro e demandas nunca ficam um sem o outro. */
+  var solEst = { busca: '', filtro: 'ativos', pendTodos: false };
+  function SOLM() { return raiz.SOLICITANTES || null; }
+
+  /** As demandas da base com o nome oficial do cadastro `cad`: { melhorias, n }. */
+  function comNomeOficial(base, cad) {
+    var SO = SOLM(), CO = raiz.COLABORADORES;
+    var muda = {};
+    SO.migracao(base.melhorias || [], cad).forEach(function (x) { muda[x.id] = x.para; });
+    var n = 0;
+    var ms = (base.melhorias || []).map(function (m) {
+      if (!m || !muda[m.id]) return m;
+      n++;
+      var c = Object.assign({}, m, { solicitante: muda[m.id] });
+      if (!c.solicitante_email && CO) c.solicitante_email = CO.emailPara(c.solicitante, {}) || '';
+      return c;
+    });
+    return { melhorias: ms, n: n };
+  }
+  /** Grava o cadastro que `fn(base.solicitantes)` devolve, e as demandas junto. */
+  function gravaSolicitantes(fn, msg) {
+    return gravaRaiz(function (base) {
+      var r = fn(base.solicitantes || []);
+      if (!r || !r.ok) return r;
+      var d = comNomeOficial(base, r.lista);
+      r.raiz = { solicitantes: r.lista };
+      if (d.n) r.raiz.melhorias = d.melhorias;
+      r.demandas = d.n;
+      return r;
+    }, function (r) { return (typeof msg === 'function' ? msg(r) : msg) + (r.demandas ? ' ' + H.plural(r.demandas, 'demanda passou', 'demandas passaram') + ' para o nome oficial.' : ''); });
+  }
+
+  function linhasSolicitantes(D) {
+    var SO = SOLM(), cad = D.solicitantes || [], edita = H.pode('configurar');
+    var cont = SO.contagem(D.melhorias || [], cad);
+    var q = norm(solEst.busca);
+    var ls = cad.filter(function (p) {
+      if (solEst.filtro === 'ativos' && p.ativo === false) return false;
+      if (solEst.filtro === 'inativos' && p.ativo !== false) return false;
+      return !q || [p.nome, p.area].concat(p.apelidos || []).some(function (t) { return norm(t).indexOf(q) >= 0; });
+    }).sort(function (a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+    if (!ls.length) return '<tr><td colspan="5" class="note" style="padding:14px">Ninguém com esse filtro.</td></tr>';
+    return ls.map(function (p) {
+      var aps = p.apelidos || [];
+      return '<tr' + (p.ativo === false ? ' style="opacity:.6"' : '') + '><td data-tc="topo"><b>' + esc(p.nome) + '</b>' + (p.ativo === false ? ' <span class="chip bk">inativo</span>' : '') + '</td>' +
+        '<td data-tc="Área">' + (p.area ? esc(p.area) : '<span class="dim">—</span>') + '</td>' +
+        '<td data-tc="Demandas" class="mono">' + (cont[p.id] || 0) + '</td>' +
+        '<td data-tc="Também escrito" class="note" title="' + esc(aps.join(' · ')) + '">' + (aps.length ? esc(aps.slice(0, 3).join(' · ')) + (aps.length > 3 ? ' +' + (aps.length - 3) : '') : '—') + '</td>' +
+        '<td data-tc="topo-fim" style="text-align:right">' + (edita ? '<span class="row" style="gap:6px;justify-content:flex-end">' +
+          '<button type="button" class="btns" data-cfg-acao="sol-editar" data-cfg-id="' + esc(p.id) + '">Editar</button>' +
+          '<button type="button" class="btns" data-cfg-acao="sol-ativo" data-cfg-id="' + esc(p.id) + '">' + (p.ativo === false ? 'Reativar' : 'Inativar') + '</button></span>' : '') + '</td></tr>';
+    }).join('');
+  }
+
+  function secSolicitantes(ctx) {
+    var SO = SOLM();
+    if (!SO) return H.vazio('alert', 'solicitantes.js não carregou', 'Recarregue a página.');
+    var D = ctx.D || {}, cad = D.solicitantes || [], edita = H.pode('configurar');
+    var ativos = cad.filter(function (p) { return p.ativo !== false; }).length;
+    var pend = SO.pendentes(D.melhorias || [], cad);
+    var mig = SO.migracao(D.melhorias || [], cad);
+    var semSol = (D.melhorias || []).filter(function (m) { return m && !m.mesclado_em && !String(m.solicitante || '').trim(); }).length;
+    var acoes = edita ? '<label class="btn" style="cursor:pointer">' + ico('upload') + ' Importar CSV<input type="file" id="cfg-sol-csv" accept=".csv,text/csv,text/plain" hidden></label>' +
+      '<button type="button" class="btnp" data-cfg-acao="sol-novo">' + ico('plus') + ' Novo solicitante</button>' : '';
+    var h = cab('Solicitantes',
+      'Quem pede demanda. O campo Solicitante da demanda só aceita nomes daqui, e grava o nome oficial; filtros e relatórios juntam cada pessoa numa linha só. ' +
+      esc(H.plural(ativos, 'ativo', 'ativos')) + ' · ' + esc(H.plural(cad.length - ativos, 'inativo', 'inativos')) + '.', acoes);
+    if (!cad.length) {
+      return h + H.vazio('user', 'Nenhum solicitante cadastrado',
+        'Enquanto a lista estiver vazia, o campo continua livre. Importe um CSV com as colunas nome;area;ativo;apelidos (apelidos separados por "|") ou cadastre um por um.');
+    }
+    if (mig.length && edita) {
+      h += '<div class="lock" style="justify-content:space-between;flex-wrap:wrap"><span>' + ico('refresh') + ' <b>' + H.plural(mig.length, 'demanda está escrita', 'demandas estão escritas') +
+        ' com um apelido</b> (ex.: “' + esc(mig[0].de) + '” → ' + esc(mig[0].para) + ').</span>' +
+        '<button type="button" class="btnp" data-cfg-acao="sol-aplicar">Passar para o nome oficial</button></div>';
+    }
+    if (pend.length) {
+      var mostra = solEst.pendTodos ? pend : pend.slice(0, 12);
+      var nPend = pend.reduce(function (t, x) { return t + x.n; }, 0);
+      h += '<section class="pn cfg-pend" style="padding:16px;gap:10px;display:flex;flex-direction:column"><div class="row" style="justify-content:space-between;flex-wrap:wrap">' +
+        '<h2 class="h2">Para resolver · ' + pend.length + '</h2><span class="note">' + H.plural(nPend, 'demanda', 'demandas') + ' com um solicitante que o cadastro não conhece' + (semSol ? ' · ' + semSol + ' sem solicitante' : '') + '</span></div>' +
+        '<span class="note">Nome que serve para duas pessoas, área no lugar de pessoa, duas pessoas no campo. Aponte o texto para uma pessoa: ele vira apelido dela e as demandas passam para o nome oficial.</span>' +
+        mostra.map(function (x) {
+          return '<div class="cfg-it"><span style="flex:1;min-width:0"><b>“' + esc(x.texto) + '”</b> <span class="note">· ' + H.plural(x.n, 'demanda', 'demandas') + '</span></span>' +
+            (edita ? '<button type="button" class="btns" data-cfg-acao="sol-apontar" data-cfg-txt="' + esc(x.texto) + '">Apontar para…</button>' : '') + '</div>';
+        }).join('') +
+        (pend.length > mostra.length ? '<button type="button" class="btns" data-cfg-acao="sol-pend-todos">Ver os ' + pend.length + '</button>' : '') + '</section>';
+    }
+    var f = function (k, rot) { return '<button type="button" class="chip' + (solEst.filtro === k ? ' ac' : '') + '" data-cfg-sol-f="' + k + '" aria-pressed="' + (solEst.filtro === k) + '" style="cursor:pointer;border:0">' + rot + '</button>'; };
+    h += '<section class="pn" style="padding:16px 14px 8px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;padding:0 6px">' +
+      '<span class="row" style="gap:6px">' + f('ativos', 'Ativos') + f('inativos', 'Inativos') + f('todos', 'Todos') + '</span>' +
+      '<input class="in cfg-q" id="cfg-sol-q" type="search" placeholder="Buscar nome, área ou apelido" value="' + esc(solEst.busca) + '" aria-label="Buscar solicitante"></div>' +
+      '<table class="tbl cfg-sol-tb"><thead><tr><th>NOME</th><th>ÁREA</th><th>DEMANDAS</th><th>TAMBÉM ESCRITO</th><th style="text-align:right">AÇÕES</th></tr></thead>' +
+      '<tbody id="cfg-sol-linhas">' + linhasSolicitantes(D) + '</tbody></table>' +
+      '<span class="note" style="padding:4px 6px 8px">Inativo: quem saiu. Continua nas demandas antigas e nos filtros, mas não é oferecido em demanda nova.</span></section>';
+    return h;
+  }
+
+  function caixaSolicitante(p) {
+    return caixa({ titulo: p ? 'Editar ' + p.nome : 'Novo solicitante',
+      campos: [
+        { nome: 'nome', rotulo: 'Nome', valor: p ? p.nome : '', dica: 'Nome completo, como deve aparecer', obrig: true, max: 120 },
+        { nome: 'area', rotulo: 'Área', valor: p ? p.area || '' : '', dica: 'Departamento', max: 80 },
+        { nome: 'apelidos', rotulo: 'Também escrito como (um por linha)', tipo: 'area', linhas: 4, valor: p ? (p.apelidos || []).join('\n') : '', dica: 'Fernando\nFernando Nascimento' }
+      ], ok: 'Salvar',
+      valida: function (x) {
+        var r = SOLM().salvar(D0().solicitantes || [], { id: p ? p.id : '', nome: x.nome, area: x.area, apelidos: String(x.apelidos || '').split(/\n|\|/) }, p ? p.id : 'novo');
+        return r.ok ? '' : { erro: r.erro, campo: r.campo };
+      } });
+  }
+  function solPorId(id) { return (D0().solicitantes || []).filter(function (p) { return p.id === id; })[0] || null; }
+  function repintaSol(el) {
+    var tb = el && el.querySelector('#cfg-sol-linhas');
+    if (tb) tb.innerHTML = linhasSolicitantes(D0());
+  }
+
+  CFG_ACOES['sol-novo'] = function () { return CFG_ACOES['sol-editar'](null); };
+  CFG_ACOES['sol-editar'] = async function (el) {
+    var p = el ? solPorId(el.getAttribute('data-cfg-id')) : null;
+    var v = await caixaSolicitante(p);
+    if (!v) return;
+    var id = p ? p.id : uid();
+    return gravaSolicitantes(function (cad) {
+      return SOLM().salvar(cad, { id: id, nome: v.nome, area: v.area, apelidos: String(v.apelidos || '').split(/\n|\|/) }, id);
+    }, 'Solicitante salvo.');
+  };
+  CFG_ACOES['sol-ativo'] = async function (el) {
+    var p = solPorId(el.getAttribute('data-cfg-id'));
+    if (!p) return;
+    if (p.ativo !== false && !(await confirma('Inativar ' + p.nome + '?', 'Continua nas demandas antigas e nos filtros, mas sai da lista de demanda nova. Dá para reativar depois.', 'Inativar', false))) return;
+    return gravaSolicitantes(function (cad) { return SOLM().alternar(cad, p.id); }, p.ativo === false ? p.nome + ' reativado.' : p.nome + ' inativado.');
+  };
+  CFG_ACOES['sol-apontar'] = async function (el) {
+    var texto = el.getAttribute('data-cfg-txt');
+    var cad = D0().solicitantes || [];
+    var v = await caixa({ titulo: 'Apontar “' + texto + '”', texto: 'As demandas com este texto passam para o nome oficial da pessoa escolhida, e o texto vira apelido dela.',
+      campos: [{ nome: 'quem', rotulo: 'Pessoa', valor: '', dica: 'Digite e escolha da lista', obrig: true }], ok: 'Apontar',
+      valida: function (x) { return SOLM().resolve(x.quem, D0().solicitantes || []) ? '' : { erro: 'Escolha um nome do cadastro. Se a pessoa não estiver nele, use "Novo solicitante" antes.', campo: 'quem' }; } },
+      function (ov) { comLista(ov, 'quem', cad.map(function (p) { return p.nome; }).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); })); });
+    if (!v) return;
+    return gravaSolicitantes(function (c) {
+      var p = SOLM().resolve(v.quem, c);
+      return p ? SOLM().apontar(c, texto, p.id) : { ok: false, erro: 'Pessoa não encontrada no cadastro.' };
+    }, '“' + texto + '” aponta para ' + v.quem + '.');
+  };
+  CFG_ACOES['sol-aplicar'] = async function () {
+    var n = SOLM().migracao(D0().melhorias || [], D0().solicitantes || []).length;
+    if (!(await confirma('Passar ' + H.plural(n, 'demanda', 'demandas') + ' para o nome oficial?', 'Troca só o texto do solicitante pelo nome do cadastro (ex.: “Fernando Nascimento” → o nome completo). Quem pediu continua o mesmo.', 'Passar', false))) return;
+    return gravaSolicitantes(function (cad) { return { ok: true, lista: cad }; }, 'Pronto.');
+  };
+  CFG_ACOES['sol-pend-todos'] = function () { solEst.pendTodos = true; raiz.AXIS_APP.desenhar(true); };
+  async function importarSolicitantes(arq) {
+    var texto;
+    try { texto = await arq.text(); } catch (e) { H.toast('Não foi possível ler o arquivo.', 'erro'); return; }
+    var previa = SOLM().deCSV(texto, D0().solicitantes || [], uid);
+    if (!previa.ok) { H.toast(previa.erro, 'erro'); return; }
+    var ok = await confirma('Importar ' + arq.name + '?', H.plural(previa.novos, 'pessoa nova', 'pessoas novas') + ' e ' + H.plural(previa.atualizados, 'atualizada', 'atualizadas') + '. Ninguém é apagado.' +
+      (previa.erros.length ? '\n\nFicam de fora ' + H.plural(previa.erros.length, 'linha', 'linhas') + ':\n' + previa.erros.slice(0, 8).join('\n') + (previa.erros.length > 8 ? '\n…' : '') : ''), 'Importar', false);
+    if (!ok) return;
+    var r = null;
+    await gravaSolicitantes(function (cad) { r = SOLM().deCSV(texto, cad, uid); return r; },
+      function () { return 'Importado: ' + H.plural(r.novos, 'nova', 'novas') + ', ' + H.plural(r.atualizados, 'atualizada', 'atualizadas') + '.'; });
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
   // SECOES QUE CHEGAM COM O AXIS COMPLETO
   // ════════════════════════════════════════════════════════════════════════
   /* Cada uma diz o que o prototipo promete e o que o RoadMap faz HOJE no
@@ -1649,6 +1823,7 @@
         : aba === 'aparencia' ? secAparencia(ctx)
         : aba === 'auditoria' ? secAuditoria()
         : aba === 'espelho' ? secEspelho(ctx)
+        : aba === 'solicitantes' ? secSolicitantes(ctx)
         : secFutura(aba, ctx);
       return '<div class="cfg">' + nav(aba) + '<div class="view" style="min-width:0">' + corpo + '</div></div>';
     },
@@ -1669,6 +1844,9 @@
         } else if (e.target.id === 'cfg-pes-q') {
           est.pesBusca = e.target.value;
           pintarPessoas(ctx.D);
+        } else if (e.target.id === 'cfg-sol-q') {
+          solEst.busca = e.target.value;
+          repintaSol(el);
         }
       });
 
@@ -1683,6 +1861,8 @@
           if (vw) vw.innerHTML = secCatalogo(ctx);
           return;
         }
+        var sf = e.target.closest('[data-cfg-sol-f]');
+        if (sf) { solEst.filtro = sf.getAttribute('data-cfg-sol-f'); var vw2 = el.querySelector('.cfg > .view'); if (vw2) vw2.innerHTML = secSolicitantes(ctx); return; }
         var f = e.target.closest('[data-cfg-pes-f]');
         if (f) {
           est.pesFiltro = f.getAttribute('data-cfg-pes-f');
@@ -1713,6 +1893,7 @@
         }
       });
       el.addEventListener('change', function (e) {
+        if (e.target.id === 'cfg-sol-csv') { var arq = e.target.files && e.target.files[0]; e.target.value = ''; if (arq) importarSolicitantes(arq); return; }
         if (e.target.id === 'cfg-u-nomedem') roda(CFG_ACOES['u-nomedem'], e.target);
         else if (e.target.id === 'cfg-frente') roda(CFG_ACOES['perfil-frente'], e.target);
       });

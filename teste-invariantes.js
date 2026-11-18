@@ -30753,7 +30753,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
   sec('Kanban: filtro por solicitante e busca, no Quadro e no Meu trabalho');
   {
     const QDT = lerTela('axis-tela-quadro.js'), INI = lerTela('axis-tela-inicio.js');
-    const fns = ['function normTexto(s) {', 'function chaveSolicitante(s) {', 'function capricho(n) {', 'function casaSolicitante(m, filtro) {', 'function solicitantesDe(lista) {', 'function casaBusca(m, termo) {'].map((a) => corpo(QDT, a));
+    const fns = ['function normTexto(s) {', 'function soModulo(cad) {', 'function chaveSolicitante(s, cad) {', 'function capricho(n) {', 'function casaSolicitante(m, filtro, cad) {', 'function solicitantesDe(lista, cad) {', 'function casaBusca(m, termo) {'].map((a) => corpo(QDT, a));
     ok(fns.every(Boolean), 'o Quadro tem chaveSolicitante, capricho, casaSolicitante, solicitantesDe e casaBusca');
     if (fns.every(Boolean)) {
       const X = new Function(fns.join('\n') + '\nreturn { casaSolicitante, solicitantesDe, casaBusca };')();
@@ -30782,13 +30782,92 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     }
     // Quadro: a busca voltou e o Solicitante entra no filtro, na contagem do Limpar e no Limpar.
     ok(/<input type="search" id="qd-busca"/.test(QDT) && /data-filtro="sol"/.test(QDT), 'o Quadro tem o campo de busca e o seletor Solicitante');
-    ok(/if \(F\.sol && !casaSolicitante\(m, F\.sol\)\) return false;/.test(QDT), 'o Solicitante recorta o Quadro em casaFiltros');
+    ok(/if \(F\.sol && !casaSolicitante\(m, F\.sol, cadSol\(\)\)\) return false;/.test(QDT), 'o Solicitante recorta o Quadro em casaFiltros');
     ok(/\(F\.sol \? 1 : 0\)/.test(QDT) && /F\.dev = F\.sol = /.test(QDT), 'o Solicitante conta no "Limpar (n)" e o Limpar o zera');
     // Meu trabalho: os dois filtros, pelos mesmos testes do Quadro.
-    ok(/Q\.casaSolicitante\(m, MEU\.sol\)/.test(INI) && /Q\.casaBusca\(m, MEU\.busca\)/.test(INI), 'o Meu trabalho filtra com casaSolicitante e casaBusca do Quadro');
-    ok(/id="ini-busca-meu"/.test(INI) && /data-meu="sol"/.test(INI) && /Q\.opcoesSolicitante\(doPainel, MEU\.sol\)/.test(INI), 'o Meu trabalho tem o campo de busca e o seletor Solicitante');
+    ok(/Q\.casaSolicitante\(m, MEU\.sol, \(D \|\| \{\}\)\.solicitantes\)/.test(INI) && /Q\.casaBusca\(m, MEU\.busca\)/.test(INI), 'o Meu trabalho filtra com casaSolicitante e casaBusca do Quadro');
+    ok(/id="ini-busca-meu"/.test(INI) && /data-meu="sol"/.test(INI) && /Q\.opcoesSolicitante\(doPainel, MEU\.sol, \(ctx\.D \|\| \{\}\)\.solicitantes\)/.test(INI), 'o Meu trabalho tem o campo de busca e o seletor Solicitante');
     const resets = (INI.match(/MEU\.tipo = MEU\.tema = MEU\.ano = MEU\.mes = (MEU\.sol = MEU\.busca = )?'';/g) || []);
     ok(resets.length >= 4 && resets.every((r) => r.includes('MEU.sol = MEU.busca')), 'todo lugar que limpa os filtros do Meu trabalho limpa tambem o Solicitante e a busca', resets.length + '');
+  }
+
+  /* O CADASTRO DE SOLICITANTES (solicitantes.js, 18/11/2026): o campo deixa de
+     ser texto livre. Apelidos apontam para a pessoa, o que nao casa fica "para
+     resolver", e a demanda grava o nome oficial. */
+  sec('Solicitantes: cadastro, de-para, validacao da demanda e filtro por pessoa');
+  {
+    const SO = require('./solicitantes.js');
+    const cad = [
+      { id: 'f1', nome: 'Fernando Morais Do Nascimento', area: 'TI', ativo: true, apelidos: ['Fernando Nascimento', 'fernando morais'] },
+      { id: 'l1', nome: 'Livia Maria Gomes De Almeida', area: 'Crédito', ativo: true, apelidos: ['Lívia'] },
+      { id: 'x1', nome: 'Phollyanna do Carmo Santos', area: '', ativo: false, apelidos: ['Phollyanna'] },
+    ];
+    ok(SO.resolve('FERNANDO  nascimento', cad).id === 'f1' && SO.resolve('livia', cad).id === 'l1' && SO.resolve('Fernando', cad) === null,
+       'resolve pelo nome ou apelido, sem acento e sem caixa; nome que nao foi apontado nao casa (nada se adivinha)');
+    const ms = [
+      { id: 'a', codigo: 'AX-1', solicitante: 'Fernando Nascimento' }, { id: 'b', codigo: 'AX-2', solicitante: 'Fernando Morais Do Nascimento' },
+      { id: 'c', codigo: 'AX-3', solicitante: 'Fernando' }, { id: 'd', codigo: 'AX-4', solicitante: 'fernando ' }, { id: 'e', codigo: 'AX-5', solicitante: 'Lívia' },
+      { id: 'f', codigo: 'AX-6', solicitante: '' }, { id: 'g', codigo: 'AX-7', solicitante: 'Cobrança' }, { id: 'h', solicitante: 'Fernando Nascimento', mesclado_em: 'x' },
+    ];
+    const pend = SO.pendentes(ms, cad);
+    ok(pend.length === 2 && pend[0].texto === 'Fernando' && pend[0].n === 2 && pend[1].texto === 'Cobrança', 'para resolver: os textos que ninguem conhece, do mais usado, juntando grafias', JSON.stringify(pend));
+    const mig = SO.migracao(ms, cad);
+    ok(mig.map((x) => x.codigo).join(',') === 'AX-1,AX-5' && mig[0].para === 'Fernando Morais Do Nascimento', 'de-para: so o que casa e esta escrito diferente do oficial; a mesclada fica', JSON.stringify(mig));
+    const c2 = SO.contagem(ms, cad);
+    ok(c2.f1 === 2 && c2.l1 === 1 && !c2.x1, 'a contagem por pessoa junta os apelidos');
+
+    ok(!SO.salvar(cad, { nome: 'Fernando Nascimento' }, 'n').ok, 'nao cria pessoa com o apelido de outra');
+    ok(!SO.salvar(cad, { id: 'l1', nome: 'Livia Maria Gomes De Almeida', apelidos: ['fernando morais'] }).ok, 'nao aceita apelido que ja aponta para outra pessoa');
+    const s1 = SO.salvar(cad, { nome: '  Pedro   Da Matta ', area: 'Jurídico', apelidos: 'Pedro da Matta|Pedrinho' }, 'p1');
+    ok(s1.ok && s1.pessoa.nome === 'Pedro Da Matta' && s1.pessoa.ativo === true && s1.pessoa.apelidos.join() === 'Pedrinho' && s1.lista.length === 4,
+       'nova pessoa: nome limpo, ativa, e o apelido igual ao nome nao se repete', JSON.stringify(s1.pessoa));
+    const ap = SO.apontar(cad, 'Fernando', 'f1');
+    ok(ap.ok && SO.resolve('fernando', ap.lista).id === 'f1' && SO.pendentes(ms, ap.lista).length === 1 && SO.migracao(ms, ap.lista).length === 4,
+       'apontar "Fernando" para uma pessoa: o texto vira apelido, sai do para resolver e as duas demandas entram no de-para');
+    ok(!SO.apontar(ap.lista, 'Fernando', 'l1').ok, 'um texto ja apontado nao aponta para outra pessoa');
+    ok(SO.alternar(cad, 'x1').lista.find((p) => p.id === 'x1').ativo === true, 'inativo volta a ativo');
+
+    // A validacao da demanda: so pessoa ativa, gravada pelo nome oficial; sem mudanca passa; cadastro vazio = livre.
+    ok(SO.valida('fernando nascimento', null, cad).nome === 'Fernando Morais Do Nascimento', 'apelido grava o nome oficial');
+    ok(!SO.valida('Fulano de Tal', null, cad).ok && !SO.valida('Phollyanna', null, cad).ok, 'nome fora do cadastro e pessoa inativa sao recusados em demanda nova');
+    ok(SO.valida('Fernando ', 'Fernando', cad).ok && SO.valida('Fernando ', 'Fernando', cad).nome === 'Fernando', 'demanda antiga com o mesmo texto de antes passa como esta');
+    ok(SO.valida('Qualquer Um', null, []).nome === 'Qualquer Um', 'sem cadastro, o campo continua livre');
+
+    const F = require('./axis-form-demanda.js');
+    const R = { SPRINTPO: require('./sprint.js'), ABERTURA: require('./abertura.js'), AXIS_ACOES: require('./axis-acoes.js'), PREVOO: require('./prevoo.js'),
+                HOMOLOGACAO: require('./homologacao.js'), COLABORADORES: { emailPara: () => '' }, SOLICITANTES: SO };
+    const cx = (papel) => ({ papel, quem: papel === 'dev' ? 'Ana Dev' : 'Paula PO', hoje: '2026-11-05', agora: '2026-11-05T14:00:00.000Z', id: 'n1', D: { feriados: [], sprints_fechadas: [], solicitantes: cad }, R });
+    const fb = { titulo: 'Tela nova', tipo: 'evolucao', tema_id: 't1', descricao: 'x', impacto: 'medio', urgencia: 'alta' };
+    const n1 = F.nova(Object.assign({}, fb, { solicitante: 'lívia' }), cx('admin'));
+    ok(n1.ok && n1.obj.solicitante === 'Livia Maria Gomes De Almeida', 'formulario: demanda nova grava o nome oficial', JSON.stringify(n1.erro || n1.obj.solicitante));
+    const n2 = F.nova(Object.assign({}, fb, { solicitante: 'Fulano' }), cx('dev'));
+    ok(!n2.ok && n2.campo === 'solicitante', 'formulario: nome fora do cadastro e recusado no campo Solicitante', n2.erro);
+    const velha = { id: 'v1', codigo: 'AX-9', titulo: 'Antiga', tipo: 'evolucao', tema_id: 't1', solicitante: 'Cobrança', status_planejamento: 'backlog', status: 'recebida', dev: 'Ana Dev' };
+    const e1 = F.edicao(velha, { titulo: 'Antiga corrigida', tipo: 'evolucao', tema_id: 't1', solicitante: 'Cobrança' }, cx('admin'));
+    ok(e1.ok && !('solicitante' in (e1.patch || {})), 'formulario: editar outra coisa numa demanda com solicitante antigo nao esbarra nele', JSON.stringify(e1.erro || e1.patch));
+    const AC = require('./axis-acoes.js');
+    const g1 = AC.REGRAS.solicitante({ id: 'v1', solicitante: 'Cobrança' }, { solicitante: 'fernando morais' }, { papel: 'admin', D: { solicitantes: cad }, R: { SOLICITANTES: SO } });
+    ok(g1.ok && g1.patch.solicitante === 'Fernando Morais Do Nascimento', 'Item: trocar o solicitante tambem passa pelo cadastro', JSON.stringify(g1));
+
+    // O filtro do Quadro com o cadastro: uma opcao por pessoa, pelo nome oficial.
+    const QDT = lerTela('axis-tela-quadro.js');
+    const fq = ['function normTexto(s) {', 'function soModulo(cad) {', 'function chaveSolicitante(s, cad) {', 'function capricho(n) {', 'function casaSolicitante(m, filtro, cad) {', 'function solicitantesDe(lista, cad) {'].map((a) => corpo(QDT, a));
+    if (fq.every(Boolean)) {
+      globalThis.SOLICITANTES = SO;
+      const X = new Function(fq.join('\n') + '\nreturn { casaSolicitante, solicitantesDe };')();
+      const S = X.solicitantesDe(ms.filter((m) => !m.mesclado_em), cad);
+      const fer = S.ops.find((o) => o.v === 'p:f1');
+      ok(!!fer && fer.n === 2 && fer.rot === 'Fernando Morais Do Nascimento' && S.ops.some((o) => o.v === 'fernando' && o.n === 2) && S.sem === 1,
+         'Quadro: o nome oficial junta os apelidos numa opcao; o que nao casa continua agrupado pelo texto', JSON.stringify(S));
+      ok(ms.filter((m) => X.casaSolicitante(m, 'p:f1', cad)).length === 3, 'Quadro: filtrar a pessoa traz todas as grafias dela');
+    } else ok(false, 'as funcoes do filtro existem no Quadro');
+
+    const CFG = lerTela('axis-tela-configuracoes.js'), AXH = fs.readFileSync('axis.html', 'utf8');
+    ok(/id: 'solicitantes', rotulo: 'Solicitantes', real: true/.test(CFG) && /aba === 'solicitantes' \? secSolicitantes\(ctx\)/.test(CFG), 'Configuracoes tem a secao Solicitantes');
+    ok(/r\.raiz = \{ solicitantes: r\.lista \};/.test(CFG) && /if \(d\.n\) r\.raiz\.melhorias = d\.melhorias;/.test(CFG), 'gravar o cadastro passa as demandas para o nome oficial na mesma publicacao');
+    ok(/<script src="solicitantes\.js\?v=[0-9a-f]+"><\/script>/.test(AXH), 'o app carrega solicitantes.js');
+    ok(!fs.readdirSync('.').some((f) => /\.xlsx$/i.test(f) && !/^\.git/.test(f) && require('child_process').execSync('git ls-files -- "' + f + '"').toString().trim()),
+       'nenhuma planilha entra no repositorio (ele e publico)');
   }
 
   Promise.all(pendentes).then(() => {

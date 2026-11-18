@@ -265,8 +265,17 @@
       return falha(ehDev(c) ? 'Informe quem pediu: é o solicitante quem confere a entrega.'
                             : 'Informe quem pediu: é o solicitante quem homologa a entrega.', 'solicitante');
     }
+    // O solicitante sai do cadastro (Configuracoes › Solicitantes, 18/11/2026).
+    if ('solicitante' in f) { var vs = validaSolicitante(f.solicitante, m, c); if (!vs.ok) return falha(vs.erro, 'solicitante'); }
     return null;
   }
+
+  /** `SOLICITANTES.valida` com o cadastro da base; sem o modulo, o texto como veio. */
+  function validaSolicitante(v, m, c) {
+    var SO = mod(c, 'SOLICITANTES');
+    return SO ? SO.valida(v, m ? m.solicitante : null, ((c && c.D) || {}).solicitantes) : { ok: true, nome: txt(v) };
+  }
+  function oficial(v, m, c) { var r = validaSolicitante(v, m, c); return r.ok ? r.nome : txt(v); }
 
   function emailDe(nome, antes, c) {
     var CO = mod(c, 'COLABORADORES');
@@ -298,7 +307,7 @@
       obj = {
         id: c.id, titulo: titulo, tema_id: txt(f.tema_id), descricao: txt(f.descricao),
         dev: txt(c.quem), tipo: f.tipo,
-        solicitante: txt(f.solicitante), solicitante_email: emailDe(f.solicitante, null, c),
+        solicitante: oficial(f.solicitante, null, c), solicitante_email: emailDe(oficial(f.solicitante, null, c), null, c),
         origem: 'dev', projeto_id: txt(f.projeto_id), anexos: (f.anexos || []).slice(),
         inicio: txt(f.inicio), entrega: txt(f.entrega),
         status: STATUS_DEV[sp] || 'recebida', status_planejamento: sp,
@@ -315,7 +324,7 @@
         status: STATUS_ADMIN[sp] || 'recebida', status_planejamento: sp, estimativa: '',
         dev: txt(f.dev), prioridade: txt(f.prioridade),
         impacto: nivel('impacto', f.impacto, c), urgencia: nivel('urgencia', f.urgencia, c),
-        solicitante: txt(f.solicitante), solicitante_email: emailDe(f.solicitante, null, c),
+        solicitante: oficial(f.solicitante, null, c), solicitante_email: emailDe(oficial(f.solicitante, null, c), null, c),
         data_solicitacao: txt(f.data_solicitacao), inicio: txt(f.inicio), entrega: txt(f.entrega),
         entrega_usuario: txt(f.entrega_usuario), mes_alvo: '', meses: [], motivo_negacao: '',
         resumo_entrega: '', implementacao: '', versao: '', em_producao: false, producao_em: '', producao_por: '',
@@ -372,7 +381,7 @@
     if (!(ehDev(c) && m.tipo)) poe('tipo', f.tipo);
     if ('solicitante' in f) {
       // Em branco na edicao fica o que estava (dev.html); o admin pode apagar.
-      var sol = txt(f.solicitante) || (ehPO(c) ? '' : txt(m.solicitante));
+      var sol = oficial(f.solicitante, m, c) || (ehPO(c) ? '' : txt(m.solicitante));
       if (sol !== txt(m.solicitante)) { poe('solicitante', sol); poe('solicitante_email', emailDe(sol, m, c)); }
     }
     if ('projeto_id' in f) poe('projeto_id', txt(f.projeto_id));

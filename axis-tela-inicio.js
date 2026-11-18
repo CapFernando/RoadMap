@@ -741,7 +741,7 @@
     if (MEU.tipo === '__sem__' ? !!m.tipo : (MEU.tipo && m.tipo !== MEU.tipo)) return false;
     if (MEU.tema && !(window.catalogoCasa ? window.catalogoCasa(m.tema_id, MEU.tema, (D || {}).temas || []) : m.tema_id === MEU.tema)) return false;
     var Q = window.AXIS_QUADRO;
-    if (MEU.sol && Q && !Q.casaSolicitante(m, MEU.sol)) return false;
+    if (MEU.sol && Q && !Q.casaSolicitante(m, MEU.sol, (D || {}).solicitantes)) return false;
     if (MEU.busca && Q && !Q.casaBusca(m, MEU.busca)) return false;
     return casaPeriodo(m, MEU.ano, MEU.mes);
   }
@@ -951,7 +951,7 @@
         opt('', 'Todos (' + dDev.length + ')', MEU.tema) + (window.catalogoOpcoesHTML ? window.catalogoOpcoesHTML(ct.visiveis, MEU.tema || '', { vazio: false, contagem: ct.conta }) : '') + '</select></span>' +
       // Solicitante: as opcoes saem do que o painel mostra (Mostrar + Times), com a contagem.
       (Q ? '<span class="qd-par"><label class="note" for="ini-sol">Solicitante</label><select id="ini-sol" class="in" data-meu="sol" style="height:36px;max-width:220px"' +
-        ' title="Quem pediu a demanda. Grafias diferentes do mesmo nome contam juntas.">' + Q.opcoesSolicitante(doPainel, MEU.sol) + '</select></span>' : '') +
+        ' title="Quem pediu a demanda. Grafias diferentes do mesmo nome contam juntas.">' + Q.opcoesSolicitante(doPainel, MEU.sol, (ctx.D || {}).solicitantes) + '</select></span>' : '') +
       // Periodo (`f-ano` e `f-mes`): pelo inicio, ou pela criacao.
       '<span class="qd-par"><label class="note" for="ini-ano">Período</label><select id="ini-ano" class="in" data-meu="ano" style="height:36px" aria-label="Ano">' +
         opt('', 'Todos os anos', MEU.ano) + anosDaBase(ctx.D).map(function (a) { return opt(a, a, MEU.ano); }).join('') + '</select>' +
