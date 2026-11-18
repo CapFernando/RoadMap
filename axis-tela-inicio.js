@@ -125,13 +125,14 @@
         '.axa .ini-qd .qd-col.vazia.trava .qd-trava{display:none}}',
       '.axa button.k{font:inherit;text-align:left;color:inherit;cursor:pointer;width:100%}',
       '.axa .ini-fil{display:flex;flex-wrap:wrap;gap:10px;align-items:center}',
+      '.axa .ini-bmeu{height:36px;width:250px;padding:0 12px;border-radius:10px;font-size:12.5px;background-color:var(--sf)}',
       /* FILTROS NO PADRAO DO QUADRO (16/11/2026): grade de colunas iguais, nome dentro da caixa, 40px e 12px
          entre caixas. O Periodo leva ano e mes lado a lado na mesma celula, que ocupa duas colunas. */
       '@container app (min-width: 761px){.axa .ini-fil{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-items:stretch;grid-auto-flow:row dense;flex:1 1 100%;width:100%;box-sizing:border-box}' +
         '.axa .ini-fil .qd-par{position:relative;display:block;min-width:0}.axa .ini-fil .qd-par:has(select + select){display:grid;grid-template-columns:1fr 1fr;gap:8px;grid-column:span 2}' +
         '.axa .ini-fil .qd-par>label{position:absolute;left:13px;top:5px;z-index:1;font-size:10px;line-height:12px;letter-spacing:.03em;pointer-events:none}' +
         '.axa .ini-fil .qd-sel,.axa .ini-fil select.in{width:100%;max-width:none;height:40px !important;padding-top:13px}' +
-        '.axa .ini-fil .fsp{display:flex;width:100%}.axa .ini-fil .fsp .fsp-btn.in{min-width:0;max-width:none;width:100%}.axa .ini-fil>.btnp,.axa .ini-fil>.btns,.axa .ini-fil>button{height:40px;justify-content:center}}',
+        '.axa .ini-fil .ini-bmeu{grid-column:span 2;width:100%;height:40px}.axa .ini-fil .fsp{display:flex;width:100%}.axa .ini-fil .fsp .fsp-btn.in{min-width:0;max-width:none;width:100%}.axa .ini-fil>.btnp,.axa .ini-fil>.btns,.axa .ini-fil>button{height:40px;justify-content:center}}',
       // A faixa do prazo vencido (`risco-dev`, dev.html): quantas, quais (cada uma abre), e as escondidas pelo filtro.
       '.axa .ini-risco{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:10px 14px;border-radius:12px;background:rgba(var(--dg-rgb),.1);border:1px solid rgba(var(--dg-rgb),.35);color:var(--dg-t);font-size:13px;line-height:20px}',
       '.axa .ini-risco:focus{outline:2px solid rgba(var(--dg-rgb),.6);outline-offset:2px}',
@@ -222,6 +223,10 @@
       '.axa .ini-kg.seis>.k:last-child .note{display:none}',
       '.axa .ini-hd.ini-hd-meu{flex-wrap:nowrap;align-items:center}',
       '.axa .ini-hd.ini-hd-meu>div{width:auto !important}',
+      // A busca do Meu trabalho desce para uma linha propria, ao lado do botao "Filtros (n)".
+      '.axa .ini-hd.ini-hd-meu:has(.ini-bmeu){flex-wrap:wrap}',
+      '.axa .ini-hd-meu .ini-fil:has(.ini-bmeu){flex:1 1 100%;flex-wrap:nowrap}',
+      '.axa .ini-bmeu{flex:1 1 auto;width:auto;min-width:0;height:44px}',
       '.axa .ini-risco{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;scrollbar-width:none;padding:0 12px}',
       '.axa .ini-risco::-webkit-scrollbar{display:none}',
       '.axa .ini-rl{min-height:44px}',
@@ -620,7 +625,7 @@
     sprint_futura: function (n, r) { return H.plural(n, 'tarefa sua', 'tarefas suas') + ' na <b>' + H.esc(rotCurto(r)) + '</b>, sprint que ainda não começou'; },
     outra_sprint: function (n, r) { return H.plural(n, 'tarefa sua aberta', 'tarefas suas abertas') + ' na <b>' + H.esc(rotCurto(r)) + '</b>'; },
     fora_da_sprint: function (n) { return H.plural(n, 'tarefa sua aberta', 'tarefas suas abertas') + ' <b>sem sprint</b>'; },
-    filtro: function (n) { return H.plural(n, 'tarefa sua escondida', 'tarefas suas escondidas') + ' pelo filtro de <b>tipo, tema ou período</b>'; },
+    filtro: function (n) { return H.plural(n, 'tarefa sua escondida', 'tarefas suas escondidas') + ' pelo filtro de <b>tipo, tema, período, solicitante ou busca</b>'; },
     mostrar: function (n) { return H.plural(n, 'tarefa no seu nome escondida', 'tarefas no seu nome escondidas') + ' por <b>"Só a fila do time"</b>'; },
     concluida_fora_do_mes: function (n) { return H.plural(n, 'tarefa concluída', 'tarefas concluídas') + ' nesta seleção, <b>fora deste mês</b>'; }
   };
@@ -692,7 +697,10 @@
   /* `tipo`, `tema`, `ano` e `mes`: os filtros Tipo, Tema e Periodo da barra
      do painel do dev; `prod`: o periodo da produtividade. Ficam enquanto o
      app esta aberto, como o resto do estado da tela. */
-  var MEU = { tipo: '', tema: '', ano: '', mes: '', prod: 'semana', pdAberto: false };
+  /* `sol` e `busca` (18/11/2026): o Solicitante e a busca, os mesmos do Quadro
+     (`AXIS_QUADRO.casaSolicitante` e `casaBusca`). */
+  var MEU = { tipo: '', tema: '', ano: '', mes: '', sol: '', busca: '', prod: 'semana', pdAberto: false };
+  var _buscaMeuT = 0;
   var TIPOS_MEU = [['', 'Todos'], ['sustentacao', 'Sustentação'], ['evolucao', 'Evolução'], ['__sem__', 'Sem tipo']];
 
   /** As demandas do dev (`doDev` do dev.html): sem a mesclada, no nome dele. */
@@ -732,6 +740,9 @@
   function casaMeu(m, D) {
     if (MEU.tipo === '__sem__' ? !!m.tipo : (MEU.tipo && m.tipo !== MEU.tipo)) return false;
     if (MEU.tema && !(window.catalogoCasa ? window.catalogoCasa(m.tema_id, MEU.tema, (D || {}).temas || []) : m.tema_id === MEU.tema)) return false;
+    var Q = window.AXIS_QUADRO;
+    if (MEU.sol && Q && !Q.casaSolicitante(m, MEU.sol)) return false;
+    if (MEU.busca && Q && !Q.casaBusca(m, MEU.busca)) return false;
     return casaPeriodo(m, MEU.ano, MEU.mes);
   }
 
@@ -846,6 +857,8 @@
     // Com Periodo escolhido, as concluidas dele aparecem todas (`getFiltered`, dev.html).
     var comPeriodo = !!(MEU.ano || MEU.mes !== '');
     var noMes = function (m) { return comPeriodo || (CAP && CAP.diaDaEntrega(m).slice(0, 7) === mes); };
+    // A busca traz as concluidas de outros meses para as colunas, como no Quadro; o numero "Entregues no mes" nao muda.
+    var naColuna = function (m) { return !!MEU.busca || noMes(m); };
     if (Q) Q.css();
     cssMeu();
 
@@ -872,13 +885,13 @@
       : doPainel).filter(function (m) { return casaMeu(m, ctx.D); });
     var times = AC && AC.times ? AC.times() : '';
     var filtrosAtivos = (EST.sprint !== (sprint || '') ? 1 : 0) + (times ? 1 : 0);
-    filtrosAtivos += (MEU.tipo ? 1 : 0) + (MEU.tema ? 1 : 0) + (MEU.ano ? 1 : 0) + (MEU.mes !== '' ? 1 : 0);
+    filtrosAtivos += (MEU.tipo ? 1 : 0) + (MEU.tema ? 1 : 0) + (MEU.ano ? 1 : 0) + (MEU.mes !== '' ? 1 : 0) + (MEU.sol ? 1 : 0);
     /* TIPO E TEMA COM A CONTAGEM (`f-tipo` e `buildTemaSelect`, dev.html): os
        numeros sao das demandas do dev; o tema so lista os que ele tem. */
     var dDev = doDev(ctx.D);
     var ct = contaTemas(dDev, (ctx.D || {}).temas || [], MEU.tema);
     var nTipo = function (v) { return v === '__sem__' ? dDev.filter(function (m) { return !m.tipo; }).length : v ? dDev.filter(function (m) { return m.tipo === v; }).length : dDev.length; };
-    var cols = colunasDoPainel(noQuadro, noMes);
+    var cols = colunasDoPainel(noQuadro, naColuna);
     var porCol = {};
     cols.forEach(function (c) { porCol[c.k] = c.itens; });
     // No celular (uma etapa por vez) o Meu trabalho abre onde ha trabalho: Em andamento, ou a primeira com card.
@@ -936,6 +949,9 @@
         TIPOS_MEU.map(function (o) { return opt(o[0], o[1] + ' (' + nTipo(o[0]) + ')', MEU.tipo); }).join('') + '</select></span>' +
       '<span class="qd-par"><label class="note" for="ini-tema">Tema</label><select id="ini-tema" class="in" data-meu="tema" style="height:36px;max-width:240px">' +
         opt('', 'Todos (' + dDev.length + ')', MEU.tema) + (window.catalogoOpcoesHTML ? window.catalogoOpcoesHTML(ct.visiveis, MEU.tema || '', { vazio: false, contagem: ct.conta }) : '') + '</select></span>' +
+      // Solicitante: as opcoes saem do que o painel mostra (Mostrar + Times), com a contagem.
+      (Q ? '<span class="qd-par"><label class="note" for="ini-sol">Solicitante</label><select id="ini-sol" class="in" data-meu="sol" style="height:36px;max-width:220px"' +
+        ' title="Quem pediu a demanda. Grafias diferentes do mesmo nome contam juntas.">' + Q.opcoesSolicitante(doPainel, MEU.sol) + '</select></span>' : '') +
       // Periodo (`f-ano` e `f-mes`): pelo inicio, ou pela criacao.
       '<span class="qd-par"><label class="note" for="ini-ano">Período</label><select id="ini-ano" class="in" data-meu="ano" style="height:36px" aria-label="Ano">' +
         opt('', 'Todos os anos', MEU.ano) + anosDaBase(ctx.D).map(function (a) { return opt(a, a, MEU.ano); }).join('') + '</select>' +
@@ -943,7 +959,10 @@
         H.MESES.map(function (n, i) { return opt(String(i), n.charAt(0).toUpperCase() + n.slice(1), MEU.mes); }).join('') + '</select></span>' +
       (filtrosAtivos ? '<button type="button" class="btns" data-ini="limpar" style="height:36px" title="Volta para a sprint atual e só o seu time">Limpar (' + filtrosAtivos + ')</button>' : '');
     var h = '<header class="ini-hd fim ini-hd-meu"><div style="display:flex;flex-direction:column;gap:6px;min-width:0"><h1 class="h1">Meu trabalho</h1><span class="sub ini-sub">' + sub + '</span></div>' +
-      '<div class="ini-fil">' + H.filtros(fl, filtrosAtivos + (EST.mostrar ? 1 : 0), { id: 'meu' }) +
+      // A busca fica fora da gaveta, a vista tambem no celular (como a do Quadro).
+      '<div class="ini-fil">' + (Q ? '<input type="search" id="ini-busca-meu" class="in ini-bmeu" value="' + H.esc(MEU.busca) + '" placeholder="AX-179, título, dev, solicitante…"' +
+        ' aria-label="Buscar no Meu trabalho por código, título, descrição, dev ou solicitante" autocomplete="off" enterkeyhint="search">' : '') +
+      H.filtros(fl, filtrosAtivos + (EST.mostrar ? 1 : 0), { id: 'meu' }) +
       '<button type="button" class="btnp ini-novo" data-axa-form="novo">+ Nova demanda</button></div></header>';
 
     var kp = '<div class="ini-kg seis">' +
@@ -971,7 +990,7 @@
        quadro de fato nao desenhou (`visiveis`), para a faixa nunca contar uma
        tarefa que esta na tela. */
     var fora = (AC && AC.motivosFora ? AC.motivosFora(vs, cx, { sprint: EST.sprint, mostrar: EST.mostrar,
-      casaFiltro: function (m) { return casaMeu(m, ctx.D); }, noMes: noMes, colunaDe: H.colunaDe }, H.hoje()) : [])
+      casaFiltro: function (m) { return casaMeu(m, ctx.D); }, noMes: naColuna, colunaDe: H.colunaDe }, H.hoje()) : [])
       .map(function (g) { return { motivo: g.motivo, rotulo: g.rotulo, ids: g.ids.filter(function (id) { return !visiveis[id]; }) }; })
       .filter(function (g) { return g.ids.length; });
     var rod = faixaFora(fora);
@@ -979,7 +998,9 @@
       return h + kp + faixaRisco(risco) + rod + H.vazio('inbox', 'A fila do time está vazia', 'Nada na sprint em curso está sem dono agora.');
     }
     if (!noQuadro.length && doPainel.length) {
-      return h + kp + faixaRisco(risco) + rod + H.vazio('inbox', 'Nada nesta sprint com estes filtros', 'Troque a sprint no filtro ou escolha Todas.');
+      return h + kp + faixaRisco(risco) + rod + (MEU.busca
+        ? H.vazio('search', 'Nenhuma demanda com “' + H.esc(MEU.busca) + '”', 'A busca olha a sprint e os filtros escolhidos. Escolha Todas na sprint ou limpe a busca.')
+        : H.vazio('inbox', 'Nada nesta sprint com estes filtros', 'Troque a sprint no filtro ou escolha Todas.'));
     }
     if (!minhas.length && !noQuadro.length) {
       // O vinculo do 1o acesso (dev.html, `corrigirVinculo`): escolher como o nome aparece nas demandas.
@@ -1303,7 +1324,7 @@
     var Q = window.AXIS_QUADRO;
     if (!m || !Q) return;
     var achar = function () { return el.querySelector('.qd-card[data-qd-id="' + String(m.id).replace(/"/g, '') + '"]'); };
-    if (!achar()) { EST.sprint = ''; EST.mostrar = ''; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); }
+    if (!achar()) { EST.sprint = ''; EST.mostrar = ''; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = MEU.sol = MEU.busca = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); }
     var col = Q.COLUNAS_DEV.find(function (c) { return c.junto.indexOf(H.colunaDe(m)) >= 0; });
     if (col) { EST.etapa = col.k; EST.mais[col.k] = true; }
     redesenha(el, ctx);
@@ -1330,14 +1351,14 @@
         if (q === 'ntf') { EST.ntfFiltro = b.getAttribute('data-f'); EST.ntfLimite = 30; redesenha(el, ctx); return; }
         if (q === 'ntf-mais') { EST.ntfLimite += 30; redesenha(el, ctx); return; }
         // O Limpar do Meu trabalho volta para a sprint atual e so o seu time (o padrao).
-        if (q === 'limpar') { EST.sprint = EST.sprintAuto = H.sprintAtual() || ''; EST.sprintManual = false; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
+        if (q === 'limpar') { EST.sprint = EST.sprintAuto = H.sprintAtual() || ''; EST.sprintManual = false; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = MEU.sol = MEU.busca = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
         if (q === 'sprint-todas') { EST.sprint = ''; EST.sprintManual = true; redesenha(el, ctx); return; }
         // "Fora da tela" (RF-02): cada motivo desfaz o que esconde aquelas tarefas.
         if (q === 'fora') {
           var mo2 = b.getAttribute('data-m'), r2 = b.getAttribute('data-r') || '', um2 = b.getAttribute('data-id');
           if (mo2 === 'sprint_futura' || mo2 === 'outra_sprint') { EST.sprint = r2; EST.sprintManual = true; }
           else if (mo2 === 'fora_da_sprint') { EST.sprint = '__fora__'; EST.sprintManual = true; }
-          else if (mo2 === 'filtro') { MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; }
+          else if (mo2 === 'filtro') { MEU.tipo = MEU.tema = MEU.ano = MEU.mes = MEU.sol = MEU.busca = ''; }
           else if (mo2 === 'mostrar') { EST.mostrar = ''; }
           else if (mo2 === 'concluida_fora_do_mes') {
             // Uma so abre direto; varias, o Periodo do ano corrente traz as concluidas de fora do mes.
@@ -1348,7 +1369,7 @@
         }
         // A faixa e o numero do prazo vencido levam ate a demanda (dev.html: `devIrPara`, `limparFiltrosDev`).
         if (q === 'risco-abre') { irParaDemanda(el, ctx, b.getAttribute('data-id')); return; }
-        if (q === 'risco-limpa') { EST.sprint = ''; EST.sprintManual = true; EST.mostrar = ''; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
+        if (q === 'risco-limpa') { EST.sprint = ''; EST.sprintManual = true; EST.mostrar = ''; MEU.tipo = MEU.tema = MEU.ano = MEU.mes = MEU.sol = MEU.busca = ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
         if (q === 'risco') {
           var um = el.querySelectorAll('[data-ini="risco-abre"]');
           var fx = el.querySelector('#ini-risco');
@@ -1382,6 +1403,28 @@
         if (n) n.focus();
       };
     });
+    /* A busca redesenha a cada pausa da digitacao e devolve foco e cursor ao
+       campo, que nasce de novo no redesenho; Esc limpa. */
+    var bm = el.querySelector('#ini-busca-meu');
+    if (bm) {
+      var volta = function (pos) {
+        var n = el.querySelector('#ini-busca-meu');
+        if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (_) {} }
+      };
+      bm.oninput = function () {
+        var v = bm.value, pos = bm.selectionStart;
+        clearTimeout(_buscaMeuT);
+        _buscaMeuT = setTimeout(function () {
+          if (MEU.busca === v.trim()) return;
+          MEU.busca = v.trim(); EST.mais = {};
+          redesenha(el, ctx); volta(pos);
+        }, 220);
+      };
+      bm.onkeydown = function (e) {
+        if (e.key !== 'Escape' || !bm.value) return;
+        e.preventDefault(); clearTimeout(_buscaMeuT); MEU.busca = ''; redesenha(el, ctx); volta(0);
+      };
+    }
     var tm = el.querySelector('[data-ini="times"]');
     if (tm) tm.onchange = function () { if (window.AXIS_ACOES) AXIS_ACOES.times(tm.value); redesenha(el, ctx); var n = el.querySelector('[data-ini="times"]'); if (n) n.focus(); };
     var sel = el.querySelector('[data-ini="cron-dev"]');

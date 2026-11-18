@@ -104,7 +104,7 @@
   /* `etapa`: a coluna a vista no celular (uma por vez). */
   /* `prod` e `dados`: os filtros Producao e Dados/BI da barra do admin;
      `prodCol`: { coluna: 'no_ar' | 'fora_ar' | 'pausado' }, o menu do contador. */
-  var F = { frente: '', tipo: '', sistema: '', dev: '', prazo: '', busca: '', meus: null, vencidas: false, sprint: null, sprintPadrao: false,
+  var F = { frente: '', tipo: '', sistema: '', dev: '', sol: '', prazo: '', busca: '', meus: null, vencidas: false, sprint: null, sprintPadrao: false,
             todasConcluidas: false, negadaAberta: false, mais: {}, etapa: '', prod: '', dados: '', prodCol: {} };
 
   /* A sprint atual e o padrao do dev: so conta como filtro quando ele escolhe outra. */
@@ -176,7 +176,7 @@
         '.axa .qd-ferr .qd-par:not(.qd-so-cel){position:relative;display:block;min-width:0}' +
         '.axa .qd-ferr .qd-fl{position:absolute;left:13px;top:5px;z-index:1;font-size:10px;line-height:12px;letter-spacing:.03em;pointer-events:none}' +
         '.axa .qd-ferr .qd-sel{width:100%;max-width:none;height:40px;padding-top:13px}' +
-        '.axa .qd-ferr .fsp{display:flex;width:100%}.axa .qd-ferr .fsp .fsp-btn.in{min-width:0;max-width:none;width:100%}.axa .qd-ferr>.btns{height:40px;justify-content:center}}',
+        '.axa .qd-ferr .qd-busca{grid-column:span 2;width:100%;height:40px;margin-left:0}.axa .qd-ferr .fsp{display:flex;width:100%}.axa .qd-ferr .fsp .fsp-btn.in{min-width:0;max-width:none;width:100%}.axa .qd-ferr>.btns{height:40px;justify-content:center}}',
       '.axa .qd-ch h2{margin:0;font-family:var(--font-ui);font-size:11.5px;font-weight:800;letter-spacing:.12em;color:var(--tx)}',
       '.axa .qd-ch .n{margin-left:auto;font-family:var(--font-mono);font-size:11.5px;color:var(--tx3)}',
       '.axa .qd-card{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:13px;background:var(--qd-card);border:1px solid var(--qd-cbd);text-decoration:none;color:var(--tx);cursor:pointer}',
@@ -356,6 +356,42 @@
     return alvo.indexOf(normTexto(termo)) >= 0;
   }
 
+  /* O FILTRO SOLICITANTE (18/11/2026), no Quadro e no Meu trabalho. O nome
+     e digitado a mao na demanda, entao "Lívia", "livia " e "LIVIA" sao a
+     mesma pessoa: a chave e o nome sem acento, minusculo e sem espaco
+     sobrando, e o rotulo e a grafia mais usada. '__sem__' = sem solicitante. */
+  function chaveSolicitante(s) {
+    return normTexto(String(s || '').replace(/\s+/g, ' ').trim());
+  }
+  function casaSolicitante(m, filtro) {
+    if (!filtro) return true;
+    var k = chaveSolicitante(m && m.solicitante);
+    return filtro === '__sem__' ? !k : k === filtro;
+  }
+  /* No empate de uso, a grafia mais caprichada: inicial maiuscula, sem
+     estar toda em caixa alta, e com acento ("Lívia" ganha de "livia" e "LIVIA"). */
+  function capricho(n) {
+    return (/^[A-ZÀ-Ý]/.test(n) ? 2 : 0) + (n !== n.toUpperCase() ? 2 : 0) + (n !== normTexto(n) && /[À-ÿ]/.test(n) ? 1 : 0);
+  }
+  /** [{ v: chave, rot: grafia mais usada, n }], em ordem alfabetica, e quantas estao sem solicitante. */
+  function solicitantesDe(lista) {
+    var por = {}, sem = 0;
+    (lista || []).forEach(function (m) {
+      if (!m) return;
+      var nome = String(m.solicitante || '').replace(/\s+/g, ' ').trim();
+      var k = chaveSolicitante(nome);
+      if (!k) { sem++; return; }
+      var g = por[k] || (por[k] = { v: k, n: 0, grafias: {} });
+      g.n++; g.grafias[nome] = (g.grafias[nome] || 0) + 1;
+    });
+    var ops = Object.keys(por).map(function (k) {
+      var g = por[k];
+      var rot = Object.keys(g.grafias).sort(function (a, b) { return g.grafias[b] - g.grafias[a] || capricho(b) - capricho(a) || a.localeCompare(b, 'pt-BR'); })[0];
+      return { v: k, rot: rot, n: g.n };
+    }).sort(function (a, b) { return a.rot.localeCompare(b.rot, 'pt-BR'); });
+    return { ops: ops, sem: sem };
+  }
+
   /* O FILTRO PRAZO — COPIA DE `matchPrazo` (admin.html), com a data de hoje
      por parametro: vencidas, vencem na semana (7 dias), vencem no mes e sem
      data. So a demanda aberta vence (`isDemandaAberta`). */
@@ -485,6 +521,7 @@
     if (F.meus) { if (!mostraDoDev(m)) return false; }
     else if (F.dev === '__sem__') { if (H.devsDe(m).length) return false; }
     else if (F.dev && !(window.DEVNOME ? DEVNOME.eDe(m, F.dev) : H.devsDe(m).indexOf(F.dev) >= 0)) return false;
+    if (F.sol && !casaSolicitante(m, F.sol)) return false;
     return true;
   }
 
@@ -769,6 +806,15 @@
 
   /* QUEM APARECE NO FILTRO DE DEV: quem tem trabalho aberto, mais o cadastro
      sem quem saiu do time — a regra de `devsComTrabalhoAberto` (admin.html). */
+  /* As opcoes do Solicitante: a escolhida fica na lista mesmo sem demanda
+     no recorte, para o seletor nao mentir o que esta filtrando. */
+  function opcoesSolicitante(lista, atual) {
+    var S = solicitantesDe(lista);
+    var h = opcao('', 'Todos', atual);
+    if (atual && atual !== '__sem__' && !S.ops.some(function (o) { return o.v === atual; })) h += opcao(atual, atual + ' (0)', atual);
+    S.ops.forEach(function (o) { h += opcao(o.v, o.rot + ' (' + o.n + ')', atual); });
+    return h + opcao('__sem__', 'Sem solicitante (' + S.sem + ')', atual);
+  }
   function opcoesDev(lista, D) {
     var nomes = {};
     var fora = {};
@@ -878,7 +924,7 @@
     // Para o dev o padrao e a sprint atual: "Todas" ou outra sprint contam como filtro.
     var sprintAtivo = sprintPadraoDev(ctx) ? !sprintEhPadrao(ctx) : !!F.sprint;
     // Cada coluna filtrada pelo contador conta um (o "Limpar (n)" do admin conta `_kbProdCol`).
-    var ativos = (sprintAtivo ? 1 : 0) + (F.meus && times ? 1 : 0) + (F.tipo ? 1 : 0) + (F.sistema ? 1 : 0) + (!F.meus && F.dev ? 1 : 0) + (F.prazo ? 1 : 0) +
+    var ativos = (sprintAtivo ? 1 : 0) + (F.meus && times ? 1 : 0) + (F.tipo ? 1 : 0) + (F.sistema ? 1 : 0) + (!F.meus && F.dev ? 1 : 0) + (F.sol ? 1 : 0) + (F.prazo ? 1 : 0) +
       (F.vencidas ? 1 : 0) + (F.frente ? 1 : 0) + (F.busca ? 1 : 0) + (F.prod ? 1 : 0) + (F.dados ? 1 : 0) + Object.keys(F.prodCol).length;
     h += '<div class="qd-barra"><div class="qd-alertas">';
     if (vencidas.length) {
@@ -897,9 +943,11 @@
     h += avisoSprintPendente(ctx);
     /* Os filtros sao um bloco so, empurrado para a direita: quando nao cabem
        ao lado dos alertas, descem juntos para a linha de baixo. A BUSCA DO QUADRO
-       SAIU (16/11/2026): havia duas, esta e a global da barra do topo (Ctrl K), e
-       fica so a global. `F.busca` continua no estado, sempre vazio. */
-    h += '</div><div class="qd-ferr">';
+       VOLTOU (18/11/2026): a global (Ctrl K) abre UMA demanda; esta recorta o
+       quadro. Fica fora do H.filtros: no celular continua a mao, ao lado do botao. */
+    h += '</div><div class="qd-ferr">' +
+      '<input type="search" id="qd-busca" class="in qd-busca" value="' + attr(F.busca) + '" placeholder="AX-179, título, dev, solicitante…"' +
+      ' aria-label="Buscar no quadro por código, título, descrição, dev ou solicitante" autocomplete="off" enterkeyhint="search">';
     // No celular os filtros recolhem no botao "Filtros (n)" (H.filtros); `h` volta depois.
     var antesFl = h; h = '';
     // A frente, que no computador e o seletor do cabecalho, no celular vai para a gaveta.
@@ -934,6 +982,8 @@
       opcao('', 'Todos', F.tipo) + opcao('evolucao', 'Evolução', F.tipo) + opcao('sustentacao', 'Sustentação', F.tipo) + opcao('__sem__', 'Sem tipo', F.tipo) + '</select></span>' +
       '<span class="qd-par"><label class="qd-fl" for="qd-sis">Sistema</label><select id="qd-sis" class="in qd-sel" data-filtro="sistema">' + opcoesSistema(todos) + '</select></span>';
     if (!F.meus) h += '<span class="qd-par"><label class="qd-fl" for="qd-dev">Dev</label><select id="qd-dev" class="in qd-sel" data-filtro="dev">' + opcoesDev(todos, D) + '</select></span>';
+    h += '<span class="qd-par"><label class="qd-fl" for="qd-sol">Solicitante</label><select id="qd-sol" class="in qd-sel" data-filtro="sol"' +
+      ' title="Quem pediu a demanda. Grafias diferentes do mesmo nome contam juntas.">' + opcoesSolicitante(todos, F.sol) + '</select></span>';
     h += '<span class="qd-par"><label class="qd-fl" for="qd-prazo">Prazo</label><select id="qd-prazo" class="in qd-sel" data-filtro="prazo">' +
       PRAZOS.map(function (p) { return opcao(p[0], p[1], F.prazo); }).join('') + '</select></span>';
     /* PRODUCAO E DADOS/BI (`renderKbToolbar`, admin.html), com a contagem de
@@ -1342,7 +1392,7 @@
         else if (a === 'negada') { F.negadaAberta = !F.negadaAberta; if (F.negadaAberta) F.etapa = 'negada'; else if (F.etapa === 'negada') F.etapa = ''; }
         else if (a === 'limpar') {
           // O Limpar do dev volta a sprint atual e ao seu time, que sao o padrao.
-          F.tipo = F.sistema = F.dev = F.frente = F.prazo = F.busca = F.prod = F.dados = ''; F.prodCol = {}; F.sprint = sprintPadraoDev(ctx); F.vencidas = false; F.mais = {};
+          F.tipo = F.sistema = F.dev = F.sol = F.frente = F.prazo = F.busca = F.prod = F.dados = ''; F.prodCol = {}; F.sprint = sprintPadraoDev(ctx); F.vencidas = false; F.mais = {};
           if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times('');
         }
       }
@@ -1382,7 +1432,7 @@
   window.AXIS_QUADRO = {
     css: css, card: card, coluna: coluna, abasEtapas: abasEtapas, COLUNAS_DEV: COLUNAS_DEV,
     ligarQuadro: ligarQuadro, sincEtapa: sincEtapa, abrirItem: abrirItem, pintaItem: pintaItem,
-    casaBusca: casaBusca, casaPrazo: casaPrazo, dataNoCard: dataNoCard, faixaDevolucao: faixaDevolucao,
+    casaBusca: casaBusca, casaSolicitante: casaSolicitante, solicitantesDe: solicitantesDe, opcoesSolicitante: opcoesSolicitante, casaPrazo: casaPrazo, dataNoCard: dataNoCard, faixaDevolucao: faixaDevolucao,
     casaProducao: casaProducao, casaDados: casaDados, vinculosDe: vinculosDe, htmlVinculos: htmlVinculos, grillPendente: grillPendente
   };
 
