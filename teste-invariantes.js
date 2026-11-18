@@ -30005,7 +30005,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const piA = corpo(INI, 'function prodIntervalo(qual, hojeISO) {'), paA = corpo(INI, 'function prodAgrega(lista, de, ate, eDeMim) {');
     ok([bts, gf, ctm, cpe, cmeu, piD, paD, piA, paA].every(Boolean) && /data-meu="tipo"/.test(INI) && /data-meu="tema"/.test(INI) && /data-meu="ano"/.test(INI) && /data-meu="mes"/.test(INI) &&
        /\.filter\(function \(m\) \{ return casaMeu\(m, ctx\.D\); \}\)/.test(INI) && /htmlProdutividade\(ctx\) \+ faixaRisco\(risco\)/.test(INI) &&
-       /MEU\.tipo = MEU\.tema = MEU\.ano = MEU\.mes = '';/.test(corpo(INI, 'function depois(el, ctx) {') || ''),
+       /MEU\.tipo = MEU\.tema = MEU\.ano = MEU\.mes = (MEU\.sol = MEU\.busca = )?'';/.test(corpo(INI, 'function depois(el, ctx) {') || ''),
        'Tipo, Tema, Periodo e a produtividade (podio) estao no painel do dev.html e no Meu trabalho do app, e o Limpar volta todos');
     if ([bts, gf, ctm, cpe, cmeu, piD, paD, piA, paA].every(Boolean)) {
       const g = {}; new Function('window', CAT)(g);
@@ -30745,6 +30745,50 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(CFG.includes("H.api('chave-visualizacao')") && CFG.includes('var chave = await chaveDoLink();'), 'Configuracoes pede a chave ao Worker na hora de copiar o link');
     ok(!/VIEW_CHAVE\s*=\s*['"][^'"]+['"]/.test(fs.readdirSync('.').filter((f) => /\.(js|html)$/.test(f) && f !== 'teste-invariantes.js').map((f) => fs.readFileSync(f, 'utf8')).join('\n')),
        'nenhuma tela do site publico traz a chave escrita no codigo');
+  }
+
+  /* FILTRO POR SOLICITANTE E BUSCA NO KANBAN (18/11/2026): no Quadro e no Meu
+     trabalho. O solicitante e digitado a mao, entao grafias do mesmo nome
+     (acento, caixa, espaco) contam juntas; a busca e a `casaBusca` do Quadro. */
+  sec('Kanban: filtro por solicitante e busca, no Quadro e no Meu trabalho');
+  {
+    const QDT = lerTela('axis-tela-quadro.js'), INI = lerTela('axis-tela-inicio.js');
+    const fns = ['function normTexto(s) {', 'function chaveSolicitante(s) {', 'function capricho(n) {', 'function casaSolicitante(m, filtro) {', 'function solicitantesDe(lista) {', 'function casaBusca(m, termo) {'].map((a) => corpo(QDT, a));
+    ok(fns.every(Boolean), 'o Quadro tem chaveSolicitante, capricho, casaSolicitante, solicitantesDe e casaBusca');
+    if (fns.every(Boolean)) {
+      const X = new Function(fns.join('\n') + '\nreturn { casaSolicitante, solicitantesDe, casaBusca };')();
+      const ms = [
+        { codigo: 'AX-1', titulo: 'Remessa', solicitante: 'Lívia Souza' },
+        { codigo: 'AX-2', titulo: 'Retorno', solicitante: 'livia  souza ' },
+        { codigo: 'AX-3', titulo: 'Cedentes', solicitante: 'LÍVIA SOUZA' },
+        { codigo: 'AX-4', titulo: 'Estorno', solicitante: 'Bruno' },
+        { codigo: 'AX-5', titulo: 'Sem quem pediu', solicitante: '   ' },
+        { codigo: 'AX-6', titulo: 'Sem campo' },
+        null,
+      ];
+      const S = X.solicitantesDe(ms);
+      ok(S.ops.length === 2 && S.sem === 2, 'grafias do mesmo nome viram uma opcao so; vazio e espaco contam como sem solicitante', JSON.stringify(S));
+      const liv = S.ops.find((o) => o.v === 'livia souza');
+      ok(!!liv && liv.n === 3 && liv.rot === 'Lívia Souza', 'a opcao conta as tres e, no empate, mostra a grafia mais caprichada (maiuscula so na inicial, com acento)', JSON.stringify(liv));
+      const S2 = X.solicitantesDe([{ solicitante: 'bruno' }, { solicitante: 'bruno' }, { solicitante: 'Bruno' }]);
+      ok(S2.ops.length === 1 && S2.ops[0].rot === 'bruno', 'sem empate, vale a grafia mais usada', JSON.stringify(S2.ops));
+      ok(S.ops[0].rot === 'Bruno', 'as opcoes vem em ordem alfabetica', S.ops.map((o) => o.rot).join(', '));
+      const vivos = ms.filter(Boolean);
+      const cods = (f) => vivos.filter((m) => X.casaSolicitante(m, f)).map((m) => m.codigo).join(',');
+      ok(cods('livia souza') === 'AX-1,AX-2,AX-3', 'filtrar por Livia traz as tres grafias', cods('livia souza'));
+      ok(cods('__sem__') === 'AX-5,AX-6', '"Sem solicitante" traz o vazio e o campo que falta', cods('__sem__'));
+      ok(cods('') === vivos.map((m) => m.codigo).join(','), 'sem filtro, passa tudo');
+      ok(X.casaBusca(ms[0], 'livia') && X.casaBusca(ms[3], 'ax4') && !X.casaBusca(ms[3], 'remessa'), 'a busca acha pelo solicitante sem acento e pelo codigo sem hifen');
+    }
+    // Quadro: a busca voltou e o Solicitante entra no filtro, na contagem do Limpar e no Limpar.
+    ok(/<input type="search" id="qd-busca"/.test(QDT) && /data-filtro="sol"/.test(QDT), 'o Quadro tem o campo de busca e o seletor Solicitante');
+    ok(/if \(F\.sol && !casaSolicitante\(m, F\.sol\)\) return false;/.test(QDT), 'o Solicitante recorta o Quadro em casaFiltros');
+    ok(/\(F\.sol \? 1 : 0\)/.test(QDT) && /F\.dev = F\.sol = /.test(QDT), 'o Solicitante conta no "Limpar (n)" e o Limpar o zera');
+    // Meu trabalho: os dois filtros, pelos mesmos testes do Quadro.
+    ok(/Q\.casaSolicitante\(m, MEU\.sol\)/.test(INI) && /Q\.casaBusca\(m, MEU\.busca\)/.test(INI), 'o Meu trabalho filtra com casaSolicitante e casaBusca do Quadro');
+    ok(/id="ini-busca-meu"/.test(INI) && /data-meu="sol"/.test(INI) && /Q\.opcoesSolicitante\(doPainel, MEU\.sol\)/.test(INI), 'o Meu trabalho tem o campo de busca e o seletor Solicitante');
+    const resets = (INI.match(/MEU\.tipo = MEU\.tema = MEU\.ano = MEU\.mes = (MEU\.sol = MEU\.busca = )?'';/g) || []);
+    ok(resets.length >= 4 && resets.every((r) => r.includes('MEU.sol = MEU.busca')), 'todo lugar que limpa os filtros do Meu trabalho limpa tambem o Solicitante e a busca', resets.length + '');
   }
 
   Promise.all(pendentes).then(() => {
