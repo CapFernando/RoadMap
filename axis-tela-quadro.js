@@ -356,16 +356,22 @@
     return alvo.indexOf(normTexto(termo)) >= 0;
   }
 
-  /* O FILTRO SOLICITANTE (18/11/2026), no Quadro e no Meu trabalho. O nome
-     e digitado a mao na demanda, entao "Lívia", "livia " e "LIVIA" sao a
-     mesma pessoa: a chave e o nome sem acento, minusculo e sem espaco
-     sobrando, e o rotulo e a grafia mais usada. '__sem__' = sem solicitante. */
-  function chaveSolicitante(s) {
-    return normTexto(String(s || '').replace(/\s+/g, ' ').trim());
+  /* O FILTRO SOLICITANTE (18/11/2026), no Quadro e no Meu trabalho. Com o
+     cadastro (Configuracoes › Solicitantes, `SOLICITANTES`), cada pessoa e
+     UMA opcao, pelo nome oficial, juntando os apelidos ("Fernando Nascimento"
+     e "Fernando Morais do Nascimento"). O que o cadastro nao conhece agrupa
+     pelo texto sem acento, minusculo e sem espaco sobrando, com a grafia mais
+     usada como rotulo. '__sem__' = sem solicitante. `cad` = a lista do
+     cadastro (vazia ou ausente: so o texto). */
+  function cadSol() { return ((AX.APP || {}).D || {}).solicitantes || null; }
+  function soModulo(cad) { return typeof SOLICITANTES !== 'undefined' && cad && cad.length ? SOLICITANTES : null; }
+  function chaveSolicitante(s, cad) {
+    var SO = soModulo(cad);
+    return SO ? SO.chave(s, cad) : normTexto(String(s || '').replace(/\s+/g, ' ').trim());
   }
-  function casaSolicitante(m, filtro) {
+  function casaSolicitante(m, filtro, cad) {
     if (!filtro) return true;
-    var k = chaveSolicitante(m && m.solicitante);
+    var k = chaveSolicitante(m && m.solicitante, cad);
     return filtro === '__sem__' ? !k : k === filtro;
   }
   /* No empate de uso, a grafia mais caprichada: inicial maiuscula, sem
@@ -373,15 +379,17 @@
   function capricho(n) {
     return (/^[A-ZÀ-Ý]/.test(n) ? 2 : 0) + (n !== n.toUpperCase() ? 2 : 0) + (n !== normTexto(n) && /[À-ÿ]/.test(n) ? 1 : 0);
   }
-  /** [{ v: chave, rot: grafia mais usada, n }], em ordem alfabetica, e quantas estao sem solicitante. */
-  function solicitantesDe(lista) {
+  /** [{ v: chave, rot, n }], em ordem alfabetica, e quantas estao sem solicitante. */
+  function solicitantesDe(lista, cad) {
+    var SO = soModulo(cad);
     var por = {}, sem = 0;
     (lista || []).forEach(function (m) {
       if (!m) return;
       var nome = String(m.solicitante || '').replace(/\s+/g, ' ').trim();
-      var k = chaveSolicitante(nome);
+      var k = chaveSolicitante(nome, cad);
       if (!k) { sem++; return; }
       var g = por[k] || (por[k] = { v: k, n: 0, grafias: {} });
+      if (SO && k.indexOf('p:') === 0) nome = SO.rotulo(nome, cad);
       g.n++; g.grafias[nome] = (g.grafias[nome] || 0) + 1;
     });
     var ops = Object.keys(por).map(function (k) {
@@ -521,7 +529,7 @@
     if (F.meus) { if (!mostraDoDev(m)) return false; }
     else if (F.dev === '__sem__') { if (H.devsDe(m).length) return false; }
     else if (F.dev && !(window.DEVNOME ? DEVNOME.eDe(m, F.dev) : H.devsDe(m).indexOf(F.dev) >= 0)) return false;
-    if (F.sol && !casaSolicitante(m, F.sol)) return false;
+    if (F.sol && !casaSolicitante(m, F.sol, cadSol())) return false;
     return true;
   }
 
@@ -808,10 +816,14 @@
      sem quem saiu do time — a regra de `devsComTrabalhoAberto` (admin.html). */
   /* As opcoes do Solicitante: a escolhida fica na lista mesmo sem demanda
      no recorte, para o seletor nao mentir o que esta filtrando. */
-  function opcoesSolicitante(lista, atual) {
-    var S = solicitantesDe(lista);
+  function opcoesSolicitante(lista, atual, cad) {
+    if (arguments.length < 3) cad = cadSol();
+    var S = solicitantesDe(lista, cad);
     var h = opcao('', 'Todos', atual);
-    if (atual && atual !== '__sem__' && !S.ops.some(function (o) { return o.v === atual; })) h += opcao(atual, atual + ' (0)', atual);
+    if (atual && atual !== '__sem__' && !S.ops.some(function (o) { return o.v === atual; })) {
+      var pe = atual.indexOf('p:') === 0 ? (cad || []).filter(function (p) { return p && 'p:' + p.id === atual; })[0] : null;
+      h += opcao(atual, (pe ? pe.nome : atual) + ' (0)', atual);
+    }
     S.ops.forEach(function (o) { h += opcao(o.v, o.rot + ' (' + o.n + ')', atual); });
     return h + opcao('__sem__', 'Sem solicitante (' + S.sem + ')', atual);
   }

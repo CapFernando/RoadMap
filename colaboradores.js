@@ -119,9 +119,41 @@
    *  A lista é pedida no FOCO, e não ao abrir a página: na abertura a pessoa
    *  ainda pode não ter entrado, e o Worker recusaria a chamada sem sessão.
    *  `credenciais` é função pelo mesmo motivo — lida na hora do pedido. */
+  /* COM O CADASTRO DE SOLICITANTES (18/11/2026, solicitantes.js), a sugestao
+     sai dele, e nao do WorkOS: so pessoas ativas, pelo nome oficial, e o que
+     se digita ("joao siqueira", um apelido) vira o nome oficial ao sair do
+     campo. O e-mail continua vindo do WorkOS, pelo nome. */
+  function cadastro() {
+    var D = raiz.AXIS_APP && raiz.AXIS_APP.APP && raiz.AXIS_APP.APP.D;
+    var c = D && D.solicitantes;
+    return raiz.SOLICITANTES && Array.isArray(c) && c.length ? c : null;
+  }
+  function ligarCadastro(input, cad) {
+    var SO = raiz.SOLICITANTES;
+    var dl = document.getElementById('solic-lista');
+    if (!dl) { dl = document.createElement('datalist'); dl.id = 'solic-lista'; document.body.appendChild(dl); }
+    dl.innerHTML = SO.ativos(cad).map(function (p) {
+      return '<option value="' + String(p.nome).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '"></option>';
+    }).join('');
+    input.setAttribute('list', 'solic-lista');
+    input.setAttribute('autocomplete', 'off');
+    input.addEventListener('change', function () {
+      var p = SO.resolve(input.value, cadastro() || cad);
+      if (p) input.value = p.nome;
+      input.title = p ? (p.area || '') : '';
+    });
+  }
+
   function ligar(input, proxyUrl, credenciais) {
     if (!input || input.dataset.colab) return;
     input.dataset.colab = '1';
+    var cad = cadastro();
+    if (cad) {
+      ligarCadastro(input, cad);
+      // A lista do WorkOS ainda vem, so para o e-mail sair junto do nome.
+      input.addEventListener('focus', function () { carrega(proxyUrl, typeof credenciais === 'function' ? credenciais() : credenciais); });
+      return;
+    }
     garanteDatalist();
     input.setAttribute('list', ID_LISTA);
     input.setAttribute('autocomplete', 'off');
