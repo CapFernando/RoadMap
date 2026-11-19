@@ -23,6 +23,11 @@
 
   var _versao = null;     // `atualizado_em` da base cuja trilha esta em cache
   var _itens = null;      // { id: [entradas] }
+  /* INCREMENTAL (19/11/2026): `_ate` e o `ate` da ultima resposta. Com ele, a
+     proxima busca pede so as trilhas que mudaram desde entao (`desde`), e nao a
+     tabela inteira — cada gravacao fazia cada aba aberta reler ~1.500 linhas
+     do D1, e isso ajudou a estourar o limite diario do plano. */
+  var _ate = '';
 
   function baseTemTrilha(dados) {
     var ms = (dados && dados.melhorias) || [];
@@ -46,11 +51,14 @@
     try {
       var r = await fetch(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.assign({ action: 'historico' }, credenciais || {}))
+        body: JSON.stringify(Object.assign({ action: 'historico' }, _itens && _ate ? { desde: _ate } : {}, credenciais || {}))
       });
       if (r.ok) {
         var j = await r.json();
-        _itens = (j && j.itens) || {};
+        var novos = (j && j.itens) || {};
+        if (j && j.parcial && _itens) Object.keys(novos).forEach(function (id) { _itens[id] = novos[id]; });
+        else _itens = novos;
+        if (j && typeof j.ate === 'string' && j.ate) _ate = j.ate;
         _versao = versao;
       } else {
         console.warn('historico: HTTP ' + r.status);

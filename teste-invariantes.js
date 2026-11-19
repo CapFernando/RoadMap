@@ -30870,6 +30870,49 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'nenhuma planilha entra no repositorio (ele e publico)');
   }
 
+  /* O CONSUMO DO D1 (19/11/2026): o limite de 5 milhoes de linhas lidas por dia
+     do plano Free estourou numa sessao de Poker e derrubou o login. */
+  sec('D1: Poker, trilha e espelho sem releitura desnecessaria');
+  {
+    const fPM = corpo(W, 'async function pokerMigrar(db) {') || '';
+    ok(fPM.includes('if (_migrouPoker) return;') && fPM.includes('CREATE INDEX IF NOT EXISTS poker_participante_codigo ON poker_participante (codigo)'),
+       'Poker: as tabelas sao criadas uma vez por isolate, com indice por codigo da sessao');
+    const fPE = corpo(W, "if (body.action === 'poker-estado') {") || '';
+    ok(/if \(Math\.random\(\) < POKER_FAXINA_CHANCE\) \{[\s\S]*DELETE FROM poker_participante[\s\S]*DELETE FROM poker_voto/.test(fPE) && /const POKER_FAXINA_CHANCE = 0\.0\d+;/.test(W),
+       'Poker: a faxina da mesa roda de vez em quando, nao em toda batida do polling');
+    const PKA = fs.readFileSync('axis-tela-poker.js', 'utf8'), PKH = fs.readFileSync('poker.html', 'utf8');
+    ok(/var POLL_MS = 3000;/.test(PKA) && /const POLL_MS\s+= 3000;/.test(PKH), 'Poker: o polling e de 3 s no app e na tela antiga');
+    ok(/PRESENCA_S\s*=\s*(\d+)/.test(W) && +W.match(/PRESENCA_S\s*=\s*(\d+)/)[1] >= 10, 'a janela de presenca segue bem maior que o polling');
+
+    const fHT = corpo(W, 'async function historicoTabela(db) {') || '';
+    ok(fHT.includes('CREATE INDEX IF NOT EXISTS historico_demanda_atualizado ON historico_demanda (atualizado_em)'), 'trilha: indice por atualizado_em');
+    const fH = corpo(W, "if (body.action === 'historico') {") || '';
+    ok(fH.includes("WHERE atualizado_em >= ?") && fH.includes('"ate":') && fH.includes('"parcial":'), 'trilha: com `desde`, a rota le so o que mudou e devolve `ate`');
+    const HC = require('./historico-cliente.js');
+    const respostas = [];
+    const chamadas = [];
+    globalThis.fetch = async (url, o) => { const b = JSON.parse(o.body); chamadas.push(b.desde || ''); return { ok: true, json: async () => respostas.shift() }; };
+    const base = (v) => ({ atualizado_em: v, melhorias: [{ id: 'a' }, { id: 'b' }] });
+    respostas.push({ itens: { a: [{ em: '1' }], b: [{ em: '2' }] }, ate: '2026-11-19T10:00:00.000Z', parcial: false });
+    respostas.push({ itens: { b: [{ em: '2' }, { em: '3' }] }, ate: '2026-11-19T11:00:00.000Z', parcial: true });
+    (async () => {
+      const d1 = await HC.hidrata(base('v1'), 'u', {});
+      const d1b = await HC.hidrata(base('v1'), 'u', {});
+      const d2 = await HC.hidrata(base('v2'), 'u', {});
+      ok(chamadas.length === 2 && chamadas[0] === '' && chamadas[1] === '2026-11-19T10:00:00.000Z',
+         'trilha no cliente: a primeira busca e inteira, a mesma versao nao busca de novo, a seguinte pede so desde o `ate`', JSON.stringify(chamadas));
+      ok(d1.melhorias[1].historico.length === 1 && d1b.melhorias[0].historico.length === 1 && d2.melhorias[0].historico.length === 1 && d2.melhorias[1].historico.length === 2,
+         'trilha no cliente: a resposta parcial substitui so as demandas que mudaram');
+    })().catch((e) => ok(false, 'trilha no cliente', e.message));
+    pendentes.push(Promise.resolve());
+
+    const fES = corpo(W, 'async function espelhoSincroniza(db, espelho, max) {') || '';
+    ok(fES.includes('await espelhoEstadoD1(db, max != null)') && /catch \(e\) \{ _espelhoD1 = null; throw e; \}/.test(fES),
+       'espelho: a gravacao usa o estado guardado no isolate e o descarta se o lote falhar');
+    ok(/espelhoSincroniza\(db, await espelhoDaBaseNoArquivo\(gh\), ESPELHO_MAX_LINHAS\)/.test(W) && (corpo(W, 'async function espelhoCompara(') || W).includes('espelhoLerD1'),
+       'espelho: Sincronizar (admin) e a comparacao leem o D1 de verdade');
+  }
+
   Promise.all(pendentes).then(() => {
     console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
     process.exit(falhas ? 1 : 0);
