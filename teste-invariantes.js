@@ -30489,6 +30489,39 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const dov = QD.slice(QD.indexOf("el.addEventListener('dragover'"), QD.indexOf("el.addEventListener('dragleave'"));
     ok(dov.indexOf('rolaNaBorda(e)') > 0 && dov.indexOf('rolaNaBorda(e)') < dov.indexOf("closest('[data-solta]')"),
        'o arraste rola a esteira antes de procurar a coluna, entao anda tambem sobre o vao entre colunas');
+    /* O FILTRO DO QUADRO FICA SALVO NO NAVEGADOR (19/11/2026): ao recarregar, o
+       quadro voltava sempre ao padrao (seu time, sprint atual). Agora volta como
+       a pessoa deixou, e "a sprint atual" acompanha a troca de sprint. */
+    const f0 = QD.indexOf('var GUARDA = '), f1 = QD.indexOf('/* FIM filtroSalvo */');
+    ok(f0 > 0 && f1 > f0, 'o Quadro tem as regras do filtro salvo');
+    if (f0 > 0 && f1 > f0) {
+      const FS = new Function(QD.slice(f0, f1) + '\nreturn { guardar: filtroParaGuardar, aplicar: aplicaFiltroGuardado };')();
+      const novo = () => ({ frente: '', tipo: '', sistema: '', dev: '', sol: '', prazo: '', busca: '', meus: null, vencidas: false, sprint: null, sprintPadrao: false,
+                            todasConcluidas: false, negadaAberta: false, mais: {}, etapa: '', prod: '', dados: '', prodCol: {} });
+      const validas = ['', '__fora__', 'S3-11-2026', 'S4-11-2026'];
+      const g = FS.guardar(Object.assign(novo(), { tipo: 'evolucao', meus: '', sprint: ['S3-11-2026'], busca: 'abc', etapa: 'feito' }), true, 'dados');
+      ok(g.v === 1 && g.tipo === 'evolucao' && g.meus === '' && g.sprint === 'atual' && g.times === 'dados' && !('busca' in g) && !('etapa' in g) && !('mais' in g),
+         'guarda os filtros escolhidos e o time; a sprint atual vira "a atual", e a busca e a coluna do celular nao sao guardadas');
+      const F1 = novo();
+      ok(FS.aplicar(F1, JSON.parse(JSON.stringify(g)), ['S4-11-2026'], validas) && F1.tipo === 'evolucao' && F1.meus === '' && F1.sprintPadrao === true &&
+         JSON.stringify(F1.sprint) === '["S4-11-2026"]', 'na sprint seguinte o filtro salvo como "a atual" abre na sprint nova');
+      const F2 = novo(); FS.aplicar(F2, { v: 1, sprint: null, meus: 'meu_fila' }, ['S4-11-2026'], validas);
+      ok(F2.sprint === null && F2.meus === 'meu_fila', '"Todas" continua Todas, sem cair na sprint atual');
+      const F3 = novo(); FS.aplicar(F3, { v: 1, sprint: ['S9-01-2020', '__fora__'] }, ['S4-11-2026'], validas);
+      const F4 = novo(); FS.aplicar(F4, { v: 1, sprint: ['S9-01-2020'] }, ['S4-11-2026'], validas);
+      ok(JSON.stringify(F3.sprint) === '["__fora__"]' && JSON.stringify(F4.sprint) === '["S4-11-2026"]',
+         'sprint que nao existe mais sai do filtro, e sem nenhuma valida volta para a atual');
+      const F5 = novo();
+      ok(!FS.aplicar(F5, null, null, validas) && !FS.aplicar(F5, { v: 2, tipo: 'x' }, null, validas) && F5.tipo === '' && F5.meus === null && F5.sprintPadrao === false,
+         'sem nada salvo, ou salvo em outro formato, o quadro abre no padrao de hoje');
+      const F6 = novo(); FS.aplicar(F6, { v: 1, tipo: 5, vencidas: 'sim', meus: 'meu_fila' }, null, validas);
+      ok(F6.tipo === '' && F6.vencidas === false && F6.meus === 'meu_fila', 'valor de tipo errado no salvo e ignorado');
+    }
+    const mt = QD.slice(QD.indexOf('function montar('), QD.indexOf('function montar(') + 900);
+    ok(mt.indexOf('aplicaFiltroGuardado(') > 0 && mt.indexOf('aplicaFiltroGuardado(') < mt.indexOf("F.meus = ctx.papel === 'dev'"),
+       'ao abrir, o filtro salvo vem antes do padrao do dev');
+    const rd = QD.slice(QD.indexOf('function redesenhar('), QD.indexOf('function redesenhar(') + 500);
+    ok(rd.indexOf('guardaFiltro(') > 0, 'cada redesenho do Quadro grava o filtro');
   }
 
   /* O ENDERECO SEM ".html" TAMBEM LEVA AO APP (09/11/2026). */
