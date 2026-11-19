@@ -3,7 +3,7 @@
      saber, de olhada, se o navegador esta servindo uma copia antiga desta tela.
      Faltava justamente aqui, e esta e a tela que o time inteiro abre ao mesmo
      tempo numa reuniao — onde descobrir tarde custa a reuniao. -->
-<html lang="pt-BR" data-build="d7ca0c557d">
+<html lang="pt-BR" data-build="602d35a6a2">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -607,7 +607,7 @@ const DATA_PATH   = 'data/melhorias.json';
    sem uso era um convite a religar o endereco morto — e foi exatamente por esse
    caminho que a tela do dev passou meses lendo um 404 em silencio. A unica porta
    de leitura e o Worker, via `lerDados`. */
-const POLL_MS     = 1500;
+const POLL_MS     = 3000; // 19/11/2026: era 1,5 s; com a mesa cheia, o polling estourou o limite diario de leitura do D1
 // As cartas NUMERICAS do baralho (POKER_CARTAS no Worker, sem o '?' e sem o
 // cafe): usadas para sugerir a carta mais proxima da media. O nome ficou
 // `FIBONACCI` por historia — a sequencia deixou de ser fibonacci quando o 13

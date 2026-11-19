@@ -16,7 +16,7 @@
    (`poker-entrar`), o mesmo participante que o celular usa pelo QR.
 
    O QUE VEIO DO poker.html, E FICOU IGUAL DE PROPOSITO: o polling de
-   `poker-estado` a cada 1,5 s (que e o sinal de vida de quem esta na mesa), o
+   `poker-estado` a cada 3 s (que e o sinal de vida de quem esta na mesa), o
    contador `mutSeq` que descarta resposta de polling anterior a uma acao, a
    carta guardada por sala e pauta ate revelar (`cartaMarcada`), o aviso
    `poker-ausente` ao sair (e nao `poker-sair`, que apagaria o voto), a fila
@@ -43,7 +43,7 @@
   var H = A.H;
   var esc = H.esc, ico = H.ico, chip = H.chip;
 
-  var POLL_MS = 1500;
+  var POLL_MS = 3000; // 19/11/2026: era 1,5 s; com a mesa cheia, o polling estourou o limite diario de leitura do D1
   /* Copia de POKER_CARTAS (worker.js) SO para pintar o baralho antes de o
      estado chegar — o mesmo papel da lista em `renderCartas` do poker.html.
      Quem manda e o `cartas` que vem no estado. */
@@ -866,7 +866,7 @@
   }
 
   // ── Pintura da sala (por partes, so o que mudou) ───────────────────────
-  /* O polling chega a cada 1,5 s. Redesenhar tudo tirava a rolagem de quem le
+  /* O polling chega a cada 3 s. Redesenhar tudo tirava a rolagem de quem le
      a descricao e o tooltip de quem esta com o mouse numa carta — por isso
      cada parte so se redesenha quando a sua assinatura muda (`_detAssin` e
      `_mesaAssin` do poker.html). */

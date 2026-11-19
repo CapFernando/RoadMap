@@ -1216,11 +1216,31 @@ async function espelhoComHash(espelho) {
   return { demandas, meta, metaTxt };
 }
 
-/** Leva ao D1 o que difere, ate o teto. Devolve o que ficou por fazer. */
+/* O QUE O D1 TEM, GUARDADO NO ISOLATE (19/11/2026). Cada gravacao lia os
+   hashes das ~1.500 demandas do D1 para achar o que mudou — umas 800 gravacoes
+   por dia, 1,2 milhao de linhas: foi o que dobrou o consumo diario a partir de
+   16/11. Agora a primeira gravacao do isolate le, e as seguintes usam o que ele
+   mesmo gravou, por ate ESPELHO_CACHE_MS. Outro isolate gravando no meio pode
+   deixar uma linha para tras: a comparacao diaria (cron) e o "Sincronizar"
+   leem o D1 de verdade e acertam. O espelho e copia de conferencia; a fonte
+   continua sendo o arquivo. */
+const ESPELHO_CACHE_MS = 10 * 60 * 1000;
+let _espelhoD1 = null; // { em, demandas: Map(id -> hash), meta: { chave: hash } }
+async function espelhoEstadoD1(db, fresco) {
+  if (!fresco && _espelhoD1 && Date.now() - _espelhoD1.em < ESPELHO_CACHE_MS) {
+    return { demandas: [..._espelhoD1.demandas].map(([id, hash]) => ({ id, hash })), meta: Object.assign({}, _espelhoD1.meta) };
+  }
+  const d1 = await espelhoLerD1(db);
+  _espelhoD1 = { em: Date.now(), demandas: new Map(d1.demandas.map(x => [x.id, x.hash])), meta: Object.assign({}, d1.meta) };
+  return d1;
+}
+
+/** Leva ao D1 o que difere, ate o teto. Devolve o que ficou por fazer.
+ *  Com `max` (o "Sincronizar" do admin), le o D1 de verdade, sem o cache. */
 async function espelhoSincroniza(db, espelho, max) {
   await espelhoTabelas(db);
   const base = await espelhoComHash(espelho);
-  const dif = espelhoDiferencas(base, await espelhoLerD1(db));
+  const dif = espelhoDiferencas(base, await espelhoEstadoD1(db, max != null));
   const porId = new Map(base.demandas.map(d => [d.id, d]));
   const teto = max == null ? ESPELHO_MAX_LINHAS : max;
   const gravar = dif.faltando.concat(dif.diferentes).slice(0, teto).map(id => porId.get(id));
@@ -1243,7 +1263,16 @@ async function espelhoSincroniza(db, espelho, max) {
         .bind(k, base.metaTxt[k], base.meta[k], agora));
     } else stmts.push(db.prepare('DELETE FROM base_meta WHERE chave = ?').bind(k));
   });
-  if (stmts.length) await db.batch(stmts);
+  if (stmts.length) {
+    try { await db.batch(stmts); }
+    catch (e) { _espelhoD1 = null; throw e; }
+  }
+  // O cache passa a refletir o que acabou de ser gravado.
+  if (_espelhoD1) {
+    gravar.forEach(d => _espelhoD1.demandas.set(d.id, d.hash));
+    apagar.forEach(id => _espelhoD1.demandas.delete(id));
+    dif.meta.forEach(k => { if (k in base.metaTxt) _espelhoD1.meta[k] = base.meta[k]; else delete _espelhoD1.meta[k]; });
+  }
   const restam = (dif.faltando.length + dif.diferentes.length - gravar.length) + (dif.sobrando.length - apagar.length);
   return { gravadas: gravar.length, apagadas: apagar.length, meta: dif.meta.length, restam, total: base.demandas.length };
 }
@@ -1311,8 +1340,13 @@ function mesclaHist(a, b) {
 let _criouHistorico = false;
 async function historicoTabela(db) {
   if (_criouHistorico) return;
-  await db.prepare('CREATE TABLE IF NOT EXISTS historico_demanda ' +
-    '(id TEXT PRIMARY KEY, hist TEXT NOT NULL, atualizado_em TEXT)').run();
+  /* O INDICE EM `atualizado_em` (19/11/2026) e o que faz a leitura incremental
+     (`historico` com `desde`) ler so as linhas que mudaram, e nao a tabela. */
+  await db.batch([
+    db.prepare('CREATE TABLE IF NOT EXISTS historico_demanda ' +
+      '(id TEXT PRIMARY KEY, hist TEXT NOT NULL, atualizado_em TEXT)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS historico_demanda_atualizado ON historico_demanda (atualizado_em)'),
+  ]);
   _criouHistorico = true;
 }
 
@@ -4298,7 +4332,13 @@ const POKER_TTL_H = 2;    // sessão expira em 2h — duração máxima de um pl
 // bloqueando por instantes, sem deixar fantasma na sala.
 const PRESENCA_S  = 30;
 
+/* UMA VEZ POR ISOLATE (19/11/2026). Rodava em TODA requisicao do Poker — e o
+   `poker-estado` e o polling de 1,5 s de cada pessoa na mesa: tres CREATE TABLE
+   por batida. O indice em `poker_participante (codigo)` tira a varredura da
+   tabela inteira (que so cresce) das consultas da mesa. */
+let _migrouPoker = false;
 async function pokerMigrar(db) {
+  if (_migrouPoker) return;
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS poker_sessao (
       codigo TEXT PRIMARY KEY, melhoria_id TEXT, revelado INTEGER NOT NULL DEFAULT 0,
@@ -4309,8 +4349,18 @@ async function pokerMigrar(db) {
       codigo TEXT NOT NULL, melhoria_id TEXT NOT NULL, participante TEXT NOT NULL,
       valor TEXT NOT NULL, votado_em TEXT NOT NULL,
       PRIMARY KEY (codigo, melhoria_id, participante))`),
+    db.prepare('CREATE INDEX IF NOT EXISTS poker_participante_codigo ON poker_participante (codigo)'),
   ]);
+  _migrouPoker = true;
 }
+
+/* A FAXINA DA MESA, UMA VEZ EM CADA ~20 BATIDAS (19/11/2026). Rodava em toda
+   batida do polling: dois DELETE, um deles com subconsulta, para cada pessoa a
+   cada 1,5 s — foi o que mais leu do D1 no dia em que o limite estourou. O que
+   ela apaga e participante parado ha 2 horas (e o voto dele): a mesa ja nao
+   mostra quem esta fora da janela de presenca, entao fazer isso a cada ~1 min
+   em vez de a cada 1,5 s nao muda nada na tela. */
+const POKER_FAXINA_CHANCE = 0.05;
 
 function pokerCodigo() {
   // sem 0/O/1/I para ninguém errar ao digitar
@@ -5071,15 +5121,17 @@ async function rotear(request, env, _histFila) {
           await db.prepare('UPDATE poker_participante SET visto_em = ? WHERE id = ? AND codigo = ?')
             .bind(iso, String(body.participante), codigo).run();
         }
-        // faxina: registro sem sinal de vida ha muito tempo nao volta mais
-        const velho = new Date(agora.getTime() - 2 * 3600 * 1000).toISOString();
-        await db.prepare('DELETE FROM poker_participante WHERE codigo = ? AND visto_em < ?').bind(codigo, velho).run();
-        // O voto do participante removido ficava na base e seguia contando: a mesa
-        // aparecia vazia e o placar mostrava "5 votos" com media de gente que nao
-        // esta mais na sala. Voto sem participante e apagado junto.
-        await db.prepare(
-          'DELETE FROM poker_voto WHERE codigo = ? AND participante NOT IN (SELECT id FROM poker_participante WHERE codigo = ?)'
-        ).bind(codigo, codigo).run();
+        // faxina: registro sem sinal de vida ha muito tempo nao volta mais (de vez em quando: POKER_FAXINA_CHANCE)
+        if (Math.random() < POKER_FAXINA_CHANCE) {
+          const velho = new Date(agora.getTime() - 2 * 3600 * 1000).toISOString();
+          // O voto do participante removido ficava na base e seguia contando: a mesa
+          // aparecia vazia e o placar mostrava "5 votos" com media de gente que nao
+          // esta mais na sala. Voto sem participante e apagado junto.
+          await db.batch([
+            db.prepare('DELETE FROM poker_participante WHERE codigo = ? AND visto_em < ?').bind(codigo, velho),
+            db.prepare('DELETE FROM poker_voto WHERE codigo = ? AND participante NOT IN (SELECT id FROM poker_participante WHERE codigo = ?)').bind(codigo, codigo),
+          ]);
+        }
 
         const est = await pokerEstado(db, codigo);
         if (!est) return json({ error: 'Sessao nao encontrada' }, 404, headers);
@@ -8255,7 +8307,7 @@ async function rotear(request, env, _histFila) {
         if (!ligado) return json({ error: 'desligado', detail: 'O espelho no D1 está desligado (variável ESPELHO_D1 do Worker).' }, 409, headers);
         if (op === 'comparar') return json({ ok: true, ligado, ultima: await espelhoCompara(env, gh, 'manual') }, 200, headers);
         if (op === 'sincronizar') {
-          const r = await espelhoSincroniza(db, await espelhoDaBaseNoArquivo(gh));
+          const r = await espelhoSincroniza(db, await espelhoDaBaseNoArquivo(gh), ESPELHO_MAX_LINHAS); // com teto explicito: le o D1 de verdade
           console.log(JSON.stringify({ acao: 'espelho-sincronizar', ok: true, gravadas: r.gravadas, apagadas: r.apagadas, restam: r.restam }));
           return json(Object.assign({ ok: true }, r), 200, headers);
         }
@@ -8749,9 +8801,22 @@ async function rotear(request, env, _histFila) {
       if (!(await leituraLiberadaAsync(body))) return json({ error: 'credencial' }, 401, headers);
       if (!env.POKER_DB) return json({ itens: {} }, 200, headers);
       await historicoTabela(env.POKER_DB);
-      const rh = await env.POKER_DB.prepare('SELECT id, hist FROM historico_demanda').all();
-      const partes = ((rh && rh.results) || []).map(x => JSON.stringify(x.id) + ':' + (x.hist || '[]'));
-      return new Response('{"itens":{' + partes.join(',') + '}}', {
+      /* LEITURA INCREMENTAL (19/11/2026). Cada gravacao muda a versao da base, e
+         CADA ABA ABERTA buscava a trilha inteira de novo (~1.500 linhas): gravacoes
+         x abas x 1.500 foi o grosso do consumo diario do D1 — e no dia 19/11 o
+         limite de 5 milhoes de linhas lidas do plano Free estourou e derrubou o
+         login. Com `desde` (o `ate` da resposta anterior), vem so o que mudou,
+         pelo indice. A resposta traz `ate` para a proxima vez; `>=` repete a
+         linha da borda, e quem le substitui por id, sem duplicar. */
+      const desde = typeof body.desde === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(body.desde) ? body.desde : '';
+      const rh = desde
+        ? await env.POKER_DB.prepare('SELECT id, hist, atualizado_em FROM historico_demanda WHERE atualizado_em >= ?').bind(desde).all()
+        : await env.POKER_DB.prepare('SELECT id, hist, atualizado_em FROM historico_demanda').all();
+      const linhas = (rh && rh.results) || [];
+      let ate = desde;
+      linhas.forEach(x => { if (x.atualizado_em && x.atualizado_em > ate) ate = x.atualizado_em; });
+      const partes = linhas.map(x => JSON.stringify(x.id) + ':' + (x.hist || '[]'));
+      return new Response('{"itens":{' + partes.join(',') + '},"ate":' + JSON.stringify(ate) + ',"parcial":' + (desde ? 'true' : 'false') + '}', {
         status: 200,
         headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers },
       });
