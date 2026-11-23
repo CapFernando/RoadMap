@@ -25672,7 +25672,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(a1.ok && a1.obj.poker_pontos === 5 && a1.obj.prioridade === 'alta' && a1.obj.entrega === '2026-12-01' && a1.obj.dados_bi === true && a1.obj.sales_ops === false &&
        a1.obj.comite === null && Array.isArray(a1.obj.historico) && a1.obj.homologacao === null, 'admin: os padroes do saveMelhoria; Dados/BI e Sales Ops sao exclusivos');
     ok(F.nova(Object.assign({}, base, { entrega: '2026-10-01' }), c('admin')).campo === 'entrega', 'admin: tambem nao nasce com data no passado');
-    ok(F.nova(Object.assign({}, base, { etapa: 'planejado', dev: 'Ana' }), c('admin')).campo === 'sprint', 'admin: Planejado sem sprint pede a sprint');
+    /* 24/11/2026: o time de produto (dono da sprint) pode deixar em Planejado sem
+       sprint, para o dev lancar as horas de task fora da sprint. Quem nao e do
+       produto nao escolhe etapa na abertura (nasce no Backlog). */
+    const aPl = F.nova(Object.assign({}, base, { etapa: 'planejado', dev: 'Ana' }), c('admin'));
+    ok(aPl.ok && aPl.obj.status_planejamento === 'planejado' && !aPl.obj.sprint_po, 'admin do time de produto: Planejado sem sprint passa');
     const a2 = F.nova(Object.assign({}, base, { etapa: 'planejado', sprint: 'S2-11-2026' }), c('admin'));
     ok(a2.ok && a2.obj.sprint_po === 'S2-11-2026' && a2.obj.sprint_po_por === 'Paula PO' && a2.obj.sprint_po_historico.length === 1,
        'admin: a sprint entra por SPRINTPO.repassar, e Planejado com sprint dispensa o dono', JSON.stringify(a2.erro || ''));

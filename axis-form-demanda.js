@@ -345,7 +345,7 @@
       }
       if (dono(c)) { var e = aplicaSprint(obj, f.sprint || '', c); if (e) return e; }
       var SP = mod(c, 'SPRINTPO');
-      if (SP && SP.travaDeAlocacao(obj, 'backlog', sp, c.hoje).trava) {
+      if (SP && SP.travaDeAlocacao(obj, 'backlog', sp, c.hoje, { produto: dono(c) }).trava) {
         return falha('Escolha a sprint: depois da Planning ela é obrigatória.', 'sprint');
       }
       if (sp === 'concluido' && !(Number(obj.horas_realizadas) > 0)) {
