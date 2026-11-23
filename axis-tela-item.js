@@ -305,7 +305,7 @@
 
     if (prox) {
       if (window.SPRINTPO) {
-        var ta = SPRINTPO.travaDeAlocacao(m, col, prox, hoje);
+        var ta = SPRINTPO.travaDeAlocacao(m, col, prox, hoje, { produto: !!(H.donoDaSprint && H.donoDaSprint()) });
         if (ta && ta.trava) faltas.push(ta.motivo);
       }
       if (window.HOMOLOGACAO) {

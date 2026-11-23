@@ -502,6 +502,9 @@
   var ETAPAS_POS_PLANNING = ['planejado', 'em_andamento', 'validacao_area',
                              'validacao', 'concluido', 'atrasado'];
 
+  /** Onde o time de produto chega sem sprint (ver `travaDeAlocacao`). */
+  var ETAPAS_DE_ENTREGA = ['validacao_area', 'validacao', 'concluido'];
+
   function posPlanning(etapa) { return ETAPAS_POS_PLANNING.indexOf(txt(etapa)) >= 0; }
 
   /** Mantida pelo nome: era a única etapa guardada, e quem lê o código antigo
@@ -550,6 +553,13 @@
     var conclui = txt(etapaDepois) === 'concluido' && txt(etapaAntes) !== 'concluido' &&
                   entregueNoRegime(m) && !(opts && opts.produto);
     if (!cruza && !comeca && !conclui) return { trava: false };
+    /* O TIME DE PRODUTO LEVA SEM SPRINT ATÉ A VALIDAÇÃO E O FECHAMENTO
+       (24/11/2026): "itens tratados no kanban sem sprint estão sendo
+       movimentados para validação PM/PO". Para a área de produto, ir sem
+       sprint para Validação da área, Validação PM/PO ou Concluído passa —
+       o trabalho já foi feito e a falta de sprint fica como sinal. Planejado
+       e Em andamento continuam exigindo sprint para todos. */
+    if (opts && opts.produto && ETAPAS_DE_ENTREGA.indexOf(txt(etapaDepois)) >= 0) return { trava: false };
     if (tipoLivre(m)) return { trava: false };
     if (doPO(m)) return { trava: false };
     if (conclui && !cruza && !comeca) {
