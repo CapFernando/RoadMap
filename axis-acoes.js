@@ -1205,6 +1205,14 @@
     var itens = SP.proximasSprints(c.hoje, 5, D.feriados || [], SP.rotulosFechados(D)).map(function (s) {
       return { valor: s.rotulo, rotulo: SP.rotuloCurto(s.rotulo), nota: dm(s.de) + '–' + dm(s.ate) + (s.agora ? ' · agora' : '') };
     });
+    /* SPRINT PASSADA, SO PARA A AREA DE PRODUTO (23/11/2026): as quatro ultimas
+       que ainda nao foram fechadas, depois das futuras. `c.dono` e a mesma
+       trava do repasse (area de produto); fechada continua fora (`repassar`). */
+    if (c.dono && SP.sprintsAnteriores) {
+      SP.sprintsAnteriores(c.hoje, 4, D.feriados || [], SP.rotulosFechados(D)).forEach(function (s) {
+        itens.push({ valor: s.rotulo, rotulo: SP.rotuloCurto(s.rotulo), nota: dm(s.de) + '–' + dm(s.ate) + ' · já passou' });
+      });
+    }
     if (SP.doPO(m)) itens.push({ valor: '', rotulo: 'Tirar da sprint', nota: 'volta para o backlog', perigo: true });
     return itens;
   }

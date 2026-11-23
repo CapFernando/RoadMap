@@ -26087,7 +26087,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       corpo(ADMIN, 'function opcoesSprintKb() {') + '\n' + corpo(ADMIN, 'function renderEntregasSprint() {') +
       '\nreturn function (s, f, p, e, v) { _esSprint = s; _esFiltro = f; _esPessoa = p || \'\'; _esEsteira = e || \'\'; _esSoVenc = !!v; renderEntregasSprint(); return _esPessoa; };');
     const esApp = new Function([(SPT.match(/^ {2}var ES_ESTEIRAS = .*$/m) || [''])[0], corpo(SPT, 'function esEsteiraDe(PI, perfis, m) {'),
-      corpo(SPT, 'function esSituacao(SPm, etapa, r, feriados) {'), corpo(SPT, 'function esResumo(SPm, etapa, vivas, r, hoje, projetos, feriados, esteira, esteiraDe) {'),
+      corpo(SPT, 'function esSituacao(SPm, etapa, r, feriados, fech) {'), corpo(SPT, 'function esResumo(SPm, etapa, vivas, r, hoje, projetos, feriados, esteira, esteiraDe, fech) {'),
       corpo(SPT, 'function esDaPessoa(x, nome) {'), corpo(SPT, 'function esGrupos(lista, temas) {'),
       corpo(SPT, 'function esGruposFalta(SPm, lista, x, feriados) {'), corpo(SPT, 'function esEntregaDev(m, hoje) {'),
       corpo(SPT, 'function esEntregaUsuario(m, hoje, aberta) {')].join('\n') + '\nreturn { esEsteiraDe, esResumo, esDaPessoa, esGrupos, esGruposFalta, esEntregaDev, esEntregaUsuario };')();
@@ -26111,7 +26111,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        (c11b681 e 93b6d4c) entra duas vezes: tudo o que falta e "So vencidas". */
     const FILTROS_E = [['todas'], ['entregues'], ['falta_com'], ['falta_com', true], ['falta_sem']];
     ['S5-10-2026', 'S1-11-2026', 'S2-11-2026', 'S4-11-2026', 'S1-12-2026'].forEach(r => ['', 'dev', 'dados', 'sales'].forEach(est => FILTROS_E.forEach(([f, soVenc]) => {
-      const x = esApp.esResumo(SP, statusKey, vivasE, r, HOJE, projetos, stateE.feriados, est, deEApp);
+      const x = esApp.esResumo(SP, statusKey, vivasE, r, HOJE, projetos, stateE.feriados, est, deEApp, SP.fechamentoEm(stateE));
       const modoF = f === 'falta_com';
       // Cada pessoa da sprint (com ou sem nada faltando), ninguem e um nome de fora.
       const nomes = [''].concat([...new Set(x.ms.map(m => String(m.dev || '').trim()).filter(Boolean))], ['Ninguem']);
@@ -26210,9 +26210,27 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     {
       // A regra de 05/11 na amostra: o que a S1-11 e a S2-11 contam, pelo codigo.
       const cod = (l) => l.map(m => m.codigo).filter(c => /^AX-9/.test(c)).sort().join();
-      const s1 = esApp.esResumo(SP, statusKey, vivasE, 'S1-11-2026', HOJE, projetos, stateE.feriados, '', deEApp);
-      const s2 = esApp.esResumo(SP, statusKey, vivasE, 'S2-11-2026', HOJE, projetos, stateE.feriados, '', deEApp);
-      const s5 = esApp.esResumo(SP, statusKey, vivasE, 'S5-10-2026', HOJE, projetos, stateE.feriados, '', deEApp);
+      /* Aqui a S1-11 esta FECHADA em 09/11, antes da ida da AX-904 (12/11): a
+         entrega dela e da S2-11, pela data. A regra da flag aberta (23/11) vem
+         logo depois. */
+      const FECH_S1 = { 'S1-11-2026': '2026-11-09' };
+      const s1 = esApp.esResumo(SP, statusKey, vivasE, 'S1-11-2026', HOJE, projetos, stateE.feriados, '', deEApp, FECH_S1);
+      const s2 = esApp.esResumo(SP, statusKey, vivasE, 'S2-11-2026', HOJE, projetos, stateE.feriados, '', deEApp, FECH_S1);
+      const s5 = esApp.esResumo(SP, statusKey, vivasE, 'S5-10-2026', HOJE, projetos, stateE.feriados, '', deEApp, FECH_S1);
+      /* A SPRINT DA FLAG, ENQUANTO ABERTA (23/11/2026): "mandei hoje para
+         validacao tarefas da S3 e foram para a S4, mesmo com a flag da S3".
+         Com a S1-11 ainda aberta, a AX-904 (flag S1, ida 12/11) conta na S1. */
+      const a1 = esApp.esResumo(SP, statusKey, vivasE, 'S1-11-2026', HOJE, projetos, stateE.feriados, '', deEApp, {});
+      const a2 = esApp.esResumo(SP, statusKey, vivasE, 'S2-11-2026', HOJE, projetos, stateE.feriados, '', deEApp, {});
+      ok(cod(a1.fechadas).split(',').includes('AX-904') && !cod(a1.faltaCom).split(',').includes('AX-904') && !cod(a2.ms).split(',').includes('AX-904') &&
+         cod(a2.aguardando) === 'AX-903',
+         'flag aberta: entrega depois do fim da sprint, com ela ainda nao fechada, conta na sprint da flag e nao na seguinte', JSON.stringify({ s1: cod(a1.fechadas), s2: cod(a2.ms) }));
+      const d = SP.sprintDaIdaValidacao({ sprint_po: 'S3-11-2026', primeira_validacao_em: '2026-11-23' }, [], {});
+      const d2 = SP.sprintDaIdaValidacao({ sprint_po: 'S3-11-2026', primeira_validacao_em: '2026-11-23' }, [], { 'S3-11-2026': '2026-11-21' });
+      const d3 = SP.sprintDaIdaValidacao({ sprint_po: 'S3-11-2026', primeira_validacao_em: '2026-11-23' }, []);
+      const d4 = SP.sprintDaIdaValidacao({ sprint_po: 'S5-11-2026', primeira_validacao_em: '2026-11-23' }, [], {});
+      ok(d === 'S3-11-2026' && d2 === 'S4-11-2026' && d3 === 'S4-11-2026' && d4 === 'S4-11-2026',
+         'o caso relatado: flag S3, ida na segunda 23/11 -> S3 enquanto aberta; S3 fechada antes -> S4; flag numa sprint futura nao puxa a entrega', [d, d2, d3, d4].join(','));
       /* Regra de 06/11 (fdf14e2): em validacao conta como entregue da sprint, e a
          devolvida para ajuste (AX-906) volta a ser item em aberto. */
       ok(cod(s1.fechadas) === 'AX-901,AX-905,AX-907' && cod(s1.aguardando) === 'AX-902' && cod(s1.entregues) === 'AX-901,AX-902,AX-905,AX-907' &&
@@ -26223,7 +26241,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          JSON.stringify({ s1: [cod(s1.fechadas), cod(s1.aguardando), cod(s1.faltaCom)], s2: [cod(s2.fechadas), cod(s2.aguardando), cod(s2.ms)] }));
     }
     ok(/var ops = spOpcoesSprint\(SP\(\), vivas, H\.hoje\(\), fer\(D\)\)\.filter\(function \(o\) \{ return o\.key && o\.key !== '__fora__'; \}\);/.test(SPT) &&
-       /var x = esResumo\(SP\(\), H\.colunaDe, vivas, r, H\.hoje\(\), D\.projetos \|\| \[\], fer\(D\), _ent\.esteira,\s*function \(m\) \{ return esEsteiraDe\(PI, D\.devs_perfil, m\); \}\);/.test(SPT) &&
+       /var x = esResumo\(SP\(\), H\.colunaDe, vivas, r, H\.hoje\(\), D\.projetos \|\| \[\], fer\(D\), _ent\.esteira,\s*function \(m\) \{ return esEsteiraDe\(PI, D\.devs_perfil, m\); \}, SP\(\)\.fechamentoEm \? SP\(\)\.fechamentoEm\(D\) : null\);/.test(SPT) &&
        /var PI = raiz\.PIPELINES;/.test(SPT) && /data-es-esteira="' \+ e\.k \+ '"/.test(SPT) && /_ent\.esteira = _ent\.esteira === evv \? '' : evv;/.test(SPT) &&
        /_ent\.esteira = selEst\.value;/.test(SPT) && /\(modoFalta \? esGruposFalta\(SP\(\), lista, x, fer\(D\)\) : esGrupos\(lista, D\.temas \|\| \[\]\)\)/.test(SPT) &&
        /var modoFalta = _ent\.filtro === 'falta_com';\s*if \(!modoFalta\) _ent\.soVenc = false;/.test(SPT) &&
@@ -26305,7 +26323,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       PJ_ADM + '\nreturn { renderProjetos, imprimirProjetosAndamento, imprimirAprovacaoReq };');
     const GER = { gera: async (ps, o) => { capt.ps = ps; capt.o = o; return { projetos: ps.length }; } };
     const GER2 = { gera: async (l, o) => { capt.apr = l; capt.aprO = o; return { demandas: l.length }; } };
-    const fA = pjAdm(state, SP, PRAZO_, ET, doc, { PROJETOSPPT: GER, APROVACAOPPT: GER2 }, GER, GER2, () => {});
+    /* O "atrasado" do admin vem de ETAPA.efetiva(m), que sem data usa o relogio
+       de verdade; o app aqui usa HOJE. Sem prender o admin no mesmo HOJE, o
+       teste quebrava sozinho no dia em que uma entrega da amostra vencia (23/11). */
+    const ET_HOJE = Object.assign({}, ET, { efetiva: (m, h) => ET.efetiva(m, h || HOJE) });
+    const fA = pjAdm(state, SP, PRAZO_, ET_HOJE, doc, { PROJETOSPPT: GER, APROVACAOPPT: GER2 }, GER, GER2, () => {});
     fA.renderProjetos();
     const ordA = [...doc.els['pj-lista'].innerHTML.matchAll(/<div class="pj-and-topo"[^>]*>(?:<span class="pj-cod">([^<]*)<\/span>)?<span class="pj-nome">([^<]*)</g)].map(a => (a[1] || '') + '·' + a[2]);
     const ordP = pjApp.pjaOrdena(statusKey, m => ET.efetiva(m, HOJE), projetos, vivas)
@@ -29955,12 +29977,23 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'O gesto "Sprint…" existe no chip do Kanban do admin (sprintEscolher) e no card e no Item do app (o gesto `sprint` de axis-acoes.js)');
     if (so && se) {
       const D = { melhorias: [], feriados: FERIADOS_PROVA, sprints: [{ rotulo: 'S2-11-2026', iniciada_em: '2026-11-09', em: '2026-11-13', por: 'Fernando' }] };
-      const opsAdm = (atual) => new Function('state', 'SPRINTPO', 'PRAZO', 'window', so + '\nreturn sprintOpcoes;')(D, SP, { hojeISO: () => HOJE }, { PRAZO: { hojeISO: () => HOJE } })(atual);
+      const EU_PRODUTO = { papel: 'admin', area_produto: true };
+      const opsAdm = (atual, eu) => new Function('state', 'SPRINTPO', 'PRAZO', 'window', '_eu', so + '\nreturn sprintOpcoes;')(D, SP, { hojeISO: () => HOJE }, { PRAZO: { hojeISO: () => HOJE } }, eu === undefined ? EU_PRODUTO : eu)(atual);
       const cx = (extra) => ctx('admin', D.melhorias, Object.assign({ quem: 'Fernando', dono: true, D }, extra || {}));
       const norm = (l) => l.map((o) => [o.valor, semEmoji(o.rotulo), o.nota, !!o.perigo].join('|')).join(' ; ');
       const divO = ['', 'S1-11-2026', 'S2-11-2026'].filter((s) => norm(opsAdm(s)) !== norm(AC.sprintOpcoes({ sprint_po: s }, cx())));
-      ok(!divO.length && opsAdm('').length === 6 && !opsAdm('').some((o) => o.valor === 'S2-11-2026') && opsAdm('S1-11-2026').some((o) => o.valor === ''),
+      const futuras = (l) => l.filter((o) => o.valor && !/já passou/.test(o.nota));
+      const passadas = (l) => l.filter((o) => /já passou/.test(o.nota));
+      ok(!divO.length && futuras(opsAdm('')).length === 6 && !opsAdm('').some((o) => o.valor === 'S2-11-2026') && opsAdm('S1-11-2026').some((o) => o.valor === ''),
          'As sprints oferecidas: a atual e as cinco seguintes sem a fechada, e "Tirar da sprint" so para quem esta numa, como o sprintOpcoes do admin', divO.join(','));
+      /* SPRINT PASSADA (23/11/2026): so para a area de produto, as quatro ultimas ainda nao fechadas. */
+      const pas = passadas(AC.sprintOpcoes({ sprint_po: '' }, cx()));
+      ok(pas.length > 0 && pas.length <= 4 && !pas.some((o) => o.valor === 'S2-11-2026') && pas.every((o) => o.valor !== SP.rotuloDeData(HOJE, FERIADOS_PROVA)),
+         'area de produto: a lista traz tambem sprints que ja passaram, sem a fechada e sem a atual', pas.map((o) => o.valor).join(','));
+      ok(!passadas(AC.sprintOpcoes({ sprint_po: '' }, cx({ dono: false }))).length && !passadas(opsAdm('', { papel: 'admin', area_produto: false })).length,
+         'quem nao e da area de produto nao ve sprint passada (app e admin)');
+      const rp = SP.repassar({ id: 'x', sprint_po: '' }, pas[0].valor, 'Fernando', HOJE, { dados: D });
+      ok(rp.ok, 'repassar para a sprint passada (aberta) e aceito pelo sprint.js', JSON.stringify(rp.erro || ''));
       const escolhe = async (m0, escolha, eu, salva) => {
         const m = copia(m0); const st = { melhorias: [m], feriados: D.feriados, sprints: D.sprints }; let aviso = '';
         await new Function('state', 'SPRINTPO', 'PRAZO', 'window', '_eu', 'escolherDaLista', 'renderAll', 'saveViaProxy', 'avisaFalha', 'toast',
