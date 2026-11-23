@@ -2517,6 +2517,9 @@ function alocacaoSemSprint(recebido, servidor, papel, hoje, produto) {
        sprint (`ehDonoDaSprint`) passa; para os demais a trava continua. Mesma
        regra de `SPRINTPO.travaDeAlocacao` com `opts.produto`. */
     if (!cruza && !comeca && !conclui) continue;
+    /* TIME DE PRODUTO SEM SPRINT ATE A VALIDACAO E O FECHAMENTO (24/11/2026):
+       mesma regra de `SPRINTPO.travaDeAlocacao` com `opts.produto`. */
+    if (produto && ['validacao_area', 'validacao', 'concluido'].includes(depois)) continue;
     if (TIPOS_LIVRES_DA_SPRINT.includes(String(m.tipo || '').toLowerCase())) continue;
     if (String(m.sprint_po || '').trim()) continue;
     presos.push({ id: m.id, codigo: m.codigo || m.id,
