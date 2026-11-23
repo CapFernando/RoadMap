@@ -594,10 +594,12 @@
     if (!SP) return { html: opt('', 'Fora da sprint', ''), fechada: false };
     var fechadas = SP.rotulosFechados(D());
     var ops = SP.proximasSprints(H.hoje(), 5, D().feriados || [], fechadas);
+    // Sprint passada (ainda aberta), so para a area de produto (23/11/2026) — como o `sprintOpcoes`.
+    if (H.donoDaSprint && H.donoDaSprint() && SP.sprintsAnteriores) ops = ops.concat(SP.sprintsAnteriores(H.hoje(), 4, D().feriados || [], fechadas));
     var fechada = !!atual && SP.estaFechada(D(), atual);
     var h = opt('', 'Fora da sprint', atual);
     if (atual && !ops.some(function (o) { return o.rotulo === atual; })) h += opt(atual, SP.rotuloCurto(atual) + (fechada ? ' · fechada' : ' · anterior'), atual);
-    h += ops.map(function (o) { return opt(o.rotulo, SP.rotuloCurto(o.rotulo) + ' · ' + H.dm(o.de) + '–' + H.dm(o.ate) + (o.agora ? ' · agora' : ''), atual); }).join('');
+    h += ops.map(function (o) { return opt(o.rotulo, SP.rotuloCurto(o.rotulo) + ' · ' + H.dm(o.de) + '–' + H.dm(o.ate) + (o.agora ? ' · agora' : o.passada ? ' · já passou' : ''), atual); }).join('');
     return { html: h, fechada: fechada };
   }
 

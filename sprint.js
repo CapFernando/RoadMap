@@ -584,6 +584,27 @@
     return lista;
   }
 
+  /** AS SPRINTS QUE JA PASSARAM, da mais recente para tras (23/11/2026): "quero
+   *  poder colocar tasks em sprints passadas, mas so a area de produto". Ate
+   *  `n`, olhando no maximo tres meses para tras, sem as fechadas — fechada nao
+   *  recebe demanda (`repassar`) e o numero apresentado nao muda. */
+  function sprintsAnteriores(hoje, n, feriados, fechadas) {
+    var dia = iso(hoje) || new Date().toISOString().slice(0, 10);
+    var fora = fechadas || [];
+    var agora = rotuloDeData(dia, feriados);
+    var ano = +dia.slice(0, 4), mes = +dia.slice(5, 7);
+    var lista = [];
+    for (var k = 0; k < 4 && lista.length < (n || 0); k++) {
+      sprintsDoMes(ano, mes, feriados).slice().reverse().forEach(function (s) {
+        if (lista.length >= (n || 0)) return;
+        if (chaveOrdem(s.rotulo) >= chaveOrdem(agora) || fora.indexOf(s.rotulo) >= 0) return;
+        lista.push({ rotulo: s.rotulo, de: s.de, ate: s.ate, dias: s.dias, passada: true });
+      });
+      if (mes === 1) { mes = 12; ano -= 1; } else { mes -= 1; }
+    }
+    return lista;
+  }
+
   /** Quem pode repassar uma demanda para a sprint.
    *
    *  PELO PAPEL, e nunca pelo nome. É a mesma trava do Validado em Comitê, e ela
@@ -682,6 +703,15 @@
   }
 
   function estaFechada(dados, rotulo) { return !!fechamentoDe(dados, rotulo); }
+
+  /** { rotulo: dia do fechamento } das sprints fechadas — o que a regra da
+   *  entrega (`sprintDaIdaValidacao`) precisa para saber se a sprint da flag
+   *  ainda estava aberta quando a demanda foi para validacao. */
+  function fechamentoEm(dados) {
+    var o = {};
+    fechamentos(dados).forEach(function (f) { if (txt(f.rotulo)) o[txt(f.rotulo)] = iso(f.em); });
+    return o;
+  }
 
   /** A SPRINT JÁ FOI INICIADA? É isto que libera as demandas para o time.
    *  Fechada conta como iniciada: ela correu e acabou. */
@@ -1460,11 +1490,27 @@
   }
 
   /** A sprint em que a entrega conta — '' quando não há ida para validação
-   *  ou ela é anterior à regra (aí vale a regra antiga, pela sprint marcada). */
-  function sprintDaIdaValidacao(m, feriados) {
+   *  ou ela é anterior à regra (aí vale a regra antiga, pela sprint marcada).
+   *
+   *  A SPRINT DA FLAG, ENQUANTO ELA ESTIVER ABERTA (23/11/2026): "mandei hoje
+   *  (segunda) para validação tarefas da S3-11 e elas foram contabilizadas na
+   *  S4-11, mesmo com a flag da S3. As que são aprovadas com a sprint aberta
+   *  são da sprint da flag, e não da próxima." A sprint de segunda a sexta
+   *  termina antes de o PM/PO fechá-la; o que o dev entrega nesse intervalo
+   *  ainda é trabalho da sprint da flag. Então: se a demanda está marcada numa
+   *  sprint ANTERIOR à do dia da ida e essa sprint não estava fechada naquele
+   *  dia, a entrega conta nela. `fech` = `fechamentoEm(dados)`; sem ele, a
+   *  regra só pela data, como antes. */
+  function sprintDaIdaValidacao(m, feriados, fech) {
     var d = primeiraIdaValidacao(m);
     if (!d || d < REGRA_ENTREGA_DESDE) return '';
-    return rotuloDeData(diaUtilAteHoje(d, feriados), feriados);
+    var peloDia = rotuloDeData(diaUtilAteHoje(d, feriados), feriados);
+    var flag = doPO(m);
+    if (fech && rotuloValido(flag) && peloDia && chaveOrdem(flag) < chaveOrdem(peloDia)) {
+      var fe = fech[flag];
+      if (!fe || d <= fe) return flag;
+    }
+    return peloDia;
   }
 
   /* IDA PARA VALIDAÇÃO NO FIM DE SEMANA OU FERIADO É DA SEMANA TRABALHADA
@@ -1501,7 +1547,7 @@
    *                   ou rolou para outra sprint sem ir;
    *    null         — não é desta sprint (inclusive a que foi para validação
    *                   numa sprint ANTERIOR: a entrega é de lá).            */
-  function situacaoNaSprint(m, rotulo, etapa, feriados) {
+  function situacaoNaSprint(m, rotulo, etapa, feriados, fech) {
     var r = txt(rotulo);
     var e = txt(etapa);
     if (!m || !r || e === 'negada') return null;
@@ -1515,7 +1561,7 @@
       return e === 'concluido' ? 'entregue'
            : (e === 'validacao' || e === 'validacao_area') ? 'aguardando' : 'em_curso';
     }
-    var ida = sprintDaIdaValidacao(m, feriados);
+    var ida = sprintDaIdaValidacao(m, feriados, fech);
     if (ida === r) {
       if (e === 'concluido') return 'entregue';
       /* Devolvida para ajuste já não está em validação: volta a ser item em
@@ -1554,17 +1600,17 @@
     return fora && !transbordouNoFechamento(dados, rotulo, m);
   }
 
-  function situacaoComPausa(m, rotulo, etapa, feriados) {
-    var sit = situacaoNaSprint(m, rotulo, etapa, feriados);
+  function situacaoComPausa(m, rotulo, etapa, feriados, fech) {
+    var sit = situacaoNaSprint(m, rotulo, etapa, feriados, fech);
     return sit === 'em_curso' && iso((m || {}).pausado_em) ? 'pausada' : sit;
   }
 
   function demandasDaSprintPorEntrega(dados, rotulo, trilha, etapaDe) {
-    var r = txt(rotulo), fer = (dados || {}).feriados || [];
+    var r = txt(rotulo), fer = (dados || {}).feriados || [], fech = fechamentoEm(dados);
     return ((dados || {}).melhorias || []).filter(function (m) {
       if (!m || m.oculto || m.mesclado_em || !daTrilha(m, trilha)) return false;
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
-      var sit = situacaoNaSprint(m, r, e, fer);
+      var sit = situacaoNaSprint(m, r, e, fer, fech);
       return !!sit;
     });
   }
@@ -1573,14 +1619,14 @@
   function placarDaSprint(dados, rotulo, etapaDe, trilha) {
     var r = txt(rotulo);
     if (sprintNoRegimeDeEntrega(r, (dados || {}).feriados)) {
-      var fer = (dados || {}).feriados || [];
+      var fer = (dados || {}).feriados || [], fechQ = fechamentoEm(dados);
       var q = { rotulo: r, trilha: txt(trilha), total: 0, validados: 0, aguardando: 0, pausadas: 0, emCurso: 0, saiu: 0, replanejadas: 0, naArea: 0,
                 pontosTotal: 0, pontosValidados: 0, pontosAguardando: 0,
                 semPontuacao: 0, pct: 0, pctPontos: null, regraEntrega: true,
                 itens: { validados: [], aguardando: [], pausadas: [], emCurso: [], saiu: [], replanejadas: [] } };
       demandasDaSprintPorEntrega(dados, r, trilha, etapaDe).forEach(function (m) {
         var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
-        var sit = situacaoComPausa(m, r, e, fer);
+        var sit = situacaoComPausa(m, r, e, fer, fechQ);
         var pts = pontosDe(m);
         /* REPLANEJADA NAO CONTA NO TOTAL (13/11/2026): "do Paullymax eu
            realoquei para proxima sprint pelo fato dele estar ausente e na
@@ -1674,10 +1720,10 @@
       return acc[nome];
     };
     var regraNova = sprintNoRegimeDeEntrega(r, (dados || {}).feriados);
-    var ferR = (dados || {}).feriados || [];
+    var ferR = (dados || {}).feriados || [], fechR = fechamentoEm(dados);
     (regraNova ? demandasDaSprintPorEntrega(dados, r, trilha, etapaDe) : []).forEach(function (m) {
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
-      var sit = situacaoComPausa(m, r, e, ferR);
+      var sit = situacaoComPausa(m, r, e, ferR, fechR);
       var nomes = txt(m.dev).split('/').map(function (x) { return x.trim(); }).filter(Boolean);
       if (!nomes.length) nomes = ['(sem dev)'];
       var qn = nomes.length, pts = pontosDe(m);
@@ -2070,7 +2116,7 @@
     placarDaSprint: placarDaSprint,
     REGRA_ENTREGA_DESDE: REGRA_ENTREGA_DESDE,
     primeiraIdaValidacao: primeiraIdaValidacao,
-    sprintDaIdaValidacao: sprintDaIdaValidacao,
+    sprintDaIdaValidacao: sprintDaIdaValidacao, fechamentoEm: fechamentoEm, sprintsAnteriores: sprintsAnteriores,
     sprintNoRegimeDeEntrega: sprintNoRegimeDeEntrega,
     situacaoNaSprint: situacaoNaSprint,
     situacaoComPausa: situacaoComPausa,

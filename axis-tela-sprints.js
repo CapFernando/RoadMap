@@ -1513,13 +1513,13 @@
      80%. O cartao Entregues soma as fechadas e as em validacao, e o quinto
      cartao (Aguardando aprovacao) saiu. A devolvida para ajuste ja nao esta em
      validacao: volta a ser item em aberto (`situacaoNaSprint`, sprint.js). */
-  function esSituacao(SPm, etapa, r, feriados) {
+  function esSituacao(SPm, etapa, r, feriados, fech) {
     var regra = !!(SPm.sprintNoRegimeDeEntrega && SPm.sprintNoRegimeDeEntrega(r, feriados));
     var sit = function (m) {
       var sk = etapa(m);
       if (sk === 'negada') return 'negada';
       if (!regra) return sk === 'concluido' ? 'entregue' : 'aberta';
-      var s = SPm.situacaoNaSprint(m, r, sk, feriados);
+      var s = SPm.situacaoNaSprint(m, r, sk, feriados, fech);
       if (s === 'entregue' || s === 'aguardando') return s;
       if (s === 'em_curso') return 'aberta';
       return s === 'saiu' && SPm.naSprint(m, r) ? 'aberta' : null;
@@ -1542,8 +1542,8 @@
   /** O resumo da aba. `esteira` ('' = todas) recorta a sprint; `esteiraDe(m)`
    *  diz a esteira de cada demanda. O andamento por esteira e sempre sobre a
    *  sprint inteira, como no admin. */
-  function esResumo(SPm, etapa, vivas, r, hoje, projetos, feriados, esteira, esteiraDe) {
-    var S = esSituacao(SPm, etapa, r, feriados || []), sit = S.sit;
+  function esResumo(SPm, etapa, vivas, r, hoje, projetos, feriados, esteira, esteiraDe, fech) {
+    var S = esSituacao(SPm, etapa, r, feriados || [], fech), sit = S.sit;
     var todas = vivas.filter(function (m) {
       if (!S.regra) return SPm.naSprint(m, r);
       var st = sit(m);
@@ -1718,7 +1718,7 @@
     }).join('');
     var PI = raiz.PIPELINES;
     var x = esResumo(SP(), H.colunaDe, vivas, r, H.hoje(), D.projetos || [], fer(D), _ent.esteira,
-      function (m) { return esEsteiraDe(PI, D.devs_perfil, m); });
+      function (m) { return esEsteiraDe(PI, D.devs_perfil, m); }, SP().fechamentoEm ? SP().fechamentoEm(D) : null);
     var pes = esDaPessoa(x, _ent.pessoa);
     if (!pes) _ent.pessoa = '';
     // O cartao "Aguardando aprovacao" saiu: em validacao ja esta em Entregues (fdf14e2).
