@@ -541,8 +541,12 @@
        obrigatória para fechar, e apenas eu posso colocar. Bloqueante." Quem
        chega em Concluído sem sprint fica fora de toda conta de sprint — é o que
        fez a S5-10 fechar com 1 entrega numa semana de 141. */
+    /* CONCLUIR SEM SPRINT, DE PROPÓSITO (23/11/2026): o PM/PO escolhe
+       "Concluir sem sprint" e a demanda leva `concluido_sem_sprint`. A regra
+       continua pedindo a sprint; a marca deixa o fechamento passar e aparecer
+       como sinal (o dev tratou sem avisar o produto, ou faltou organização). */
     var conclui = txt(etapaDepois) === 'concluido' && txt(etapaAntes) !== 'concluido' &&
-                  entregueNoRegime(m);
+                  entregueNoRegime(m) && !(m && m.concluido_sem_sprint === true);
     if (!cruza && !comeca && !conclui) return { trava: false };
     if (tipoLivre(m)) return { trava: false };
     if (doPO(m)) return { trava: false };

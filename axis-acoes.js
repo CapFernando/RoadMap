@@ -277,14 +277,16 @@
     /* APROVAR E CONCLUIR, e concluir exige sprint (`valDecidir`, 02/11/2026) —
        a mesma `SPRINTPO.travaDeAlocacao` do arraste; o servidor recusa igual. */
     var SP = mod(c, 'SPRINTPO');
-    var ta = SP ? SP.travaDeAlocacao(m, etapa(m), 'concluido', c.hoje) : null;
+    var semSprint = !!(a && a.sem_sprint) && !(SP && SP.doPO(m));
+    var ta = SP && !semSprint ? SP.travaDeAlocacao(m, etapa(m), 'concluido', c.hoje) : null;
     if (ta && ta.trava) return falha(ta.motivo, 'sprint');
     if (gestoSemDev(m, 'concluido', m.dev, m.sprint_po, c)) {
       return falha('Esta entrega está sem responsável. Escolha o desenvolvedor antes de aprovar — sem ele a entrega não entra em nenhum relatório por pessoa.', 'dev');
     }
     return { ok: true, msg: 'Entrega aprovada — demanda concluída.', patch: {
       status_planejamento: 'concluido', status: 'concluida', concluido_em: String(c.agora).slice(0, 10),
-      validado_em: c.agora, validado_por: txt(c.quem) || 'admin', validacao_obs: '' } };
+      validado_em: c.agora, validado_por: txt(c.quem) || 'admin', validacao_obs: '',
+      concluido_sem_sprint: semSprint } };
   }
 
   /** DEVOLVER COM MOTIVO (`valDecidir(false)`): volta para Planejado. */
@@ -1631,6 +1633,26 @@
 
     validar: async function (m) {
       var aviso = String(m.implementacao || '').trim() ? '' : '\n\nO dev não descreveu o que foi implementado: sem esse texto o relatório do comitê fica vazio para esta demanda.';
+      /* SEM SPRINT (23/11/2026): a caixa pede a sprint ali mesmo. O dono da
+         sprint escolhe uma aberta (inclusive a vencida ainda não fechada);
+         qualquer PM/PO pode concluir sem sprint, e a demanda fica marcada. */
+      var c = contexto(), SP = raiz.SPRINTPO;
+      var ta = SP && !SP.doPO(m) ? SP.travaDeAlocacao(m, etapa(m), 'concluido', c.hoje) : null;
+      if (ta && ta.trava) {
+        var ops = (c.dono ? sprintOpcoes(m, c).filter(function (o) { return o.valor; }) : []).map(function (o) { return { v: o.valor, r: o.rotulo, d: o.nota }; });
+        ops.push({ v: '__sem__', r: 'Concluir sem sprint', d: 'fica marcada: tratada fora do planejamento' });
+        var e = await caixa({ titulo: 'Validar e fechar ' + cod(m), texto: '"' + (m.titulo || '') + '" não está em nenhuma sprint. Inclua numa sprint aberta ou conclua sem sprint — a demanda fica marcada como concluída fora do planejamento.' + aviso,
+          campos: [{ nome: 'sprint', rotulo: 'Sprint da entrega', tipo: 'opcoes', valor: ops[0].v, opcoes: ops }],
+          ok: 'Validar e fechar', verde: true });
+        if (!e) return;
+        if (e.sprint !== '__sem__') {
+          var rs = await aplicar('sprint', m, { sprint: e.sprint });
+          if (!rs || !rs.ok) return rs;
+          var m2 = (((AX.APP.D || {}).melhorias) || []).find(function (x) { return x.id === m.id; }) || m;
+          return aplicar('validar', m2, {});
+        }
+        return aplicar('validar', m, { sem_sprint: true });
+      }
       var v = await caixa({ titulo: 'Validar e fechar ' + cod(m), texto: '"' + (m.titulo || '') + '" passa para Concluído, com o seu nome como quem validou.' + aviso,
         ok: 'Validar e fechar', verde: true, valida: validaCom('validar', m) });
       if (v) return aplicar('validar', m, {});

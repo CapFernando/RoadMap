@@ -2511,7 +2511,10 @@ function alocacaoSemSprint(recebido, servidor, papel, hoje) {
        regra de `SPRINTPO.entregueNoRegime`. */
     const entregaEm = String(m.entregue_em || m.validacao_area_em || '').slice(0, 10);
     const conclui = depois === 'concluido' && antesEt !== 'concluido' &&
-                    /^\d{4}-\d{2}-\d{2}$/.test(entregaEm) && entregaEm >= '2026-11-02';
+                    /^\d{4}-\d{2}-\d{2}$/.test(entregaEm) && entregaEm >= '2026-11-02' &&
+                    m.concluido_sem_sprint !== true;
+    /* `concluido_sem_sprint` (23/11/2026): o PM/PO concluiu sem sprint DE
+       PROPOSITO, pela opcao da tela. Mesma regra de `SPRINTPO.travaDeAlocacao`. */
     if (!cruza && !comeca && !conclui) continue;
     if (TIPOS_LIVRES_DA_SPRINT.includes(String(m.tipo || '').toLowerCase())) continue;
     if (String(m.sprint_po || '').trim()) continue;

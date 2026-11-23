@@ -1308,10 +1308,37 @@
 
   /* `manterRolagem`: redesenho pedido por filtro da propria tela nao volta a
      pagina para o topo; so a troca de rota volta. */
+  function chaveRolagem(e) {
+    return e.id ? '#' + e.id : e.getAttribute('data-col') ? '[data-col="' + e.getAttribute('data-col') + '"]' : '';
+  }
+  function rolagensDaVista() {
+    var v = raizEl && raizEl.querySelector('#vista'), r = [];
+    if (!v) return r;
+    v.querySelectorAll('[id], [data-col]').forEach(function (e) {
+      var k = chaveRolagem(e);
+      if (k && (e.scrollTop || e.scrollLeft)) r.push({ k: k, t: e.scrollTop, l: e.scrollLeft });
+    });
+    return r;
+  }
+  function devolveRolagens(r) {
+    var v = raizEl && raizEl.querySelector('#vista');
+    if (!v) return;
+    r.forEach(function (x) {
+      var e;
+      try { e = v.querySelector(x.k); } catch (_) { e = null; }
+      if (e) { e.scrollTop = x.t; e.scrollLeft = x.l; }
+    });
+  }
   function desenhar(manterRolagem) {
     if (!raizEl) return;
     lerSessao();
     if (APP.visao) { desenharVisao(manterRolagem); return; }
+    /* A ROLAGEM DE DENTRO DA TELA (19/11/2026): marcar a estrela no card 10 de uma
+       coluna redesenhava o app inteiro e a coluna voltava ao card 1. Guardando a
+       rolagem so da pagina, a de cada coluna do Quadro (`data-col`) e a do rolo
+       horizontal (`#qd-rolo`) se perdiam. Ao manter a rolagem, guarda a de todo
+       bloco rolado da vista que tenha id ou `data-col` e devolve depois. */
+    var rolagens = manterRolagem === true ? rolagensDaVista() : null;
     if (!APP.token) { _noVinculo = false; desenharLogin(); return; }
     // O passo do vinculo esta na tela: a releitura e a troca de rota nao passam por cima dele.
     if (_noVinculo) return;
@@ -1380,6 +1407,7 @@
         '<button class="btn" type="button" onclick="location.reload()">Recarregar</button>');
     }
     if (manterRolagem !== true) window.scrollTo(0, 0);
+    if (rolagens) devolveRolagens(rolagens);
     // A tela pode ter deixado de desenhar o bloco de filtros que estava aberto.
     if (_flAberto && !document.querySelector('.fl.aberto[data-fl="' + _flAberto + '"]')) { _flAberto = ''; document.documentElement.classList.remove('fl-trava'); }
   }
