@@ -23902,7 +23902,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * repete (ele nao importa arquivo nenhum). Copia que nao e conferida lado a
      * lado e copia que diverge calada — e aqui a divergencia seria uma trava
      * que a tela mostra e o servidor nao aplica, ou o contrario.             */
-    const semSprintFn = corpo(W, 'function alocacaoSemSprint(recebido, servidor, papel, hoje) {');
+    const semSprintFn = corpo(W, 'function alocacaoSemSprint(recebido, servidor, papel, hoje, produto) {');
     ok(!!semSprintFn, 'a trava de alocacao existe no Worker');
     const mTrava = W.match(/const TRAVA_ALOCACAO_DESDE = '([\d-]+)';/);
     const mLivres = W.match(/const TIPOS_LIVRES_DA_SPRINT = (\[[^\]]*\]);/);
@@ -24014,7 +24014,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'e ela vale TAMBEM para o PM/PO — e ele quem escolhe a sprint, antes de mover');
       /* E A ROTA DO ADMIN A APLICA. Medir a funcao sem medir que ela e chamada
          no `publish` deixaria a regra so no painel do dev. */
-      const iPub = WC.indexOf("alocacaoSemSprint(data, antesPub, 'admin')");
+      const iPub = WC.indexOf("alocacaoSemSprint(data, antesPub, 'admin', undefined, _donoPub)");
       ok(iPub > 0 && /if \(semSprintPub\.length\) \{/.test(WC.slice(iPub, iPub + 200)) &&
          /error: 'fora_da_sprint'/.test(WC.slice(iPub, iPub + 400)),
          'o publish do Admin recusa mover sem sprint, com o mesmo codigo de erro');

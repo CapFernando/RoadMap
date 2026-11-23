@@ -525,7 +525,7 @@
     return !!e && e >= CONCLUIR_EXIGE_SPRINT_DESDE;
   }
 
-  function travaDeAlocacao(m, etapaAntes, etapaDepois, hoje) {
+  function travaDeAlocacao(m, etapaAntes, etapaDepois, hoje, opts) {
     var dia = iso(hoje) || new Date().toISOString().slice(0, 10);
     if (dia < TRAVA_DESDE) return { trava: false };
     if (!posPlanning(etapaDepois)) return { trava: false };
@@ -541,12 +541,14 @@
        obrigatória para fechar, e apenas eu posso colocar. Bloqueante." Quem
        chega em Concluído sem sprint fica fora de toda conta de sprint — é o que
        fez a S5-10 fechar com 1 entrega numa semana de 141. */
-    /* CONCLUIR SEM SPRINT, DE PROPÓSITO (23/11/2026): o PM/PO escolhe
-       "Concluir sem sprint" e a demanda leva `concluido_sem_sprint`. A regra
-       continua pedindo a sprint; a marca deixa o fechamento passar e aparecer
-       como sinal (o dev tratou sem avisar o produto, ou faltou organização). */
+    /* CONCLUIR SEM SPRINT É DO TIME DE PRODUTO (24/11/2026): "retirar o
+       bloqueio e permitir, porém só time de produto deverá conseguir concluir".
+       Para a área de produto (`opts.produto`, o dono da sprint) o fechamento sem
+       sprint passa, e a demanda leva `concluido_sem_sprint` como sinal (o dev
+       tratou sem avisar o produto, ou faltou organização). Para os demais, a
+       trava de 02/11 continua. */
     var conclui = txt(etapaDepois) === 'concluido' && txt(etapaAntes) !== 'concluido' &&
-                  entregueNoRegime(m) && !(m && m.concluido_sem_sprint === true);
+                  entregueNoRegime(m) && !(opts && opts.produto);
     if (!cruza && !comeca && !conclui) return { trava: false };
     if (tipoLivre(m)) return { trava: false };
     if (doPO(m)) return { trava: false };
