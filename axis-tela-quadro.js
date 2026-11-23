@@ -114,6 +114,41 @@
     return !!p && !!F.sprint && F.sprint.length === 1 && F.sprint[0] === p[0];
   }
 
+  /* O FILTRO SALVO (19/11/2026): o estado acima morria ao recarregar e o quadro
+     voltava ao padrao. Agora os filtros escolhidos ficam no localStorage, por
+     conta, e voltam ao abrir. A sprint atual e guardada como "a atual", para na
+     semana seguinte abrir na sprint nova; sprint que sumiu sai do filtro. A
+     busca, a coluna do celular e a paginacao sao do momento e nao ficam. */
+  var GUARDA = ['frente', 'tipo', 'sistema', 'dev', 'sol', 'prazo', 'meus', 'vencidas', 'sprint', 'prod', 'dados', 'todasConcluidas'];
+  function filtroParaGuardar(F, sprintEhAtual, times) {
+    var o = { v: 1, times: times || '' };
+    GUARDA.forEach(function (k) { o[k] = F[k]; });
+    if (sprintEhAtual) o.sprint = 'atual';
+    return o;
+  }
+  function aplicaFiltroGuardado(F, s, padrao, validas) {
+    if (!s || s.v !== 1) return false;
+    GUARDA.forEach(function (k) {
+      if (k === 'sprint') return;
+      var tipo = k === 'vencidas' || k === 'todasConcluidas' ? 'boolean' : 'string';
+      if (typeof s[k] === tipo) F[k] = s[k];
+    });
+    if (s.sprint === null) F.sprint = null;
+    else if (Array.isArray(s.sprint)) {
+      var vale = s.sprint.filter(function (k) { return validas.indexOf(k) >= 0; });
+      F.sprint = vale.length ? vale : padrao;
+    } else F.sprint = padrao;
+    F.sprintPadrao = true;
+    return true;
+  }
+  /* FIM filtroSalvo */
+  function chaveFiltro() { var eu = AX.APP.eu || {}; return 'rm_quadro_filtro:' + (eu.login || eu.usuario || eu.nome || ''); }
+  function lerFiltro() { try { return JSON.parse(localStorage.getItem(chaveFiltro()) || 'null'); } catch (_) { return null; } }
+  function guardaFiltro(ctx) {
+    var AC = window.AXIS_ACOES;
+    try { localStorage.setItem(chaveFiltro(), JSON.stringify(filtroParaGuardar(F, sprintEhPadrao(ctx), AC && AC.times ? AC.times() : ''))); } catch (_) {}
+  }
+
   // ── CSS proprio, injetado uma vez ────────────────────────────────────
   function css() {
     if (document.getElementById('css-tela-quadro')) return;
@@ -871,6 +906,11 @@
 
   function montar(ctx) {
     var D = ctx.D;
+    if (F.meus === null && !F.sprintPadrao) {
+      var salvo = lerFiltro();
+      if (aplicaFiltroGuardado(F, salvo, sprintPadraoDev(ctx), window.AXIS_SPRINTS ? AXIS_SPRINTS.opcoes(universo(ctx)).map(function (o) { return o.key; }) : []) &&
+          window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(salvo.times);
+    }
     if (F.meus === null) F.meus = ctx.papel === 'dev' ? 'meu_fila' : '';
     if (!F.sprintPadrao && ctx.papel === 'dev') { F.sprintPadrao = true; if (sprintPadraoDev(ctx)) F.sprint = sprintPadraoDev(ctx); }
     var AC = window.AXIS_ACOES;
@@ -1352,6 +1392,7 @@
     var x = rolo ? rolo.scrollLeft : 0;
     var y = window.scrollY;
     el.innerHTML = montar(ctx);
+    guardaFiltro(ctx);
     var novo = el.querySelector('#qd-rolo');
     if (novo) novo.scrollLeft = x;
     sincEtapa(el, F, true);
