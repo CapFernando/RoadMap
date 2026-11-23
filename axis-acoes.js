@@ -115,6 +115,13 @@
   /* COPIA DE `marcaConclusao` (admin.html), devolvendo os campos em vez de
      mutar: chegar a Concluido estampa a data (e a entrega do dev, se faltar);
      sair dela limpa, e a marca de retroativo sai junto (`undefined` apaga). */
+  /* CONCLUIDA FORA DE SPRINT (24/11/2026): so o time de produto chega a
+     Concluido sem sprint; a marca fica como sinal no card. Sair de Concluido
+     apaga. Separada da `marcaConclusao`, que espelha a do admin.html. */
+  function marcaSemSprint(m, destino) {
+    if (destino === 'concluido') return { concluido_sem_sprint: !txt(m.sprint_po) };
+    return m.concluido_sem_sprint ? { concluido_sem_sprint: undefined } : {};
+  }
   function marcaConclusao(m, destino, hoje) {
     var p = {};
     if (destino === 'concluido') {
@@ -154,7 +161,7 @@
     }
     var SP = mod(c, 'SPRINTPO');
     if (SP) {
-      var ta = SP.travaDeAlocacao(m, etapa(m), destino, c.hoje);
+      var ta = SP.travaDeAlocacao(m, etapa(m), destino, c.hoje, { produto: !!c.dono });
       if (ta && ta.trava) return falha(ta.motivo, 'sprint');
     }
     if (destino === 'concluido') {
@@ -222,7 +229,7 @@
     if (destino === 'negada') return falha('Negar pede o motivo: use "Negar".');
     if (salesOpsLivre(m, c)) {
       var pl = { status_planejamento: destino, status: STATUS_DEV[destino] || m.status };
-      Object.assign(pl, marcaConclusao(m, destino, c.hoje));
+      Object.assign(pl, marcaConclusao(m, destino, c.hoje), marcaSemSprint(m, destino));
       Object.assign(pl, tiraInicioDoBacklog(Object.assign({}, m, pl)));
       var assumiuL = assumeAoComecar(m, destino, c);
       if (assumiuL) pl.dev = assumiuL;
@@ -241,7 +248,7 @@
       var hbd = HOd ? HOd.barra(m, destino, c.hoje) : null;
       if (hbd) return falha(hbd.motivo, hbd.campo === 'etapa' ? '' : hbd.campo);
       var SPd = mod(c, 'SPRINTPO');
-      var tad = SPd ? SPd.travaDeAlocacao(m, etapa(m), destino, c.hoje) : null;
+      var tad = SPd ? SPd.travaDeAlocacao(m, etapa(m), destino, c.hoje, { produto: !!c.dono }) : null;
       if (tad && tad.trava) return falha(tad.motivo, '');
       var pd = { status_planejamento: destino, status: STATUS_DEV[destino], horas_realizadas: m.horas_realizadas || 0 };
       /* QUEM TIRA DA FILA VIRA O DONO (`updateStatus`, dev.html, 03/11/2026):
@@ -256,7 +263,7 @@
     var t = travaDoMovimento(m, destino, c) || travaDoDevPublish(m, destino, c);
     if (t) return t;
     var p = { status_planejamento: destino, status: STATUS_ADMIN[destino] || m.status };
-    Object.assign(p, marcaConclusao(m, destino, c.hoje));
+    Object.assign(p, marcaConclusao(m, destino, c.hoje), marcaSemSprint(m, destino));
     Object.assign(p, tiraInicioDoBacklog(Object.assign({}, m, p)));
     return { ok: true, patch: p, msg: 'Movida para ' + rotulo(destino) + '.' };
   }
@@ -277,14 +284,16 @@
     /* APROVAR E CONCLUIR, e concluir exige sprint (`valDecidir`, 02/11/2026) —
        a mesma `SPRINTPO.travaDeAlocacao` do arraste; o servidor recusa igual. */
     var SP = mod(c, 'SPRINTPO');
-    var ta = SP ? SP.travaDeAlocacao(m, etapa(m), 'concluido', c.hoje) : null;
-    if (ta && ta.trava) return falha(ta.motivo, 'sprint');
+    var semSprint = !(SP && SP.doPO(m)) && !txt(m.sprint_po);
+    var ta = SP ? SP.travaDeAlocacao(m, etapa(m), 'concluido', c.hoje, { produto: !!c.dono }) : null;
+    if (ta && ta.trava) return falha('Concluir sem sprint é do time de produto. Peça à área de produto para concluir, ou para incluir a demanda numa sprint.', 'sprint');
     if (gestoSemDev(m, 'concluido', m.dev, m.sprint_po, c)) {
       return falha('Esta entrega está sem responsável. Escolha o desenvolvedor antes de aprovar — sem ele a entrega não entra em nenhum relatório por pessoa.', 'dev');
     }
     return { ok: true, msg: 'Entrega aprovada — demanda concluída.', patch: {
       status_planejamento: 'concluido', status: 'concluida', concluido_em: String(c.agora).slice(0, 10),
-      validado_em: c.agora, validado_por: txt(c.quem) || 'admin', validacao_obs: '' } };
+      validado_em: c.agora, validado_por: txt(c.quem) || 'admin', validacao_obs: '',
+      concluido_sem_sprint: semSprint } };
   }
 
   /** DEVOLVER COM MOTIVO (`valDecidir(false)`): volta para Planejado. */
@@ -455,7 +464,7 @@
     var hb = HO ? HO.barra(m, destino, c.hoje) : null;
     if (hb) return falha(hb.motivo, hb.campo === 'etapa' ? 'destino' : hb.campo);
     var SP = mod(c, 'SPRINTPO');
-    var ta = SP ? SP.travaDeAlocacao(m, col, destino, c.hoje) : null;
+    var ta = SP ? SP.travaDeAlocacao(m, col, destino, c.hoje, { produto: !!c.dono }) : null;
     if (ta && ta.trava) return falha(ta.motivo, '');
     var st = ehDev(c) ? STATUS_DEV[destino] : (STATUS_ADMIN[destino] || m.status);
     var p = { status_planejamento: destino, status: st, horas_realizadas: horas };
@@ -1631,6 +1640,11 @@
 
     validar: async function (m) {
       var aviso = String(m.implementacao || '').trim() ? '' : '\n\nO dev não descreveu o que foi implementado: sem esse texto o relatório do comitê fica vazio para esta demanda.';
+      /* SEM SPRINT (24/11/2026): o time de produto conclui sem bloqueio; a
+         caixa so avisa que a demanda fica marcada. Os demais recebem a recusa
+         da regra (`validar`). */
+      var SP = raiz.SPRINTPO;
+      if (SP && !SP.doPO(m)) aviso += '\n\nSem sprint: a demanda fica marcada como concluída fora do planejamento.';
       var v = await caixa({ titulo: 'Validar e fechar ' + cod(m), texto: '"' + (m.titulo || '') + '" passa para Concluído, com o seu nome como quem validou.' + aviso,
         ok: 'Validar e fechar', verde: true, valida: validaCom('validar', m) });
       if (v) return aplicar('validar', m, {});

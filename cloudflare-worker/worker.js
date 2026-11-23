@@ -2482,7 +2482,7 @@ const TIPOS_LIVRES_DA_SPRINT = [];
 const ETAPAS_POS_PLANNING = ['planejado', 'em_andamento', 'validacao_area',
                              'validacao', 'concluido', 'atrasado'];
 
-function alocacaoSemSprint(recebido, servidor, papel, hoje) {
+function alocacaoSemSprint(recebido, servidor, papel, hoje, produto) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const dia = String(hoje || hojeBR()).slice(0, 10);
   if (dia < TRAVA_ALOCACAO_DESDE) return [];
@@ -2511,7 +2511,11 @@ function alocacaoSemSprint(recebido, servidor, papel, hoje) {
        regra de `SPRINTPO.entregueNoRegime`. */
     const entregaEm = String(m.entregue_em || m.validacao_area_em || '').slice(0, 10);
     const conclui = depois === 'concluido' && antesEt !== 'concluido' &&
-                    /^\d{4}-\d{2}-\d{2}$/.test(entregaEm) && entregaEm >= '2026-11-02';
+                    /^\d{4}-\d{2}-\d{2}$/.test(entregaEm) && entregaEm >= '2026-11-02' &&
+                    !produto;
+    /* CONCLUIR SEM SPRINT E DO TIME DE PRODUTO (24/11/2026): para o dono da
+       sprint (`ehDonoDaSprint`) passa; para os demais a trava continua. Mesma
+       regra de `SPRINTPO.travaDeAlocacao` com `opts.produto`. */
     if (!cruza && !comeca && !conclui) continue;
     if (TIPOS_LIVRES_DA_SPRINT.includes(String(m.tipo || '').toLowerCase())) continue;
     if (String(m.sprint_po || '').trim()) continue;
@@ -8893,7 +8897,7 @@ async function rotear(request, env, _histFila) {
       const sprintsRevPub = travaSprintDoPO(data, antesPub, _donoPub);
       const nascidasNoBacklogPub = _donoPub ? [] : nascendoForaDoBacklog(data, antesPub);
       if (!_donoPub) data.sprints = (antesPub && antesPub.sprints) || [];
-      const semSprintPub = alocacaoSemSprint(data, antesPub, 'admin');
+      const semSprintPub = alocacaoSemSprint(data, antesPub, 'admin', undefined, _donoPub);
       if (semSprintPub.length) {
         return json({ error: 'fora_da_sprint',
                       codigos: semSprintPub.map(p => p.codigo),
